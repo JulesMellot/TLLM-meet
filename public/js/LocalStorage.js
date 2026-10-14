@@ -17,8 +17,8 @@ class LocalStorage {
 
         this.SFU_SETTINGS = {
             share_on_join: true, // popup message on join
-            show_chat_on_msg: true, // show chat on new message
-            transcript_show_on_msg: true, // show transcript on new message
+            show_chat_on_msg: false, // TLLM*meet: unread badge instead of opening the chat
+            transcript_show_on_msg: false, // TLLM*meet: do not pop the transcript open
             transcript_send_to_all: true, // send transcript to all participants
             speech_in_msg: false, // speech incoming message
             moderator_video_start_privacy: false, // Everyone starts video in privacy mode

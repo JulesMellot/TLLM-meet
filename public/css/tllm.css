@@ -1,0 +1,455 @@
+/*
+ * TLLM*meet - room styles
+ * Loaded after the upstream stylesheets so the fork stays easy to merge: flat surfaces,
+ * one accent colour, the system font, no glows, no blur, no heavy shadows.
+ *
+ * Two directions share the same rules and only differ by tokens:
+ *  - "sobre" (default): graphite neutral, blue accent, 10px corners
+ *  - "papier" (UI_STYLE=papier): warm dark, green accent, rounder corners
+ */
+
+:root {
+    --tllm-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+    --tllm-bg: #121416;
+    --tllm-surface: #1a1d20;
+    --tllm-surface-2: #23272b;
+    --tllm-surface-3: #2c3136;
+    --tllm-border: #30363b;
+    --tllm-text: #e9ebed;
+    --tllm-text-2: #a9afb5;
+    --tllm-accent: #4c8dff;
+    --tllm-accent-soft: rgba(76, 141, 255, 0.16);
+    --tllm-accent-ink: #ffffff;
+    --tllm-danger: #e5484d;
+    --tllm-radius: 10px;
+    --tllm-radius-sm: 8px;
+    --tllm-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-tllm-style='papier'] {
+    --tllm-bg: #191816;
+    --tllm-surface: #22201d;
+    --tllm-surface-2: #2b2925;
+    --tllm-surface-3: #35322d;
+    --tllm-border: #3a3731;
+    --tllm-text: #efece6;
+    --tllm-text-2: #b3ada3;
+    --tllm-accent: #3f9b74;
+    --tllm-accent-soft: rgba(63, 155, 116, 0.18);
+    --tllm-radius: 14px;
+    --tllm-radius-sm: 10px;
+}
+
+/* ---------- Upstream tokens mapped to ours (themes are mapped in config ui.themes) ---------- */
+
+:root {
+    --font-sans: var(--tllm-font);
+    --color-accent: var(--tllm-accent);
+    --color-accent-strong: var(--tllm-accent);
+    --color-accent-soft: var(--tllm-accent-soft);
+    --color-danger: var(--tllm-danger);
+    --color-danger-strong: var(--tllm-danger);
+    --color-focus: var(--tllm-accent);
+    --fg-1: var(--tllm-text);
+    --fg-2: var(--tllm-text-2);
+    --surface-1: var(--tllm-surface);
+    --surface-2: var(--tllm-surface-2);
+    --surface-3: var(--tllm-surface-3);
+    --border-subtle: var(--tllm-border);
+    --border-strong: var(--tllm-border);
+    --border: 1px solid var(--tllm-border);
+    --border-radius: var(--tllm-radius);
+    --box-shadow: var(--tllm-shadow);
+    --btns-hover-scale: none;
+    --room-control-bg: var(--tllm-surface-2);
+    --room-control-hover: var(--tllm-surface-3);
+    --room-border: var(--tllm-border);
+    --room-border-strong: var(--tllm-border);
+    --room-accent: var(--tllm-accent);
+    --room-accent-soft: var(--tllm-accent-soft);
+    --room-switch-accent: var(--tllm-accent);
+    --room-switch-ink: #ffffff;
+    --room-shadow: var(--tllm-shadow);
+    --room-emoji-accent: var(--tllm-accent);
+    --room-emoji-toolbar-surface: var(--tllm-surface);
+}
+
+html,
+body {
+    background: var(--tllm-bg) !important;
+}
+
+body,
+button:not([class*='fa-']),
+input,
+select,
+textarea,
+.swal2-popup,
+.dropdown-menu,
+#loadingDiv h1,
+#loadingDiv pre,
+#loadingDiv .loading-message {
+    font-family: var(--tllm-font) !important;
+}
+
+/* No glassmorphism, no glows */
+*,
+*::before,
+*::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    text-shadow: none !important;
+}
+
+#videoMediaContainer.mouse-light {
+    background: var(--tllm-bg) !important;
+}
+
+/* ---------- Bottom bar: mic, camera, screen, chat, participants, more, leave ---------- */
+
+#bottomButtons {
+    gap: 8px;
+}
+
+#bottomButtons button,
+#bottomButtons .split-btn,
+#bottomButtons .split-btn .device-dropdown-toggle {
+    background: var(--tllm-surface-2) !important;
+    box-shadow: none !important;
+}
+
+#bottomButtons button {
+    width: 46px;
+    height: 46px;
+    font-size: 1.15rem;
+    color: var(--tllm-text);
+    border-radius: var(--tllm-radius) !important;
+}
+
+#bottomButtons .split-btn {
+    border-radius: var(--tllm-radius);
+}
+
+#bottomButtons .split-btn > button:not(.device-dropdown-toggle) {
+    border-radius: var(--tllm-radius) 0 0 var(--tllm-radius) !important;
+}
+
+#bottomButtons .split-btn .device-dropdown-toggle {
+    width: 26px;
+    height: 46px;
+    border-radius: 0 var(--tllm-radius) var(--tllm-radius) 0 !important;
+    border-left: 1px solid var(--tllm-border) !important;
+}
+
+#bottomButtons button:hover,
+#bottomButtons .split-btn .device-dropdown-toggle:hover {
+    background: var(--tllm-surface-3) !important;
+    transform: none !important;
+}
+
+#bottomButtons button i {
+    color: inherit;
+}
+
+/* Muted mic / camera off: same shape, red icon (state, not decoration) */
+#bottomButtons #startAudioButton i,
+#bottomButtons #startVideoButton i {
+    color: var(--tllm-danger) !important;
+}
+
+/* Sharing in progress and open panels use the accent */
+#bottomButtons #stopScreenButton,
+#bottomButtons #chatButton[aria-pressed='true'],
+#bottomButtons #participantsButton[aria-pressed='true'] {
+    background: var(--tllm-accent) !important;
+    color: var(--tllm-accent-ink) !important;
+}
+
+#bottomButtons #exitButton {
+    background: var(--tllm-danger) !important;
+    width: 58px;
+}
+
+#bottomButtons #exitButton i,
+#bottomButtons #exitButton .red {
+    color: #fff !important;
+}
+
+/* Moved to the "Plus" menu or not part of the essentials */
+#bottomButtons > #settingsSplit > #settingsButton,
+#bottomButtons > #participantViewDropdown,
+#bottomButtons #participantsActionsDropdown {
+    display: none !important;
+}
+
+#bottomButtons #participantsSplit > #participantsButton {
+    border-radius: var(--tllm-radius) !important;
+}
+
+/* The former chevron becomes the "Plus" button */
+#bottomButtons #settingsSplit {
+    background: transparent;
+}
+
+#bottomButtons #settingsExtraToggle {
+    width: 46px !important;
+    border-left: none !important;
+    border-radius: var(--tllm-radius) !important;
+}
+
+#bottomButtons #settingsExtraToggle i {
+    font-size: 1.15rem !important;
+}
+
+#participantsCountBadge,
+#chatUnreadBadge {
+    background: var(--tllm-accent) !important;
+    color: var(--tllm-accent-ink) !important;
+    box-shadow: none !important;
+}
+
+/* Menus */
+.dropdown-menu,
+#bottomButtons .split-btn .dropdown-menu,
+#bottomButtons #exitMenu,
+#bottomButtons #settingsExtraMenu {
+    background: var(--tllm-surface) !important;
+    border: 1px solid var(--tllm-border) !important;
+    border-radius: var(--tllm-radius) !important;
+    box-shadow: var(--tllm-shadow) !important;
+}
+
+#bottomButtons .dropdown-menu button,
+#bottomButtons #exitMenu button {
+    width: 100%;
+    height: auto;
+    font-size: 0.95rem;
+    text-align: left;
+    color: var(--tllm-text);
+    background: transparent !important;
+    border-radius: var(--tllm-radius-sm) !important;
+}
+
+#bottomButtons .dropdown-menu button:hover,
+#bottomButtons #exitMenu button:hover {
+    background: var(--tllm-surface-2) !important;
+}
+
+#bottomButtons .dropdown-menu button i {
+    width: 1.4em;
+    margin-right: 0.4em;
+    text-align: center;
+    color: var(--tllm-text-2);
+}
+
+.device-menu-header {
+    font-size: 0.75rem !important;
+    letter-spacing: 0.02em;
+    text-transform: none !important;
+    color: var(--tllm-text-2) !important;
+}
+
+@media (max-width: 640px) {
+    #bottomButtons {
+        gap: 5px;
+        margin-bottom: 10px;
+    }
+
+    #bottomButtons button {
+        width: 42px;
+        height: 42px;
+    }
+
+    /* Device chevrons take too much room on a phone: devices stay reachable in Paramètres */
+    #bottomButtons #startAudioDeviceDropdown,
+    #bottomButtons #startVideoDeviceDropdown {
+        display: none !important;
+    }
+
+    #bottomButtons .split-btn > button:not(.device-dropdown-toggle) {
+        border-radius: var(--tllm-radius) !important;
+    }
+
+    #bottomButtons #exitButton {
+        width: 50px;
+    }
+}
+
+/* ---------- Panels, dialogs, toasts: flat surfaces ---------- */
+
+#mySettings,
+#mySettingsHeader,
+.settings-section-intro,
+.transcription-header,
+.transcription-inputarea,
+.transcription-inputarea.is-selectorless,
+.room-emoji-header,
+.whiteboard-header,
+.poll-header,
+.poll-creation,
+.poll,
+.chat .chat-header,
+.breakout-toolbar,
+.breakout-panel,
+.breakout-panel-header,
+.file-transfer-shell,
+.lobby-join-popup,
+.breakout-swal,
+.reaction-picker,
+.videoMenuBar {
+    background: var(--tllm-surface) !important;
+    box-shadow: none !important;
+}
+
+.swal2-popup {
+    background: var(--tllm-surface) !important;
+    border: 1px solid var(--tllm-border) !important;
+    border-radius: var(--tllm-radius) !important;
+    box-shadow: var(--tllm-shadow) !important;
+    color: var(--tllm-text) !important;
+}
+
+.swal2-popup .swal2-confirm,
+.swal2-popup .swal2-styled.swal2-confirm,
+.breakout-swal-confirm--join,
+.breakout-swal-confirm--help,
+.breakout-swal-confirm--launch,
+.lobby-action-btn--accept,
+#about button {
+    background: var(--tllm-accent) !important;
+    background-image: none !important;
+    color: var(--tllm-accent-ink) !important;
+    box-shadow: none !important;
+    border-radius: var(--tllm-radius-sm) !important;
+}
+
+.swal2-popup .swal2-deny,
+.swal2-popup .swal2-cancel,
+.breakout-swal-confirm--end,
+.lobby-action-btn--reject,
+.lobby-join-popup-confirm--reject {
+    background: var(--tllm-surface-3) !important;
+    background-image: none !important;
+    color: var(--tllm-text) !important;
+    box-shadow: none !important;
+    border-radius: var(--tllm-radius-sm) !important;
+}
+
+.swal2-popup .swal2-styled:not([disabled]):hover {
+    background-image: none !important;
+    filter: brightness(1.08);
+}
+
+.swal2-toast,
+.swal2-popup.swal2-toast {
+    border-radius: var(--tllm-radius) !important;
+}
+
+.swal2-timer-progress-bar,
+.lobby-join-toast .swal2-timer-progress-bar {
+    background: var(--tllm-accent) !important;
+}
+
+.chat .chat-history .message,
+.chat .chat-history .my-message {
+    background: var(--tllm-surface-2) !important;
+    box-shadow: none !important;
+}
+
+.chat .chat-history .my-message {
+    background: var(--tllm-accent-soft) !important;
+}
+
+.disconnect-banner__inner,
+.disconnect-banner.is-restored .disconnect-banner__inner,
+.disconnect-banner.is-failed .disconnect-banner__inner {
+    background: var(--tllm-surface) !important;
+    border: 1px solid var(--tllm-border) !important;
+    box-shadow: var(--tllm-shadow) !important;
+}
+
+.disconnect-banner__inner::before,
+.lobby-join-outcome__halo,
+.lobby-join-waiting__pulse,
+.breakout-spinner-orbit {
+    display: none !important;
+}
+
+.disconnect-banner__icon-wrap,
+.lobby-avatar,
+.lobby-join-outcome__icon,
+.lobby-join-outcome__badge,
+.lobby-join-waiting__icon,
+.file-transfer-icon-wrap,
+.breakout-popup-icon--join,
+.breakout-popup-icon--help,
+.breakout-popup-icon--launch,
+.breakout-popup-icon--end,
+.breakout-spinner-core,
+.breakout-toolbar-btn,
+.breakout-toolbar-help-btn {
+    background: var(--tllm-surface-3) !important;
+    box-shadow: none !important;
+}
+
+#sendProgress::-webkit-progress-value,
+#receiveProgress::-webkit-progress-value {
+    background: var(--tllm-accent) !important;
+}
+
+#sendProgress::-moz-progress-bar,
+#receiveProgress::-moz-progress-bar {
+    background: var(--tllm-accent) !important;
+}
+
+.mirotalk-file-dropzone,
+.mirotalk-file-dropzone:hover,
+.mirotalk-file-dropzone.is-dragover,
+.mirotalk-file-dropzone.has-file,
+.wb-shortcuts-text {
+    background: var(--tllm-surface-2) !important;
+}
+
+.form-switch .form-check-input:checked {
+    background-color: var(--tllm-accent) !important;
+    border-color: var(--tllm-accent) !important;
+}
+
+/* Video tiles: no colored glow besides the active-speaker outline */
+.Camera,
+.videoMenuBar,
+#videoMediaContainer video {
+    border-radius: var(--tllm-radius);
+}
+
+/* Theme picker: TLLM*meet ships one look per direction (UI_STYLE) */
+#tabStylingBtn {
+    display: none !important;
+}
+
+/* Technical entry: the Network tab stays available in Paramètres */
+#openNetworkSettingsButton {
+    display: none !important;
+}
+
+/* One accent: upstream "orange" emphasis becomes the regular text colour */
+.orange {
+    color: var(--tllm-text) !important;
+}
+
+#bottomButtons #stopScreenButton.orange,
+#bottomButtons #stopScreenButton.orange i {
+    color: var(--tllm-accent-ink) !important;
+}
+
+/* Settings tabs carry the icon classes on the button itself: text in the system font, icon in Font Awesome */
+.tablinks {
+    font-family: var(--tllm-font) !important;
+    font-weight: 500 !important;
+}
+
+.tablinks::before {
+    font-family: 'Font Awesome 6 Free' !important;
+    font-weight: 900 !important;
+    margin-right: 0.5em;
+}

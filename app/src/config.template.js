@@ -343,8 +343,9 @@ module.exports = {
             htmlInjection: process.env.BRAND_HTML_INJECTION !== 'false',
 
             app: {
-                language: process.env.UI_LANGUAGE || 'en',
-                translationMode: process.env.UI_TRANSLATION_MODE || 'google', // auto (native else Google) | native (no Google) | google (default, always Google)
+                language: process.env.UI_LANGUAGE || 'fr',
+                translationMode: process.env.UI_TRANSLATION_MODE || 'native', // auto (native else Google) | native (no Google, default) | google (always Google)
+                style: process.env.UI_STYLE || 'sobre', // TLLM*meet look: sobre | papier (public/css/tllm.css)
                 name: process.env.APP_NAME || 'TLLM*meet',
                 title: process.env.APP_TITLE || '<h1>TLLM*meet</h1>',
                 description:
@@ -507,31 +508,31 @@ module.exports = {
          * The client merges these with built-in defaults, so you
          * only need to specify the properties you want to change.
          */
-        themes: {
-            /* Example: override default theme background
-            default: {
-                '--body-bg': 'linear-gradient(135deg, #1a1a2e, #0a0a14)',
-                '--msger-bg': 'linear-gradient(135deg, #1a1a2e, #0a0a14)',
-            },
-            */
-            /* Example: add a custom theme
-            ocean: {
-                '--body-bg': 'linear-gradient(135deg, #0d2137, #061220)',
-                '--trx-bg': 'linear-gradient(135deg, #0d2137, #061220)',
-                '--msger-bg': 'linear-gradient(135deg, #0d2137, #061220)',
-                '--left-msg-bg': '#112d4a',
-                '--right-msg-bg': '#0a1f35',
-                '--private-msg-bg': '#0e2540',
-                '--select-bg': '#0f2a45',
-                '--select-focus-color': 'rgba(56, 189, 248, 0.5)',
-                '--tab-btn-active': '#163d5e',
-                '--settings-bg': 'linear-gradient(135deg, #0d2137, #061220)',
-                '--wb-bg': 'linear-gradient(135deg, #0d2137, #061220)',
-                '--btns-bg-color': 'rgba(6, 18, 32, 0.75)',
-                '--dd-color': '#38BDF8',
-            },
-            */
-        },
+        themes: (() => {
+            // TLLM*meet: every built-in theme maps to the flat tokens of public/css/tllm.css,
+            // so a theme remembered by a browser cannot bring gradients back.
+            const tllm = {
+                '--body-bg': 'var(--tllm-bg)',
+                '--trx-bg': 'var(--tllm-surface)',
+                '--msger-bg': 'var(--tllm-surface)',
+                '--left-msg-bg': 'var(--tllm-surface-2)',
+                '--right-msg-bg': 'var(--tllm-surface-2)',
+                '--private-msg-bg': 'var(--tllm-surface-3)',
+                '--select-bg': 'var(--tllm-surface-2)',
+                '--select-focus-color': 'var(--tllm-accent)',
+                '--tab-btn-active': 'var(--tllm-surface-2)',
+                '--settings-bg': 'var(--tllm-surface)',
+                '--wb-bg': 'var(--tllm-bg)',
+                '--btns-bg-color': 'var(--tllm-surface-2)',
+                '--dd-color': 'var(--tllm-text)',
+                '--room-switch-accent': 'var(--tllm-accent)',
+                '--room-switch-ink': '#FFFFFF',
+                '--swal-neutral-bg': 'var(--tllm-surface-3)',
+                '--swal-focus-bg': 'var(--tllm-accent)',
+            };
+            const names = ['default', 'dark', 'grey', 'green', 'blue', 'red', 'purple', 'orange', 'pink', 'yellow'];
+            return Object.fromEntries(names.map((name) => [name, { ...tllm }]));
+        })(),
 
         /**
          * UI Button Configuration
@@ -547,7 +548,7 @@ module.exports = {
             // Main control buttons visible in the UI
             main: {
                 shareButton: process.env.SHOW_SHARE_BUTTON !== 'false',
-                hideMeButton: process.env.SHOW_HIDE_ME !== 'false',
+                hideMeButton: process.env.SHOW_HIDE_ME === 'true', // TLLM*meet: off by default (shorter "Plus" menu)
                 fullScreenButton: process.env.SHOW_FULLSCREEN_BUTTON !== 'false',
                 startAudioButton: process.env.SHOW_AUDIO_BUTTON !== 'false',
                 startVideoButton: process.env.SHOW_VIDEO_BUTTON !== 'false',
@@ -556,15 +557,15 @@ module.exports = {
                 chatButton: process.env.SHOW_CHAT_BUTTON !== 'false',
                 participantsButton: process.env.SHOW_PARTICIPANTS_BUTTON !== 'false',
                 pollButton: process.env.SHOW_POLL_BUTTON !== 'false',
-                speechRecButton: process.env.SHOW_SPEECH_REC_BUTTON !== 'false',
+                speechRecButton: process.env.SHOW_SPEECH_REC_BUTTON === 'true', // TLLM*meet: off by default (shorter "Plus" menu)
                 breakoutRoomButton: process.env.SHOW_BREAKOUT_ROOM_BUTTON !== 'false',
                 editorButton: process.env.SHOW_EDITOR_BUTTON !== 'false',
                 raiseHandButton: process.env.SHOW_RAISE_HAND !== 'false',
                 transcriptionButton: process.env.SHOW_TRANSCRIPTION !== 'false',
                 whiteboardButton: process.env.SHOW_WHITEBOARD !== 'false',
-                documentPiPButton: process.env.SHOW_DOCUMENT_PIP !== 'false',
-                snapshotRoomButton: process.env.SHOW_SNAPSHOT !== 'false',
-                emojiRoomButton: process.env.SHOW_EMOJI !== 'false',
+                documentPiPButton: process.env.SHOW_DOCUMENT_PIP === 'true', // TLLM*meet: off by default (shorter "Plus" menu)
+                snapshotRoomButton: process.env.SHOW_SNAPSHOT === 'true', // TLLM*meet: off by default (shorter "Plus" menu)
+                emojiRoomButton: process.env.SHOW_EMOJI === 'true', // TLLM*meet: off by default (shorter "Plus" menu)
                 settingsButton: process.env.SHOW_SETTINGS !== 'false',
                 aboutButton: process.env.SHOW_ABOUT !== 'false',
                 exitButton: process.env.SHOW_EXIT_BUTTON !== 'false',

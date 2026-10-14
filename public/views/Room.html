@@ -142,6 +142,9 @@
         <script defer src="../js/NetworkStats.js"></script>
         <script defer src="../js/RoomClient.js"></script>
         <script defer src="../js/Room.js"></script>
+        <script defer src="../js/tllm.js"></script>
+        <!-- TLLM*meet styles: loaded last on purpose -->
+        <link rel="stylesheet" href="../css/tllm.css" />
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
@@ -348,11 +351,8 @@
                     ></div>
                 </div>
             </div>
-            <button id="swapCameraButton" class="hidden"><i class="fas fa-camera-rotate"></i></button>
             <button id="startScreenButton" class="hidden"><i class="fas fa-desktop"></i></button>
             <button id="stopScreenButton" class="orange hidden"><i class="fas fa-stop-circle"></i></button>
-            <button id="raiseHandButton" class="hidden"><i class="fas fa-hand-paper"></i></button>
-            <button id="lowerHandButton" class="hidden"><i id="lowerHandIcon" class="fas fa-hand-paper"></i></button>
             <button id="chatButton" class="hidden" aria-label="Chat" aria-pressed="false">
                 <i class="fas fa-comments" aria-hidden="true"></i>
                 <span id="chatUnreadBadge" class="unread-badge hidden" aria-live="polite" aria-atomic="true"></span>
@@ -432,9 +432,9 @@
                         type="button"
                         data-bs-toggle="dropdown"
                         aria-expanded="false"
-                        aria-label="Settings menu"
+                        aria-label="Plus"
                     >
-                        <i class="fas fa-chevron-up"></i>
+                        <i class="fas fa-ellipsis"></i>
                     </button>
                     <div
                         id="settingsExtraMenu"
@@ -444,6 +444,28 @@
                         <button id="noExtraButtons" class="hidden">
                             <i class="fas fa-ban red"></i> No extra buttons
                         </button>
+                        <!-- TLLM*meet: secondary actions moved out of the bottom bar -->
+                        <div
+                            class="device-menu-header extra-menu-group"
+                            data-buttons="raiseHandButton,lowerHandButton,swapCameraButton,tllmLayoutGridItem,tllmLayoutSpeakerItem,tllmSettingsItem"
+                        >
+                            Réunion
+                        </div>
+                        <button id="raiseHandButton" class="hidden"><i class="fas fa-hand-paper"></i> Lever la main</button>
+                        <button id="lowerHandButton" class="hidden">
+                            <i id="lowerHandIcon" class="fas fa-hand-paper"></i> Baisser la main
+                        </button>
+                        <button id="swapCameraButton" class="hidden">
+                            <i class="fas fa-camera-rotate"></i> Changer de caméra
+                        </button>
+                        <button id="tllmLayoutGridItem" type="button">
+                            <i class="fa-solid fa-border-all"></i> Affichage en grille
+                        </button>
+                        <button id="tllmLayoutSpeakerItem" type="button">
+                            <i class="fa-solid fa-window-maximize"></i> Orateur en grand
+                        </button>
+                        <button id="tllmSettingsItem" type="button"><i class="fas fa-gear"></i> Paramètres</button>
+                        <div class="device-menu-divider extra-menu-divider" data-group="meeting"></div>
 
                         <!-- SHARING -->
                         <div

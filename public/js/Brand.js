@@ -233,6 +233,8 @@ function customizeApp() {
 
 // SITE metadata
 function customizeSite() {
+    // TLLM*meet look (public/css/tllm.css): sobre | papier
+    document.documentElement.dataset.tllmStyle = BRAND.app?.style || 'sobre';
     if (title && BRAND.site?.title) {
         title.textContent = BRAND.site?.title;
     }
