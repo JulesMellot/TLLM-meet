@@ -6,6 +6,24 @@ Seul l'administrateur crée les visios ; les invités rejoignent par lien, sans 
 TLLM*meet est un fork de [MiroTalk SFU](https://github.com/miroslavpejic85/mirotalksfu) (v2.6.25)
 de Miroslav Pejic, distribué sous licence [AGPL-3.0](LICENSE). Le README d'origine suit ci-dessous.
 
+## Déploiement (Coolify derrière Cloudflare)
+
+Variables à renseigner dans `.env` (voir `.env.template`) :
+
+| Variable | Valeur |
+|---|---|
+| `NODE_ENV` | `production` |
+| `SERVER_HOST_URL` | l'URL publique, par exemple `https://meet.exemple.fr` |
+| `SFU_ANNOUNCED_IP` | l'IP publique du serveur (les flux WebRTC ne passent pas par Cloudflare) |
+| `TRUST_PROXY` | `2` (Cloudflare + proxy Coolify) |
+| `JWT_SECRET` | au moins 32 caractères : `openssl rand -hex 32` |
+| `HOST_USERS` | comptes admin, `identifiant:motdepasse:Nom affiché`, séparés par `|` |
+| `UI_STYLE` | `sobre` (par défaut) ou `papier` |
+| `SOURCE_URL` | lien vers le code source de l'instance (AGPL-3.0, article 13) |
+
+Le serveur refuse de démarrer si `HOST_USERS` est vide ou contient les identifiants par défaut.
+Les ports UDP/TCP `SFU_MIN_PORT`–`SFU_MAX_PORT` doivent être ouverts directement sur le serveur.
+
 ---
 
 <div align="center">
