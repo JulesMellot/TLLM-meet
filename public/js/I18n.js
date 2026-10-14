@@ -102,6 +102,8 @@
         }
         return value !== null ? text.replace(key, value) : text;
     }
+    // TLLM*meet: used by TllmRoom.js to translate the notifications it shows itself
+    window.tllmTranslate = translate;
 
     // Public API used by Translate.js and (optionally) other scripts.
     window.i18n = {

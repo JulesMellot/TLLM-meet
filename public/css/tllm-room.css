@@ -1,0 +1,1219 @@
+/*
+ * TLLM*meet - meeting screen (see public/js/TllmRoom.js)
+ * Top strip, video stage, fixed bottom bar, one docked side panel. Uses the tokens of tllm.css.
+ */
+
+:root {
+    --tllm-top-h: 46px;
+    --tllm-bar-h: 76px;
+    --tllm-panel-w: 360px;
+    --tllm-hand: #f5b83d;
+    --tllm-tile: #1b2026;
+}
+
+/* ---------- MiroTalk's own chrome, replaced by the shell ---------- */
+body.tllm-room #bottomButtons,
+body.tllm-room #chatRoom,
+body.tllm-room #pollRoom,
+body.tllm-room .videoMenuBar,
+body.tllm-room .speechbar,
+body.tllm-room .presenter-name-badge,
+body.tllm-room #emojiPickerContainer {
+    display: none !important;
+}
+
+body.tllm-room {
+    background: var(--tllm-bg) !important;
+}
+
+/* ---------- Top strip ---------- */
+#tllmTop {
+    position: fixed;
+    z-index: 20;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: calc(var(--tllm-top-h) + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--tllm-bg);
+    color: var(--tllm-text-2);
+    font: 13px var(--tllm-font);
+}
+#tllmTop .tllm-logo {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    background: #1c2530;
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+}
+#tllmTop .tllm-room-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--tllm-text);
+    font-weight: 600;
+}
+#tllmTop .tllm-timer {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+}
+#tllmTop .tllm-rec {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(229, 72, 77, 0.14);
+    color: #ff8a8d;
+    font-size: 12px;
+}
+#tllmTop .tllm-rec::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--tllm-danger);
+}
+#tllmTop .tllm-spacer {
+    flex: 1;
+}
+.tllm-seg {
+    flex: none;
+    display: inline-flex;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius-sm);
+    overflow: hidden;
+}
+.tllm-seg button {
+    height: 30px;
+    padding: 0 10px;
+    border: 0;
+    background: var(--tllm-surface);
+    color: var(--tllm-text-2);
+    font: 13px var(--tllm-font);
+    cursor: pointer;
+}
+.tllm-seg button[aria-pressed='true'] {
+    background: var(--tllm-surface-3);
+    color: var(--tllm-text);
+}
+.tllm-top-btn {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 11px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius-sm);
+    background: var(--tllm-surface);
+    color: var(--tllm-text);
+    font: 13px var(--tllm-font);
+    cursor: pointer;
+}
+.tllm-top-btn:hover {
+    background: var(--tllm-surface-2);
+}
+
+/* ---------- Stage (MiroTalk's video containers live inside) ---------- */
+#tllmStage {
+    position: fixed;
+    z-index: 1;
+    top: calc(var(--tllm-top-h) + env(safe-area-inset-top, 0px));
+    bottom: calc(var(--tllm-bar-h) + env(safe-area-inset-bottom, 0px));
+    left: env(safe-area-inset-left, 0px);
+    right: env(safe-area-inset-right, 0px);
+    overflow: hidden;
+}
+body.tllm-panel-open #tllmStage {
+    right: var(--tllm-panel-w);
+}
+#tllmStage #videoMediaContainer {
+    border-radius: 0;
+}
+#tllmReactions {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    pointer-events: none;
+}
+
+/* Tiles */
+body.tllm-room .Camera {
+    border-radius: var(--tllm-radius) !important;
+    background: var(--tllm-tile) !important;
+    border: 2px solid transparent !important;
+    box-shadow: none !important;
+}
+body.tllm-room .Camera video {
+    border-radius: calc(var(--tllm-radius) - 2px) !important;
+}
+#tllmStage .username {
+    position: absolute !important;
+    left: 8px !important;
+    bottom: 8px !important;
+    top: auto !important;
+    right: auto !important;
+    transform: none !important;
+    max-width: calc(100% - 16px);
+    margin: 0 !important;
+    padding: 3px 8px !important;
+    border-radius: 6px !important;
+    background: rgba(10, 12, 15, 0.72) !important;
+    color: var(--tllm-text) !important;
+    font: 12px var(--tllm-font) !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: none !important;
+    border: 0 !important;
+}
+/* Muted microphone: small red icon before the name (state from MiroTalk's hidden toolbar) */
+body.tllm-room .Camera:has([id$='__audio'].fa-microphone-slash) .username::before {
+    content: '\f131';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    margin-right: 6px;
+    color: var(--tllm-danger);
+}
+body.tllm-room .Camera .user-hand {
+    position: absolute !important;
+    left: 8px !important;
+    top: 8px !important;
+    right: auto !important;
+    width: auto !important;
+    height: auto !important;
+    padding: 5px 8px !important;
+    border-radius: 6px !important;
+    background: var(--tllm-hand) !important;
+    color: #231a05 !important;
+    font-size: 13px !important;
+    animation: none !important;
+    box-shadow: none !important;
+}
+.tllm-tile-more {
+    position: absolute;
+    z-index: 5;
+    top: 8px;
+    right: 8px;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 7px;
+    background: rgba(10, 12, 15, 0.72);
+    color: var(--tllm-text);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.Camera:hover .tllm-tile-more,
+.tllm-tile-more:focus-visible,
+.tllm-tile-more[aria-expanded='true'] {
+    opacity: 1;
+}
+@media (hover: none) {
+    .tllm-tile-more {
+        opacity: 1;
+    }
+}
+
+/* ---------- Bottom bar ---------- */
+#tllmBar {
+    position: fixed;
+    z-index: 20;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--tllm-bar-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--tllm-surface);
+    border-top: 1px solid var(--tllm-border);
+    font-family: var(--tllm-font);
+}
+#tllmBar .tllm-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+#tllmBar .tllm-center {
+    flex: 1;
+    justify-content: center;
+}
+.tllm-bb {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 64px;
+    height: 58px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--tllm-radius-sm);
+    background: transparent;
+    color: var(--tllm-text);
+    font-family: var(--tllm-font);
+    cursor: pointer;
+}
+.tllm-bb[hidden] {
+    display: none;
+}
+.tllm-bb:hover {
+    background: var(--tllm-surface-2);
+}
+.tllm-bb:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+.tllm-bb .tllm-ic {
+    font-size: 18px;
+    line-height: 1;
+}
+.tllm-bb .tllm-lb {
+    font-size: 11px;
+    color: var(--tllm-text-2);
+    white-space: nowrap;
+}
+.tllm-bb[aria-pressed='true'] .tllm-ic {
+    color: var(--tllm-accent);
+}
+.tllm-bb[aria-pressed='true'] .tllm-lb {
+    color: var(--tllm-text);
+}
+.tllm-bb.tllm-off .tllm-ic {
+    color: var(--tllm-danger);
+}
+.tllm-bb.tllm-hand-on .tllm-ic {
+    color: var(--tllm-hand);
+}
+.tllm-split {
+    display: flex;
+    align-items: stretch;
+}
+.tllm-split .tllm-bb {
+    border-radius: var(--tllm-radius-sm) 0 0 var(--tllm-radius-sm);
+}
+.tllm-caret {
+    width: 20px;
+    border: 0;
+    border-radius: 0 var(--tllm-radius-sm) var(--tllm-radius-sm) 0;
+    background: transparent;
+    color: var(--tllm-text-2);
+    font-size: 11px;
+    cursor: pointer;
+}
+.tllm-caret:hover {
+    background: var(--tllm-surface-2);
+}
+.tllm-badge {
+    position: absolute;
+    top: 4px;
+    right: 12px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--tllm-danger);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    display: grid;
+    place-items: center;
+}
+.tllm-badge[hidden] {
+    display: none;
+}
+.tllm-count {
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    font-size: 10px;
+    color: var(--tllm-text-2);
+}
+.tllm-leave {
+    height: 38px;
+    padding: 0 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    border-radius: var(--tllm-radius-sm);
+    background: var(--tllm-danger);
+    color: #fff;
+    font: 600 14px var(--tllm-font);
+    cursor: pointer;
+}
+.tllm-leave:hover {
+    background: #cf3a3f;
+}
+
+/* ---------- Menus ---------- */
+.tllm-pop {
+    position: fixed;
+    z-index: 1200;
+    min-width: 230px;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    padding: 6px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius);
+    background: var(--tllm-surface);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    color: var(--tllm-text);
+    font: 14px var(--tllm-font);
+}
+.tllm-pop h4 {
+    margin: 8px 10px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tllm-text-2);
+}
+.tllm-pop hr {
+    margin: 6px 4px;
+    border: 0;
+    border-top: 1px solid var(--tllm-border);
+    opacity: 1;
+}
+.tllm-pop-empty {
+    margin: 4px 10px 8px;
+    color: var(--tllm-text-2);
+    font-size: 13px;
+}
+.tllm-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: var(--tllm-radius-sm);
+    background: transparent;
+    color: var(--tllm-text);
+    font: 14px var(--tllm-font);
+    text-align: left;
+    cursor: pointer;
+}
+.tllm-item:hover {
+    background: var(--tllm-surface-2);
+}
+.tllm-item-ic {
+    width: 18px;
+    text-align: center;
+    color: var(--tllm-text-2);
+}
+.tllm-item-lb {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tllm-item .tllm-dot {
+    font-size: 8px;
+    opacity: 0;
+}
+.tllm-check {
+    color: var(--tllm-accent);
+}
+.tllm-item.tllm-danger,
+.tllm-item.tllm-danger .tllm-item-ic {
+    color: #ff8a8d;
+}
+.tllm-reactions {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+}
+.tllm-reactions button {
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    font-size: 24px;
+    cursor: pointer;
+}
+.tllm-reactions button:hover {
+    background: var(--tllm-surface-2);
+}
+
+/* ---------- Side panel ---------- */
+#tllmPanel {
+    position: fixed;
+    z-index: 15;
+    top: calc(var(--tllm-top-h) + env(safe-area-inset-top, 0px));
+    bottom: calc(var(--tllm-bar-h) + env(safe-area-inset-bottom, 0px));
+    right: 0;
+    width: var(--tllm-panel-w);
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--tllm-border);
+    background: var(--tllm-surface);
+    color: var(--tllm-text);
+    font: 14px var(--tllm-font);
+}
+#tllmPanel[hidden] {
+    display: none;
+}
+.tllm-panel-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 52px;
+    flex: none;
+    padding: 0 8px 0 16px;
+    border-bottom: 1px solid var(--tllm-border);
+}
+.tllm-panel-head h2 {
+    margin: 0 auto 0 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--tllm-text);
+}
+.tllm-icon-btn {
+    width: 34px;
+    height: 34px;
+    flex: none;
+    border: 0;
+    border-radius: var(--tllm-radius-sm);
+    background: transparent;
+    color: var(--tllm-text-2);
+    cursor: pointer;
+}
+.tllm-icon-btn:hover {
+    background: var(--tllm-surface-2);
+    color: var(--tllm-text);
+}
+.tllm-panel-back {
+    display: none;
+}
+.tllm-panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 16px;
+}
+.tllm-panel-foot {
+    flex: none;
+    padding: 10px 12px 12px;
+    border-top: 1px solid var(--tllm-border);
+}
+.tllm-panel-foot:empty {
+    display: none;
+}
+.tllm-empty {
+    margin: 30px 10px;
+    text-align: center;
+    color: var(--tllm-text-2);
+    line-height: 1.5;
+}
+.tllm-foot-note {
+    margin: 0;
+    font-size: 12px;
+    color: var(--tllm-text-2);
+}
+
+/* Discussion */
+.tllm-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 12px;
+}
+.tllm-msg-meta {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 12px;
+    color: var(--tllm-text-2);
+}
+.tllm-who {
+    color: var(--tllm-text);
+    font-weight: 600;
+}
+.tllm-msg-txt {
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+.tllm-msg-txt p,
+.tllm-msg-txt pre {
+    margin: 0;
+}
+.tllm-msg-txt pre {
+    white-space: pre-wrap;
+    font: inherit;
+}
+.tllm-msg-txt img {
+    max-width: 100%;
+    border-radius: 6px;
+}
+.tllm-msg-txt a {
+    color: var(--tllm-accent);
+}
+.tllm-private .tllm-msg-txt {
+    padding: 8px 10px;
+    border-radius: var(--tllm-radius-sm);
+    background: var(--tllm-accent-soft);
+}
+.tllm-private-tag {
+    color: var(--tllm-accent);
+    font-weight: 600;
+}
+.tllm-sys {
+    margin: 10px 0;
+    text-align: center;
+    font-size: 12px;
+    color: var(--tllm-text-2);
+}
+.tllm-to-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--tllm-text-2);
+}
+.tllm-to-row select {
+    height: 28px;
+    max-width: 100%;
+    padding: 0 6px;
+    border: 1px solid var(--tllm-border);
+    border-radius: 6px;
+    background: var(--tllm-surface-2);
+    color: var(--tllm-text);
+    font: 12px var(--tllm-font);
+}
+.tllm-compose {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    padding: 6px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius);
+    background: var(--tllm-surface-2);
+}
+.tllm-compose textarea {
+    flex: 1;
+    min-width: 0;
+    height: 38px;
+    max-height: 120px;
+    resize: none;
+    padding: 9px 6px;
+    border: 0;
+    background: transparent;
+    color: var(--tllm-text);
+    font: 14px var(--tllm-font);
+    outline: none;
+}
+.tllm-send {
+    width: 34px;
+    height: 34px;
+    flex: none;
+    border: 0;
+    border-radius: var(--tllm-radius-sm);
+    background: var(--tllm-accent);
+    color: var(--tllm-accent-ink);
+    cursor: pointer;
+}
+
+/* Participants */
+.tllm-search {
+    width: 100%;
+    height: 34px;
+    margin-bottom: 10px;
+    padding: 0 10px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius-sm);
+    background: var(--tllm-surface-2);
+    color: var(--tllm-text);
+    font: 14px var(--tllm-font);
+}
+.tllm-section {
+    margin: 12px 0 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tllm-text-2);
+}
+.tllm-prow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px;
+    border-radius: var(--tllm-radius-sm);
+}
+.tllm-prow:hover {
+    background: var(--tllm-surface-2);
+}
+.tllm-avatar {
+    width: 32px;
+    height: 32px;
+    flex: none;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+}
+.tllm-pname {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tllm-role {
+    color: var(--tllm-text-2);
+    font-size: 12px;
+}
+.tllm-st {
+    display: flex;
+    gap: 10px;
+    color: var(--tllm-text-2);
+    font-size: 13px;
+}
+.tllm-st-off {
+    color: var(--tllm-danger);
+}
+.tllm-st-hand {
+    color: var(--tllm-hand);
+}
+.tllm-foot-actions {
+    display: flex;
+    gap: 8px;
+}
+.tllm-foot-actions button {
+    flex: 1;
+    height: 34px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius-sm);
+    background: var(--tllm-surface-2);
+    color: var(--tllm-text);
+    font: 13px var(--tllm-font);
+    cursor: pointer;
+}
+
+/* Polls */
+.tllm-primary,
+.tllm-secondary,
+.tllm-danger-btn {
+    height: 38px;
+    padding: 0 14px;
+    border-radius: var(--tllm-radius-sm);
+    font: 600 14px var(--tllm-font);
+    cursor: pointer;
+}
+.tllm-primary {
+    border: 0;
+    background: var(--tllm-accent);
+    color: var(--tllm-accent-ink);
+}
+.tllm-secondary {
+    border: 1px solid var(--tllm-border);
+    background: var(--tllm-surface-2);
+    color: var(--tllm-text);
+}
+.tllm-danger-btn {
+    border: 0;
+    background: var(--tllm-danger);
+    color: #fff;
+}
+.tllm-block {
+    width: 100%;
+    margin-bottom: 16px;
+}
+.tllm-row {
+    display: flex;
+    gap: 8px;
+}
+.tllm-row-end {
+    justify-content: flex-end;
+}
+.tllm-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--tllm-accent);
+    font: 13px var(--tllm-font);
+    cursor: pointer;
+}
+.tllm-link-danger {
+    color: #ff8a8d;
+}
+.tllm-poll-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 12px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius);
+}
+.tllm-poll-form label {
+    font-size: 12px;
+    color: var(--tllm-text-2);
+}
+.tllm-poll-form input {
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius-sm);
+    background: var(--tllm-surface-2);
+    color: var(--tllm-text);
+    font: 14px var(--tllm-font);
+}
+.tllm-poll-opts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.tllm-poll-form .tllm-link {
+    align-self: flex-start;
+}
+.tllm-form-error {
+    margin: 0;
+    color: #ff8a8d;
+    font-size: 13px;
+}
+.tllm-poll {
+    margin-bottom: 14px;
+    padding: 14px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius);
+}
+.tllm-poll-q {
+    margin: 0 0 4px;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+.tllm-poll-state {
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: var(--tllm-text-2);
+}
+.tllm-opt {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    padding: 10px 12px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius-sm);
+    background: var(--tllm-surface-2);
+    color: var(--tllm-text);
+    font: 14px var(--tllm-font);
+    text-align: left;
+    overflow: hidden;
+    cursor: pointer;
+}
+.tllm-opt::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--pct, 0%);
+    background: var(--tllm-accent-soft);
+    transition: width 0.35s ease;
+}
+.tllm-opt > * {
+    position: relative;
+}
+.tllm-opt:disabled {
+    cursor: default;
+}
+.tllm-radio {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    border: 2px solid var(--tllm-text-2);
+    border-radius: 50%;
+}
+.tllm-opt.tllm-mine {
+    border-color: var(--tllm-accent);
+}
+.tllm-opt.tllm-mine .tllm-radio {
+    border-color: var(--tllm-accent);
+    box-shadow: inset 0 0 0 3px var(--tllm-surface-2);
+    background: var(--tllm-accent);
+}
+.tllm-opt-lb {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.tllm-opt-res {
+    flex: none;
+    color: var(--tllm-text-2);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+.tllm-poll-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 8px;
+}
+.tllm-voters {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+    color: var(--tllm-text-2);
+}
+.tllm-voters li {
+    padding: 2px 0;
+}
+
+/* ---------- Discreet bubbles ---------- */
+#tllmBubbles {
+    position: fixed;
+    z-index: 1100;
+    left: max(16px, env(safe-area-inset-left, 0px));
+    bottom: calc(var(--tllm-bar-h) + 12px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(330px, calc(100vw - 32px));
+    pointer-events: none;
+}
+.tllm-bubble {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius);
+    background: var(--tllm-surface-2);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    color: var(--tllm-text);
+    font: 13px var(--tllm-font);
+    text-align: left;
+    cursor: pointer;
+    pointer-events: auto;
+    animation: tllm-bubble-in 0.2s ease-out;
+}
+.tllm-bubble .tllm-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+}
+.tllm-b-text {
+    min-width: 0;
+    line-height: 1.35;
+}
+.tllm-b-text b,
+.tllm-b-text span {
+    display: block;
+}
+.tllm-b-text span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--tllm-text-2);
+}
+.tllm-bubble-hand {
+    border-color: rgba(245, 184, 61, 0.5);
+}
+@keyframes tllm-bubble-in {
+    from {
+        transform: translateY(8px);
+        opacity: 0;
+    }
+    to {
+        transform: none;
+        opacity: 1;
+    }
+}
+
+/* ---------- Reactions ---------- */
+.tllm-float {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    animation: tllm-rise 2.6s ease-out forwards;
+}
+.tllm-float-emoji {
+    font-size: 34px;
+    line-height: 1;
+}
+.tllm-float-name {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(10, 12, 15, 0.72);
+    color: var(--tllm-text);
+    font: 11px var(--tllm-font);
+}
+@keyframes tllm-rise {
+    0% {
+        transform: translateY(0) scale(0.7);
+        opacity: 0;
+    }
+    12% {
+        opacity: 1;
+        transform: translateY(-14px) scale(1);
+    }
+    100% {
+        transform: translateY(-160px);
+        opacity: 0;
+    }
+}
+
+/* ---------- Confirmation ---------- */
+.tllm-modal-wrap {
+    position: fixed;
+    z-index: 1300;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.55);
+}
+.tllm-modal {
+    width: min(380px, 100%);
+    padding: 20px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius);
+    background: var(--tllm-surface);
+    color: var(--tllm-text);
+    font: 14px var(--tllm-font);
+}
+.tllm-modal h3 {
+    margin: 0 0 6px;
+    font-size: 16px;
+}
+.tllm-modal p {
+    margin: 0 0 16px;
+    color: var(--tllm-text-2);
+    line-height: 1.45;
+}
+
+/* Focus */
+#tllmTop button:focus-visible,
+#tllmBar button:focus-visible,
+#tllmPanel :is(button, input, select, textarea):focus-visible,
+.tllm-pop button:focus-visible,
+.tllm-tile-more:focus-visible {
+    outline: 2px solid var(--tllm-accent);
+    outline-offset: 2px;
+}
+
+/* ---------- Phone ---------- */
+@media (max-width: 720px) {
+    :root {
+        --tllm-bar-h: 64px;
+        --tllm-top-h: 42px;
+    }
+    #tllmTop .tllm-seg,
+    #tllmTop .tllm-top-btn .tllm-lbl {
+        display: none;
+    }
+    #tllmTop .tllm-rec {
+        font-size: 0;
+        padding: 4px;
+    }
+    body.tllm-panel-open #tllmStage {
+        right: 0;
+    }
+    #tllmPanel {
+        z-index: 1000;
+        inset: 0;
+        width: auto;
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        border-left: 0;
+    }
+    .tllm-panel-back {
+        display: inline-block;
+    }
+    .tllm-panel-close {
+        display: none;
+    }
+    .tllm-bb {
+        min-width: 48px;
+        height: 52px;
+    }
+    .tllm-bb .tllm-lb,
+    .tllm-bb.tllm-desk,
+    .tllm-caret {
+        display: none;
+    }
+    .tllm-split .tllm-bb {
+        border-radius: var(--tllm-radius-sm);
+    }
+    .tllm-leave {
+        padding: 0 12px;
+    }
+    .tllm-leave .tllm-lbl {
+        display: none;
+    }
+    .tllm-count {
+        right: 4px;
+    }
+    .tllm-badge {
+        right: 4px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tllm-float,
+    .tllm-bubble {
+        animation: none;
+    }
+    .tllm-opt::before {
+        transition: none;
+    }
+}
+
+/* Bubbles with an icon (warnings, errors, recording) */
+.tllm-avatar-icon {
+    background: var(--tllm-surface-3);
+    color: var(--tllm-text);
+    font-size: 15px;
+}
+.tllm-bubble-error .tllm-avatar-icon {
+    color: #ff8a8d;
+}
+.tllm-bubble-rec .tllm-avatar-icon {
+    color: var(--tllm-danger);
+}
+.tllm-bubble .tllm-b-text b {
+    font-weight: 600;
+    white-space: normal;
+}
+
+/* Names always visible on tiles (MiroTalk hides them on small screens) */
+#tllmStage .username {
+    display: inline-block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+/* Raised hand: icon + label */
+body.tllm-room .Camera .user-hand::after {
+    content: 'Main levée';
+    margin-left: 6px;
+    font: 600 12px var(--tllm-font);
+}
+@media (max-width: 720px) {
+    body.tllm-room .Camera .user-hand::after {
+        content: '';
+        margin: 0;
+    }
+}
+
+/* ---------- Shared content (whiteboard, editor) in the video area ---------- */
+body.tllm-content #tllmStage #videoMediaContainer {
+    top: 0 !important;
+    left: 0 !important;
+    right: auto !important;
+    width: 100% !important;
+    height: 112px !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    justify-content: center;
+}
+body.tllm-content #tllmStage #videoPinMediaContainer {
+    display: none !important;
+}
+body.tllm-room #whiteboard {
+    z-index: 10 !important;
+    border-radius: var(--tllm-radius) !important;
+    box-shadow: none !important;
+}
+body.tllm-room #editorRoom.show {
+    position: fixed !important;
+    z-index: 10 !important;
+    top: calc(var(--tllm-top-h) + env(safe-area-inset-top, 0px) + 120px) !important;
+    bottom: calc(var(--tllm-bar-h) + env(safe-area-inset-bottom, 0px) + 8px) !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    border-radius: var(--tllm-radius) !important;
+    box-shadow: none !important;
+}
+body.tllm-panel-open #editorRoom.show {
+    right: calc(var(--tllm-panel-w) + 8px) !important;
+}
+
+/* Captions: docked where the side panel goes */
+body.tllm-room #transcriptionRoom {
+    position: fixed !important;
+    z-index: 14 !important;
+    top: calc(var(--tllm-top-h) + env(safe-area-inset-top, 0px)) !important;
+    bottom: calc(var(--tllm-bar-h) + env(safe-area-inset-bottom, 0px)) !important;
+    right: 0 !important;
+    left: auto !important;
+    width: var(--tllm-panel-w) !important;
+    height: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    border-radius: 0 !important;
+    border: 0 !important;
+    border-left: 1px solid var(--tllm-border) !important;
+    box-shadow: none !important;
+}
+
+/* Settings: a centred dialog above everything, never taller than the screen */
+body.tllm-room #mySettings {
+    z-index: 1050 !important;
+    max-height: calc(100vh - 32px) !important;
+}
+
+@media (max-width: 720px) {
+    body.tllm-content #tllmStage #videoMediaContainer {
+        height: 78px !important;
+    }
+    body.tllm-room #editorRoom.show {
+        top: calc(var(--tllm-top-h) + env(safe-area-inset-top, 0px) + 84px) !important;
+        left: 4px !important;
+        right: 4px !important;
+    }
+    body.tllm-room #transcriptionRoom {
+        z-index: 1000 !important;
+        inset: 0 !important;
+        width: auto !important;
+    }
+}
+
+/* Speaker view: the big video uses the same look as the tiles */
+body.tllm-room #videoPinMediaContainer {
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
