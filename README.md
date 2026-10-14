@@ -40,8 +40,14 @@ Le dépôt contient [`docker-compose.coolify.yml`](docker-compose.coolify.yml), 
 
 1. Dans Coolify, créer une ressource à partir du dépôt, type de build **Docker Compose**.
 2. Dans _Docker Compose Location_, indiquer `/docker-compose.coolify.yml`.
-3. Attribuer le domaine au service `tllm-meet`, par exemple `https://meet.exemple.fr`.
-4. Dans les variables d'environnement, remplir `HOST_USERS`, puis déployer.
+3. Dans le champ _Domains_ du service `tllm-meet`, écrire le domaine **suivi du port 3010** :
+   `https://meet.exemple.fr:3010`. Coolify envoie le trafic vers le port 3010 du conteneur ;
+   l'adresse publique reste `https://meet.exemple.fr`.
+4. Dans les variables d'environnement, remplir `HOST_USERS` et `SERVER_HOST_URL`
+   (`https://meet.exemple.fr`, sans port), puis déployer.
+5. Pour `HOST_USERS` et `SERVICE_PASSWORD_64_JWT`, décocher l'option de variable de build
+   (_Build Variable_ / _Available at Buildtime_) : ce sont des secrets utiles seulement à l'exécution,
+   et une variable de build reste lisible dans l'historique de l'image.
 
 Coolify lit le fichier et affiche les variables dans son interface :
 
@@ -49,7 +55,7 @@ Coolify lit le fichier et affiche les variables dans son interface :
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `HOST_USERS`       | **à remplir** : comptes admin `identifiant:motdepasse:Nom affiché`, séparés par `\|` ; le déploiement est bloqué tant qu'elle est vide |
 | `JWT_SECRET`       | généré par Coolify (64 caractères), conservé entre deux déploiements                                                                   |
-| `SERVER_HOST_URL`  | repris du domaine attribué dans Coolify                                                                                                |
+| `SERVER_HOST_URL`  | **à remplir** : l'adresse publique, sans port, par exemple `https://meet.exemple.fr`                                                   |
 | `TRUST_PROXY`      | `2` par défaut (Cloudflare + proxy Coolify)                                                                                            |
 | `SFU_ANNOUNCED_IP` | vide par défaut : l'IP publique est détectée au démarrage                                                                              |
 | `UI_STYLE`         | `sobre` par défaut, ou `papier`                                                                                                        |
