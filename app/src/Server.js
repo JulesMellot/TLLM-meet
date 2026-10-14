@@ -3224,6 +3224,15 @@ function startServer() {
             if (input && room.editPoll(ref, input.question, input.options)) sendPolls(room);
         });
 
+        socket.on('closePoll', (dataObject) => {
+            if (!roomExists(socket)) return;
+            const room = getRoom(socket);
+            if (!isSocketPresenter(socket, room)) return log.debug('[Poll] closePoll denied: not a presenter');
+
+            const data = checkXSS(dataObject);
+            if (typeof data?.pollId === 'string' && room.closePoll(data.pollId)) sendPolls(room);
+        });
+
         socket.on('deletePoll', (dataObject) => {
             if (!roomExists(socket)) return;
             const room = getRoom(socket);

@@ -446,6 +446,19 @@ describe('Only the admin can create a meeting (integration)', function () {
             assert.equal(poll.myVote, 'Pizza');
         });
 
+        it('lets only a presenter close a poll, and refuses votes once it is closed', async () => {
+            const { id } = pollsOf(admin)[0];
+            bob.emit('closePoll', { pollId: id });
+            await wait(300);
+            assert.equal(pollsOf(admin)[0].closed, false);
+            admin.emit('closePoll', { pollId: id });
+            await wait(300);
+            assert.equal(pollsOf(bob)[0].closed, true);
+            bob2.emit('vote', { pollId: id, option: 'Crêpes' });
+            await wait(300);
+            assert.deepEqual(pollsOf(admin)[0].counts, [2, 0]);
+        });
+
         it('lets the admin delete a poll by id', async () => {
             admin.emit('createPoll', { question: 'Second ?', options: ['Oui', 'Non'] });
             await wait(300);

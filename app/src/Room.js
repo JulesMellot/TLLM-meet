@@ -167,6 +167,13 @@ module.exports = class Room {
         return true;
     }
 
+    closePoll(ref) {
+        const poll = this.findPoll(ref);
+        if (!poll || poll.closed) return false;
+        poll.closed = true;
+        return true;
+    }
+
     deletePoll(ref) {
         const poll = this.findPoll(ref);
         if (!poll) return false;
