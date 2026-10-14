@@ -1,3 +1,13 @@
+# TLLM*meet
+
+Visioconférence privée, en français, pour des réunions jusqu'à une trentaine de personnes.
+Seul l'administrateur crée les visios ; les invités rejoignent par lien, sans compte.
+
+TLLM*meet est un fork de [MiroTalk SFU](https://github.com/miroslavpejic85/mirotalksfu) (v2.6.25)
+de Miroslav Pejic, distribué sous licence [AGPL-3.0](LICENSE). Le README d'origine suit ci-dessous.
+
+---
+
 <div align="center">
     <a href="https://sfu.mirotalk.com" target="_blank">
         <img src="public/images/mirotalk-icon.png">
