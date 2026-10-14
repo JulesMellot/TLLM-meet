@@ -1,379 +1,119 @@
-# TLLM*meet
+# TLLM\*meet
 
 Visioconférence privée, en français, pour des réunions jusqu'à une trentaine de personnes.
-Seul l'administrateur crée les visios ; les invités rejoignent par lien, sans compte.
 
-TLLM*meet est un fork de [MiroTalk SFU](https://github.com/miroslavpejic85/mirotalksfu) (v2.6.25)
-de Miroslav Pejic, distribué sous licence [AGPL-3.0](LICENSE). Le README d'origine suit ci-dessous.
+- Seul l'administrateur crée les visios.
+- Les invités rejoignent par lien, sans compte.
+- Ni ChatGPT ni DeepSeek : aucune intégration d'IA conversationnelle.
+
+TLLM\*meet est un fork de [MiroTalk SFU](https://github.com/miroslavpejic85/mirotalksfu) (v2.6.25)
+de Miroslav Pejic, sous licence [AGPL-3.0](LICENSE).
+
+## Fonctionnalités
+
+- Audio, vidéo et partage d'écran, via [mediasoup](https://mediasoup.org).
+- Chat, sondages, partage de vidéos et de fichiers pendant la visio.
+- Tableau blanc, éditeur de texte partagé, sous-salles.
+- Salle d'attente, verrouillage de la visio, mot de passe optionnel.
+- Enregistrement dans le navigateur, sous-titres (reconnaissance vocale du navigateur).
+- Fond flou ou virtuel, réduction de bruit.
+- Interface sobre, utilisable sur téléphone ; pages en mode clair ou sombre.
+
+## Fonctionnement
+
+1. L'admin se connecte sur `/login` avec un compte défini dans `HOST_USERS`.
+2. Il donne un nom à la visio. Un suffixe aléatoire est ajouté, par exemple `point-hebdo-k7m2xq`.
+3. Il partage le lien. Les invités entrent avec leur nom, sans compte.
+
+Si un invité ouvre le lien avant l'admin, il voit « Cette visio n'a pas encore commencé ».
+La page entre d'elle-même dès que l'admin ouvre la visio.
+
+L'admin est présentateur de ses visios. Un invité ne le devient que si l'admin le promeut.
+
+La session admin est un cookie signé, vérifié côté serveur (`HttpOnly`, `Secure`, `SameSite=Lax`).
+Elle ne contient pas le mot de passe et expire après `HOST_SESSION_HOURS` heures.
+La déconnexion la révoque, et changer le mot de passe invalide les sessions ouvertes.
 
 ## Déploiement (Coolify derrière Cloudflare)
 
-Variables à renseigner dans `.env` (voir `.env.template`) :
+Coolify construit l'image à partir du `Dockerfile` du dépôt. Les variables se règlent dans Coolify ;
+la liste complète est dans [`.env.template`](.env.template).
 
 | Variable | Valeur |
 |---|---|
 | `NODE_ENV` | `production` |
 | `SERVER_HOST_URL` | l'URL publique, par exemple `https://meet.exemple.fr` |
-| `SFU_ANNOUNCED_IP` | l'IP publique du serveur (les flux WebRTC ne passent pas par Cloudflare) |
+| `SFU_ANNOUNCED_IP` | l'IP publique du serveur |
 | `TRUST_PROXY` | `2` (Cloudflare + proxy Coolify) |
 | `JWT_SECRET` | au moins 32 caractères : `openssl rand -hex 32` |
-| `HOST_USERS` | comptes admin, `identifiant:motdepasse:Nom affiché`, séparés par `|` |
+| `HOST_USERS` | comptes admin `identifiant:motdepasse:Nom affiché`, séparés par `\|` |
 | `UI_STYLE` | `sobre` (par défaut) ou `papier` |
 | `SOURCE_URL` | lien vers le code source de l'instance (AGPL-3.0, article 13) |
 
-Le serveur refuse de démarrer si `HOST_USERS` est vide ou contient les identifiants par défaut.
-Les ports UDP/TCP `SFU_MIN_PORT`–`SFU_MAX_PORT` doivent être ouverts directement sur le serveur.
+Le serveur refuse de démarrer si `JWT_SECRET` manque ou est trop court,
+ou si `HOST_USERS` est vide ou contient des identifiants connus (`admin:admin`…).
 
----
+Réseau :
 
-<div align="center">
-    <a href="https://sfu.mirotalk.com" target="_blank">
-        <img src="public/images/mirotalk-icon.png">
-    </a>
-</div>
+- Le port HTTP `3010` passe par Coolify et Cloudflare.
+- Les flux audio et vidéo ne passent pas par Cloudflare. Les ports `40000-40100`, en UDP et en TCP,
+  doivent être ouverts directement sur le serveur (`SFU_MIN_PORT` et `SFU_MAX_PORT`).
+- `TRUST_PROXY` doit correspondre au nombre exact de proxys devant l'application.
+  Une valeur trop haute permet de falsifier l'IP utilisée par les limites de connexion.
 
-<h1 align="center">MiroTalk SFU - Open Source Self-Hosted WebRTC Video Conferencing Platform</h1>
+## Développement local
 
-<h3 align="center">
-Self-hosted, open-source WebRTC video conferencing platform for real-time communication and collaboration.
-</h3>
-
-<h4 align="center">
-A modern alternative to Zoom, Google Meet, Jitsi Meet, and Microsoft Teams, powered by scalable SFU architecture with Mediasoup.
-</h4>
-
-<br />
-
-<div align="center">
-
-[![GitHub Stars](https://img.shields.io/github/stars/miroslavpejic85/mirotalksfu?style=social)](https://github.com/miroslavpejic85/mirotalksfu/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/miroslavpejic85/mirotalksfu?style=social)](https://github.com/miroslavpejic85/mirotalksfu/network/members)
-
-<a href="https://choosealicense.com/licenses/agpl-3.0/">![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3_Open_Source-blue.svg)</a>
-<a href="https://hub.docker.com/r/mirotalk/sfu">![Docker Pulls](https://img.shields.io/docker/pulls/mirotalk/sfu)</a>
-<a href="https://github.com/miroslavpejic85/mirotalksfu/commits/main">![Last Commit](https://img.shields.io/github/last-commit/miroslavpejic85/mirotalksfu)</a>
-<a href="https://discord.gg/rgGYfeYW3N">![Discord](https://img.shields.io/badge/Discord-Community-5865F2?logo=discord&logoColor=white)</a>
-<a href="https://www.linkedin.com/in/miroslav-pejic-976a07101/">![Author](https://img.shields.io/badge/Author-Miroslav_Pejic-brightgreen.svg)</a>
-
-</div>
-
-<br />
-
-<p align="center"><strong>MiroTalk SFU</strong> is a <strong>self-hosted, open-source video conferencing</strong> platform built on <a href="https://mediasoup.org" target="_blank">mediasoup</a> SFU architecture for scalable real-time communication. A powerful alternative to <strong>Zoom, Google Meet, and Microsoft Teams</strong> for video conferencing, collaboration, and streaming. Deploy it on your own server and keep full control over your data, privacy, and infrastructure — with no vendor lock-in and no limits.</p>
-
-<p align="center">
-    <a href="https://sfu.mirotalk.com">Try Live Demo</a> · <a 
-href="https://sfu.mirotalk.com/privacy">Privacy</a> · <a 
-href="https://docs.mirotalk.com/mirotalk-sfu/self-hosting/">Documentation</a> · <a href="https://discord.gg/rgGYfeYW3N">Discord</a> · <a href="https://github.com/sponsors/miroslavpejic85">Sponsor</a>
-</p>
-
-<br />
-
-<p align="center">
-    <a href="https://sfu.mirotalk.com/">
-        <img src="public/images/mirotalksfu-github.gif" alt="MiroTalk SFU - Open Source Video Conferencing">
-    </a>
-</p>
-
-<p align="center">Proudly sponsored by</p>
-
-<h1 align=center><a href="https://www.recall.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=miroslavpejic85-mirotalksfu">Recall.ai</a> - API for meeting recording</h1>
-<p align="center">An API for recording Zoom, Google Meet, Microsoft Teams, and in-person meetings.</p>
-
-<hr />
-
-<br/>
-
-<details>
-<summary>✨ Why MiroTalk SFU?</summary>
-
-<br/>
-
-|                    | MiroTalk SFU                                                                                                                                        | Zoom / Meet / Teams         |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| 💰 **Cost**        | Free & Open Source (AGPLv3). [One-time fee licenses](https://codecanyon.net/item/mirotalk-sfu-webrtc-realtime-video-conferences/40769970) available | Paid plans                  |
-| 🏠 **Self-hosted** | ✅ Full control over your data                                                                                                                      | ❌ Cloud only               |
-| 🔒 **Privacy**     | Your server, your rules                                                                                                                             | Third-party data processing |
-| ⏱️ **Time limits** | Unlimited                                                                                                                                           | 40-60 min on free tiers     |
-| 🏢 **Rooms**       | Unlimited concurrent rooms                                                                                                                          | Limited                     |
-| 🎥 **Resolution**  | Up to 8K @ 60fps                                                                                                                                    | Up to 1080p                 |
-| 🌍 **Languages**   | 133 languages                                                                                                                                       | ~30-80                      |
-| 🔌 **API**         | Full REST API included                                                                                                                              | Paid add-on                 |
-| 🧩 **Rebrand**     | Full source code, white-label ready                                                                                                                 | Limited branding options    |
-| 📦 **Deploy**      | Docker, Node.js, one-click install                                                                                                                  | N/A (SaaS only)             |
-
-</details>
-
-<details>
-<summary>🚀 Features</summary>
-
-<br/>
-
-- 🎥 Video up to **8K @ 60fps** · Screen sharing · Recording · Picture-in-Picture
-- 💬 Chat with Markdown & emoji · Collaborative whiteboard and Rich text editor · File sharing
-- 🎤 Speech recognition
-- 🔒 OIDC auth · [Host protection](https://docs.mirotalk.com/mirotalk-sfu/host-protection/) · JWT credentials · Room passwords · Lobby & spam mitigation
-- 🔌 REST API · Embeddable [iframe](https://docs.mirotalk.com/mirotalk-sfu/integration/#iframe) · 133 languages
-
-**[See all features →](https://docs.mirotalk.com/mirotalk-sfu/)**
-
-</details>
-
-<details open>
-<summary>⚡ Quick Start</summary>
-
-<br/>
-
-**Start in 6 commands:**
+Il faut Node.js 24 ou plus.
 
 ```bash
-git clone https://github.com/miroslavpejic85/mirotalksfu.git
-cd mirotalksfu
-cp app/src/config.template.js app/src/config.js
 cp .env.template .env
+cp app/src/config.template.js app/src/config.js
+# dans .env : renseigner JWT_SECRET et HOST_USERS
 npm install
-npm start
+npm start      # https://localhost:3010
+npm test
 ```
 
-Open [https://localhost:3010](https://localhost:3010) - done!
+En local, le serveur utilise le certificat de test de `app/ssl` ; le navigateur demande de l'accepter.
 
----
+## Personnalisation
 
-<details>
-<summary>📋 Full Setup Guide (Requirements & Details)</summary>
+- `UI_STYLE` : `sobre` (graphite, accent bleu) ou `papier` (tons chauds, accent vert).
+- `SHOW_*` : affiche ou masque chaque bouton de la visio.
+- `BRAND_*` : nom, description et textes des pages.
 
-<br/>
+Le code propre au fork est rangé dans des fichiers séparés, pour limiter les conflits avec l'upstream :
 
-Before running MiroTalk SFU, ensure you have `Node.js` and all [requirements](https://mediasoup.org/documentation/v3/mediasoup/installation/#requirements) installed. This project has been tested with Node version [22.X](https://nodejs.org/en/download).
+| Fichier | Rôle |
+|---|---|
+| `public/css/tllm.css` | apparence de la visio |
+| `public/css/tllm-pages.css` | accueil, connexion, attente, erreurs |
+| `public/js/tllm.js` | menu « Plus », chargement à la demande des bibliothèques |
+| `public/js/TllmHome.js` | page d'accueil |
+| `app/src/AdminAuth.js` | session admin, noms de visio |
+| `app/src/ClientIp.js` | IP du client derrière les proxys |
 
-Requirements install example for `Ubuntu 24.04 LTS`:
-
-```bash
-apt-get update
-apt-get install -y build-essential
-DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata
-apt install -y software-properties-common
-add-apt-repository -y ppa:deadsnakes/ppa
-apt update
-apt install -y python3.8 python3-pip
-apt install -y ffmpeg
-```
-
----
-
-![nodejs](public/images/nodejs.png)
-
-Install `NodeJS 22.X` and `npm` using [Node Version Manager](https://docs.mirotalk.com/nvm/nvm/)
-
----
-
-Start the server:
+## Mise à jour depuis MiroTalk SFU
 
 ```bash
-git clone https://github.com/miroslavpejic85/mirotalksfu.git
-cd mirotalksfu
-cp app/src/config.template.js app/src/config.js
-cp .env.template .env
+git remote add upstream https://github.com/miroslavpejic85/mirotalksfu.git
+git fetch upstream
+git merge upstream/main
 npm install
-npm start                          # or: SERVER_LISTEN_PORT=3011 npm start
+npm test
 ```
 
-Open [https://localhost:3010](https://localhost:3010) - done!
+Les conflits se concentrent sur `app/src/Server.js`, `app/src/config.template.js`,
+`public/views/Room.html` et `public/js/RoomClient.js`.
 
-> \[!NOTE]
->
-> To run `MiroTalk SFU` on a `Windows operating system`, you can follow the instructions provided in [this documentation](https://github.com/miroslavpejic85/mirotalksfu/issues/99#issuecomment-1586073853).
+Après une mise à jour, vérifier :
 
-</details>
+- qu'aucune nouvelle route ni nouvel événement socket ne crée une visio sans passer par `AdminAuth` ;
+- que les nouvelles intégrations externes restent retirées ou désactivées par défaut.
 
-</details>
+## Licence
 
-<details>
-<summary>🐳 Docker</summary>
+[AGPL-3.0](LICENSE). Le code source modifié doit rester accessible aux utilisateurs de l'instance :
+c'est le rôle du lien `SOURCE_URL`, affiché dans « À propos ».
 
-<br/>
-
-![docker](public/images/docker.png)
-
-**Prerequisites:** Install [Docker Engine](https://docs.docker.com/engine/install/) and [Docker Compose](https://docs.docker.com/compose/install/) - Image available on [Docker Hub](https://hub.docker.com/r/mirotalk/sfu)
-
-```bash
-git clone https://github.com/miroslavpejic85/mirotalksfu.git
-cd mirotalksfu
-cp app/src/config.template.js app/src/config.js
-cp .env.template .env
-cp docker-compose.template.yml docker-compose.yml
-docker-compose pull    # optional: pull official image
-docker-compose up      # add -d to run in background
-```
-
-Open [https://localhost:3010](https://localhost:3010) - done!
-
-> **Note:** Edit `app/src/config.js`, `.env`, and `docker-compose.yml` to customize your setup.
-
-</details>
-
-<details>
-<summary>📚 Documentation</summary>
-
-<br/>
-
-For detailed guides and references, visit the **[official documentation](https://docs.mirotalk.com)**:
-
-- [Our Story](https://docs.mirotalk.com/story/)
-- [About](https://docs.mirotalk.com/mirotalk-sfu/)
-- [Self-Hosting Guide](https://docs.mirotalk.com/mirotalk-sfu/self-hosting/)
-- [Automation-scripts](https://docs.mirotalk.com/scripts/about/)
-- [Configurations](https://docs.mirotalk.com/mirotalk-sfu/configurations/)
-- [Rebranding](https://docs.mirotalk.com/mirotalk-sfu/rebranding/)
-- [Host Protection Mode](https://docs.mirotalk.com/mirotalk-sfu/host-protection/)
-- [Integration](https://docs.mirotalk.com/mirotalk-sfu/integration/)
-- [Direct Room Join](https://docs.mirotalk.com/mirotalk-sfu/join-room/)
-- [REST API Documentation](https://docs.mirotalk.com/mirotalk-sfu/api/)
-- [Scalability](https://docs.mirotalk.com/mirotalk-sfu/scalability/)
-- [Updates](https://docs.mirotalk.com/mirotalk-sfu/updates/)
-
-</details>
-
-<details open>
-<summary>☁️ Recommended Hosting Providers</summary>
-
-<br/>
-
-| Provider                                                                                           | Description                                                                                                                                             | Link                                                                |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [![Cloudron](public/sponsors/CloudronLogo.png)](https://www.cloudron.io/)                          | One-click install from the [Cloudron App Store](https://www.cloudron.io/store/index.html). Automates deployment, updates, backups, and user management. | [Get Started](https://www.cloudron.io/)                             |
-| [![Hetzner](public/sponsors/Hetzner.png)](https://www.hetzner.com)                                 | High-performance cloud servers and dedicated root servers with top-tier reliability. Powers our live demo.                                              | [Explore Hetzner](https://www.hetzner.com/cloud)                    |
-| [![Netcup](public/sponsors/Netcup.png)](https://www.netcup.com/en/?ref=309627)                     | Enterprise-grade performance at unbeatable prices. Scalable and reliable.                                                                               | [Explore Netcup](https://www.netcup.com/en/?ref=309627)             |
-| [![Hostinger](public/advertisers/HostingerLogo.png)](https://hostinger.com/?REFERRALCODE=MIROTALK) | Fast, reliable hosting with 24/7 support and great performance.                                                                                         | [Check out Hostinger](https://hostinger.com/?REFERRALCODE=MIROTALK) |
-| [![Contabo](public/advertisers/ContaboLogo.png)](https://www.dpbolvw.net/click-101027391-14462707) | Top-tier German hosting, dedicated servers, VPS, and web hosting at unbeatable prices.                                                                  | [Explore Contabo](https://www.dpbolvw.net/click-101027391-14462707) |
-
-To set up your own instance of `MiroTalk SFU` on a dedicated cloud server, please refer to our comprehensive [self-hosting documentation](https://docs.mirotalk.com/mirotalk-sfu/self-hosting/).
-
-</details>
-
-<details>
-<summary>🙏 Credits</summary>
-
-<br/>
-
-- [Davide Pacilio](https://cruip.com/demos/solid/) (html template)
-- [Dirk Vanbeveren](https://github.com/Dirvann) (sfu logic)
-- [Mediasoup](https://mediasoup.org) (sfu server)
-- [DiceBear](https://www.dicebear.com/) (random avatars)
-- [Image by ddraw on Freepik](https://www.freepik.com/free-vector/collection-female-male-avatars_1105371.htm) (avatar illustrations)
-
-</details>
-
-<details>
-<summary>🤝 Contributing</summary>
-
-<br/>
-
-Contributions are welcome and greatly appreciated! Whether it's bug fixes, features, or documentation - every contribution helps.
-
-1. Fork the repository
-2. Create your feature branch
-3. Run `npm run lint` before committing
-4. Submit a pull request
-
-Have questions? Join our [Discord community](https://discord.gg/rgGYfeYW3N)!
-
-</details>
-
-<details>
-<summary>📄 License</summary>
-
-<br/>
-
-[![AGPLv3](public/images/AGPLv3.png)](LICENSE)
-
-MiroTalk SFU is free and open-source under the terms of AGPLv3 (GNU Affero General Public License v3.0). Please `respect the license conditions`, In particular `modifications need to be free as well and made available to the public`. Get a quick overview of the license at [Choose an open source license](https://choosealicense.com/licenses/agpl-3.0/).
-
-To obtain a [MiroTalk SFU license](https://docs.mirotalk.com/license/licensing-options/) with terms different from the AGPLv3, you can conveniently make your [purchase on CodeCanyon](https://codecanyon.net/item/mirotalk-sfu-webrtc-realtime-video-conferences/40769970). This allows you to tailor the licensing conditions to better suit your specific requirements.
-
-</details>
-
-<details open>
-<summary>❤️ Support the project</summary>
-
-<br/>
-
-Do you find MiroTalk SFU indispensable for your needs? Join us in supporting this transformative project by [becoming a backer or sponsor](https://github.com/sponsors/miroslavpejic85). By doing so, not only will your logo prominently feature here, but you'll also drive the growth and sustainability of MiroTalk SFU. Your support is vital in ensuring that this valuable platform continues to thrive and remain accessible for all. Make an impact - back MiroTalk SFU today and be part of this exciting journey!
-
-|                                                                                |                                                                                                                    |                                                                                                                                   |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| [![EvoPlat](public/sponsors/EvoPlat.png)](https://evoplat.com)                 | [![Cloudron](public/sponsors/Cloudron.png)](https://cloudron.io)                                                   | [![EffectsSDK](public/sponsors/EffectsSDK.png)](https://effectssdk.ai/)                                                           |
-| [![QuestionPro](public/sponsors/QuestionPro.png)](https://www.questionpro.com) | [![TestMuAI](public/sponsors/TestMuAIBlack.svg)](https://www.testmuai.com/?utm_medium=sponsor&utm_source=mirotalk) | [![BrowserStack](public/sponsors/BrowserStack.png)](https://www.browserstack.com)                                                 |
-| [![CrystalSound](public/sponsors/CrystalSound.png)](https://crystalsound.ai)   | [![Netcup](public/sponsors/Netcup.png)](https://www.netcup.com/en/?ref=309627)                                     |                                                                                                                                   |
-| [![ApiSmart](public/sponsors/ApiSmart.png)](https://www.apismart.ai)           |                                                                                                                    |                                                                                                                                   |
-
-</details>
-
-<details>
-<summary>🙏 Past Sponsors</summary>
-
-<br/>
-
-We are grateful to our past sponsors for their support!
-
-|                                                                              |                                                                 |                                                                         |
-| ---------------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| [![Hetzner](public/sponsors/HetznerLogo.png)](https://www.hetzner.com/cloud) | [![Kiquix](public/sponsors/KiquixLogo.png)](https://kiquix.com) | [![BroadcastX](public/sponsors/BroadcastX.png)](https://broadcastx.de/) |
-| [![LuvLounge](public/sponsors/LuvLounge.png)](https://luvlounge.ca)          |                                                                 |                                                                         |
-
-</details>
-
-<details>
-<summary>📢 Advertisers</summary>
-
----
-
-|                                                                                                |                                                                                                |                                                                                 |
-| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| [![Hostinger](public/advertisers/Hostinger.png)](https://hostinger.com/?REFERRALCODE=MIROTALK) | [![Contabo](public/advertisers/Contabo.png)](https://www.dpbolvw.net/click-101027391-14462707) | [![Rambox](public/advertisers/RamboxLogo.png)](https://rambox.app?via=mirotalk) |
-
----
-
-</details>
-
-<details open>
-<summary>✨ EffectsSDK</summary>
-
-[![EffectsSDK](public/sponsors/EffectsSDK.png)](https://effectssdk.ai/)
-
-`Enhance your video conferencing` experience with `advanced virtual backgrounds` and `noise suppression`. EffectsSDK offers powerful SDKs and plugins for fast integration.
-
-**Explore:**
-
-- 🎥 **[AI Video Effects Extension](https://chromewebstore.google.com/detail/effetti-webcam-ai-+-regis/iedbphhbpflhgpihkcceocomcdnemcbj)**: Add virtual backgrounds and effects to your webcam.
-- 🔊 **[Noise Cancelling Extension](https://chromewebstore.google.com/detail/noise-cancelling-app/njmhcidcdbaannpafjdljminaigdgolj)**: Reduce background noise for clearer audio.
-- 🛠️ **[Integrate EffectsSDK](https://github.com/EffectsSDK)**: Access SDKs and plugins for custom solutions.
-
-</details>
-
-<br />
-
----
-
-This project is tested with [BrowserStack](https://www.browserstack.com).
-
----
-
-<p align="center">🌐 Explore the full MiroTalk suite (SFU, P2P, BRO, C2C, WEB, CME, ADM) → <a href="https://docs.mirotalk.com/sites/overview"><strong>MiroTalk Overview</strong></a></p>
-
----
-
-<p align="center">
-  Built with ❤️ by <a href="https://www.linkedin.com/in/miroslav-pejic-976a07101/">Miroslav</a> and the open-source community
-</p>
-
-<h2 align="center">Contributors</h2>
-
-<p align="center">Thanks to all the amazing people who have contributed to MiroTalk SFU 💙</p>
-
-<p align="center">
-  <a href="https://github.com/miroslavpejic85/mirotalksfu/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=miroslavpejic85/mirotalksfu" />
-  </a>
-</p>
+MiroTalk SFU © 2021 Miroslav Pejic. Les modifications TLLM\*meet sont publiées sous la même licence.
