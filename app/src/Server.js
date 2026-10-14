@@ -8,7 +8,6 @@
 ███████ ███████ ██   ██   ████   ███████ ██   ██                                           
 
 prod dependencies: {
-    @ngrok/ngrok            : https://www.npmjs.com/package/@ngrok/ngrok
     @sentry/node            : https://www.npmjs.com/package/@sentry/node
     axios                   : https://www.npmjs.com/package/axios
     chokidar                : https://www.npmjs.com/package/chokidar
@@ -80,7 +79,6 @@ const mediasoupClient = require('mediasoup-client');
 const http = require('http');
 const path = require('path');
 const axios = require('axios');
-const ngrok = require('@ngrok/ngrok');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const sanitizeFilename = require('sanitize-filename');
@@ -1683,9 +1681,7 @@ function startServer() {
             rtmpStreamKey = uuidv4();
             log.info('initRTMP using custom RTMP URL', { rtmp });
         } else {
-            const domainName = config?.integrations?.ngrok?.enabled
-                ? 'localhost'
-                : req.headers.host?.split(':')[0] || 'localhost';
+            const domainName = req.headers.host?.split(':')[0] || 'localhost';
 
             const rtmpUseNodeMediaServer = rtmpCfg.useNodeMediaServer ?? true;
             const rtmpServer = rtmpCfg.server != '' ? rtmpCfg.server : false;
@@ -2069,12 +2065,11 @@ function startServer() {
     // SERVER CONFIG
     // ####################################################
 
-    function getServerConfig(tunnel = false) {
+    function getServerConfig() {
         const safeConfig = {
             // Network & Connectivity
             network: {
                 server_listen: host,
-                server_tunnel: tunnel,
                 trust_proxy: trustProxy,
                 sfu: {
                     announcedIP: announcedAddress,
@@ -2083,7 +2078,6 @@ function startServer() {
                     rtcMinPort: config.mediasoup?.worker?.rtcMinPort,
                     rtcMaxPort: config.mediasoup?.worker?.rtcMaxPort,
                 },
-                ngrok_enabled: config.ngrok?.enabled ? config.ngrok : false,
             },
 
             // Security & Authentication
@@ -2179,23 +2173,6 @@ function startServer() {
     }
 
     // ####################################################
-    // NGROK
-    // ####################################################
-
-    async function ngrokStart() {
-        try {
-            await ngrok.authtoken(config?.integrations?.ngrok?.authToken);
-            const listener = await ngrok.forward({ addr: config?.server?.listen?.port });
-            const tunnelUrl = listener.url();
-            log.info('Server config', getServerConfig(tunnelUrl));
-        } catch (err) {
-            log.warn('Ngrok Start error', err);
-            await ngrok.kill();
-            process.exit(1);
-        }
-    }
-
-    // ####################################################
     // HANDLE SERVER CLIENT ERRORS
     // ####################################################
 
@@ -2227,9 +2204,6 @@ function startServer() {
                 'font-family:monospace'
             );
 
-            if (config?.integrations?.ngrok?.enabled && config?.integrations?.ngrok?.authToken !== '') {
-                return ngrokStart();
-            }
             log.info('Server config', getServerConfig());
 
             // Warn if default secrets are still in use
@@ -5026,9 +5000,7 @@ function startServer() {
             const room = getRoom(socket);
 
             const DEFAULT_HOST = 'localhost';
-            const host = config?.ngrok?.enabled
-                ? DEFAULT_HOST
-                : socket?.handshake?.headers?.host?.split(':')[0] || DEFAULT_HOST;
+            const host = socket?.handshake?.headers?.host?.split(':')[0] || DEFAULT_HOST;
 
             const customRtmpUrl = data.customRtmpUrl || null;
 
@@ -5085,9 +5057,7 @@ function startServer() {
             const room = getRoom(socket);
 
             const DEFAULT_HOST = 'localhost';
-            const host = config?.integrations?.ngrok?.enabled
-                ? DEFAULT_HOST
-                : socket?.handshake?.headers?.host?.split(':')[0] || DEFAULT_HOST;
+            const host = socket?.handshake?.headers?.host?.split(':')[0] || DEFAULT_HOST;
 
             const customRtmpUrl = data.customRtmpUrl || null;
 
@@ -6158,12 +6128,6 @@ async function gracefulShutdown(signal) {
         // 7. Cleanup HTML injector
         log.debug('Cleaning up HTML injector...');
         htmlInjector.cleanup();
-
-        // 8. Close ngrok if active
-        if (config?.integrations?.ngrok?.enabled) {
-            log.debug('Closing ngrok tunnel...');
-            await ngrok.kill();
-        }
 
         log.info('Graceful shutdown completed successfully');
         process.exit(0);

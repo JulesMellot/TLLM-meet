@@ -876,30 +876,6 @@ module.exports = {
         },
 
         /**
-         * Ngrok Tunnel Configuration
-         * =========================
-         * Secure tunneling for local development and testing
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Sign up at https://dashboard.ngrok.com/signup
-         * 2. Get your auth token from:
-         *    https://dashboard.ngrok.com/get-started/your-authtoken
-         * 3. For reserved domains/subdomains:
-         *    - Upgrade to paid plan if needed
-         *    - Reserve at https://dashboard.ngrok.com/cloud-edge/domains
-         *
-         * Core Settings:
-         * -------------
-         * - enabled      : Enable/disable Ngrok tunneling [true/false] (default: false)
-         * - authToken    : Your Ngrok authentication token (from dashboard)
-         */
-        ngrok: {
-            enabled: process.env.NGROK_ENABLED === 'true',
-            authToken: process.env.NGROK_AUTH_TOKEN || '',
-        },
-
-        /**
          * Sentry Error Tracking Configuration
          * ==================================
          * Real-time error monitoring and performance tracking
