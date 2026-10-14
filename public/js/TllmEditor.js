@@ -214,6 +214,7 @@
 
     const origToggle = P.toggleEditor;
     P.toggleEditor = function () {
+        if (!this.isEditorOpen && window.tllmBoard?.open) window.tllmBoard.toggle(false); // one at a time
         origToggle.call(this);
         if (this.isEditorOpen && E.quill) setTimeout(() => E.quill.focus(), 50);
         if (this.isEditorOpen) renderPeople();

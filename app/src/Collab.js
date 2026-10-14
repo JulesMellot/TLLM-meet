@@ -19,6 +19,9 @@ const DEFAULTS = {
     maxMessageBytes: 2 * 1024 * 1024, // one update (a pasted image is the biggest case)
     maxDocBytes: 12 * 1024 * 1024, // whole document
     maxAwarenessBytes: 4096,
+    // Messages per second a socket may send, and the burst it may reach
+    syncRate: [40, 200],
+    awarenessRate: [25, 60],
 };
 
 const COLOR = /^#[0-9a-f]{6}$/i;
@@ -32,7 +35,7 @@ function toUint8(data) {
 class CollabRoom {
     constructor(id, opts, broadcast) {
         this.id = id;
-        this.opts = opts;
+        this.opts = { ...DEFAULTS, ...opts };
         this.broadcast = broadcast; // (exceptSocketId, event, payload)
         this.doc = new Y.Doc({ gc: true });
         this.awareness = new awarenessProtocol.Awareness(this.doc);
@@ -41,6 +44,7 @@ class CollabRoom {
         this.owners = new Map(); // awareness client id -> socket id
         this.bytesSinceCheck = 0;
         this.docBytes = 0;
+        this.buckets = new Map(); // `${kind}:${socket id}` -> { tokens, at }
 
         this.doc.on('update', (update, origin) => {
             const encoder = encoding.createEncoder();
@@ -56,10 +60,25 @@ class CollabRoom {
         });
     }
 
+    // Token bucket: a socket flooding the room is ignored until it slows down
+    allow(socketId, kind) {
+        const [rate, burst] = kind === 'sync' ? this.opts.syncRate : this.opts.awarenessRate;
+        const key = `${kind}:${socketId}`;
+        const now = Date.now();
+        const bucket = this.buckets.get(key) || { tokens: burst, at: now };
+        bucket.tokens = Math.min(burst, bucket.tokens + ((now - bucket.at) / 1000) * rate);
+        bucket.at = now;
+        this.buckets.set(key, bucket);
+        if (bucket.tokens < 1) return false;
+        bucket.tokens -= 1;
+        return true;
+    }
+
     // Messages from a client. Returns the replies to send back to that client.
     handleSync(socketId, data, canWrite) {
         const buf = toUint8(data);
         if (!buf || !buf.length || buf.length > this.opts.maxMessageBytes) return { replies: [], rejected: true };
+        if (!this.allow(socketId, 'sync')) return { replies: [], rejected: true, limited: true };
 
         const replies = [];
         try {
@@ -102,6 +121,7 @@ class CollabRoom {
     handleAwareness(socketId, data, peerName) {
         const buf = toUint8(data);
         if (!buf || !buf.length || buf.length > this.opts.maxAwarenessBytes) return false;
+        if (!this.allow(socketId, 'awareness')) return false;
         let entries;
         try {
             const decoder = decoding.createDecoder(buf);
@@ -151,6 +171,8 @@ class CollabRoom {
     }
 
     removeSocket(socketId) {
+        this.buckets.delete(`sync:${socketId}`);
+        this.buckets.delete(`awareness:${socketId}`);
         const ids = this.clients.get(socketId);
         this.clients.delete(socketId);
         if (!ids) return;

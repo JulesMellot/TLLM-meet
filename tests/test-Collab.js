@@ -105,6 +105,20 @@ describe('test-Collab (shared editor and whiteboard state)', () => {
         assert.equal(sent[0].except, null);
     });
 
+    it('ignores a socket that floods the room', () => {
+        const limited = new CollabRoom('r2', { ...opts, syncRate: [1, 3] }, () => {});
+        const results = [];
+        for (let i = 0; i < 5; i++)
+            results.push(limited.handleSync('a', updateMessage('x' + i, 'f' + i), true).rejected);
+        assert.deepEqual(results, [false, false, false, true, true]);
+        assert.equal(
+            limited.handleSync('b', updateMessage('y'), true).rejected,
+            false,
+            'other sockets are not affected'
+        );
+        limited.destroy();
+    });
+
     it('keeps an empty room content for a while, then forgets it', async () => {
         const store = new CollabStore(opts);
         store.get('r').handleSync('a', updateMessage('Notes'), true);

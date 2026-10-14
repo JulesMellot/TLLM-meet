@@ -1665,3 +1665,250 @@ body.tllm-room #editorRoom .ql-snow .ql-picker-options {
     background: var(--tllm-surface-2);
     border-color: var(--tllm-border);
 }
+
+/* ---------- Whiteboard (TllmBoard.js) ---------- */
+body.tllm-room #whiteboard {
+    display: none !important;
+}
+.tllm-board {
+    position: fixed;
+    z-index: 10;
+    top: calc(var(--tllm-top-h) + env(safe-area-inset-top, 0px) + 120px);
+    bottom: calc(var(--tllm-bar-h) + env(safe-area-inset-bottom, 0px) + 8px);
+    left: 8px;
+    right: 8px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius);
+    background: var(--tllm-surface);
+    overflow: hidden;
+}
+.tllm-board[hidden] {
+    display: none;
+}
+body.tllm-panel-open .tllm-board {
+    right: calc(var(--tllm-panel-w) + 8px);
+}
+.tllm-board-top {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px 6px 12px;
+    border-bottom: 1px solid var(--tllm-border);
+}
+.tllm-board-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tllm-text);
+}
+.tllm-board-mark {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--tllm-radius-sm);
+    background: var(--tllm-accent-soft);
+    color: var(--tllm-accent);
+}
+.tllm-board-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.tllm-board-group {
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius-sm);
+}
+.tllm-board button {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--tllm-text-2);
+    font: 13px var(--tllm-font);
+    cursor: pointer;
+}
+.tllm-board button:hover {
+    background: var(--tllm-surface-3);
+    color: var(--tllm-text);
+}
+.tllm-board button:focus-visible {
+    outline: 2px solid var(--tllm-accent);
+    outline-offset: 1px;
+}
+.tllm-board-zoom {
+    font-variant-numeric: tabular-nums;
+}
+.tllm-board-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    background: #ffffff;
+    touch-action: none;
+    overflow: hidden;
+}
+.tllm-board-tools {
+    position: absolute;
+    z-index: 2;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius);
+    background: var(--tllm-surface);
+    box-shadow: var(--tllm-shadow);
+    max-height: calc(100% - 20px);
+    overflow-y: auto;
+}
+.tllm-board .tllm-board-tools button[aria-pressed='true'],
+.tllm-board .tllm-board-style button[aria-pressed='true'] {
+    background: var(--tllm-accent-soft);
+    color: var(--tllm-accent);
+}
+.tllm-board-style {
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius);
+    background: var(--tllm-surface);
+    box-shadow: var(--tllm-shadow);
+}
+.tllm-board .tllm-board-style [data-color]::before {
+    content: '';
+    display: block;
+    width: 18px;
+    height: 18px;
+    margin: auto;
+    border-radius: 50%;
+    background: var(--c);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+.tllm-board .tllm-board-style [data-color][aria-pressed='true']::before {
+    box-shadow:
+        0 0 0 2px var(--tllm-surface),
+        0 0 0 4px var(--tllm-accent);
+}
+.tllm-board .tllm-board-style [data-width] span {
+    display: block;
+    width: 18px;
+    height: var(--w);
+    margin: auto;
+    border-radius: 99px;
+    background: currentColor;
+}
+.tllm-board-sep {
+    width: 1px;
+    height: 22px;
+    margin: 0 4px;
+    background: var(--tllm-border);
+}
+.tllm-board-pointers {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+.tllm-board-pointer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: transform 0.08s linear;
+}
+.tllm-board-pointer-dot {
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: var(--c);
+}
+.tllm-board-pointer-name {
+    padding: 1px 6px;
+    border-radius: 99px;
+    background: var(--c);
+    color: #fff;
+    font: 600 11px var(--tllm-font);
+    white-space: nowrap;
+}
+.tllm-board-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    color: #6b7280;
+    font-size: 14px;
+    pointer-events: none;
+}
+.tllm-board-empty[hidden] {
+    display: none;
+}
+.tllm-board-readonly .tllm-board-write {
+    display: none !important;
+}
+
+@media (max-width: 720px) {
+    .tllm-board {
+        top: calc(var(--tllm-top-h) + env(safe-area-inset-top, 0px) + 84px);
+        left: 4px;
+        right: 4px;
+    }
+    body.tllm-panel-open .tllm-board {
+        right: 4px;
+    }
+    .tllm-board-top {
+        padding: 4px 4px 4px 8px;
+    }
+    .tllm-board-name,
+    #tllmBoardFit,
+    #tllmBoardZoom {
+        display: none;
+    }
+    .tllm-board-actions {
+        gap: 2px;
+    }
+    .tllm-board-group {
+        border: 0;
+    }
+    .tllm-board-tools {
+        top: auto;
+        left: 6px;
+        right: auto;
+        max-width: calc(100% - 12px);
+        bottom: 56px;
+        flex-direction: row;
+        max-height: none;
+        overflow-x: auto;
+    }
+    .tllm-board-tools button {
+        flex: none;
+    }
+    .tllm-board-style {
+        bottom: 6px;
+    }
+}

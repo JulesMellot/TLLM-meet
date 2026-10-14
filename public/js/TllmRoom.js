@@ -382,7 +382,7 @@
     // Whiteboard and editor are shown in the video area (videos become a strip on top);
     // captions take the place of the side panel
     function syncLayout() {
-        const wb = $('whiteboard')?.classList.contains('show');
+        const wb = $('whiteboard')?.classList.contains('show') || window.tllmBoard?.open;
         const editor = $('editorRoom')?.classList.contains('show');
         const captions = $('transcriptionRoom')?.style.display === 'block';
         document.body.classList.toggle('tllm-content', !!(wb || editor));
@@ -585,6 +585,8 @@
 
         let meeting = '';
         // Without the right to share, the notes can still be read
+        if (!canShare() && isShown('whiteboardButton'))
+            meeting += item('click:whiteboardButton', 'fas fa-chalkboard', 'Voir le tableau blanc');
         if (!canShare() && isShown('editorButton'))
             meeting += item('click:editorButton', 'fas fa-file-lines', 'Lire les notes partagées');
         if (isShown('transcriptionButton'))
