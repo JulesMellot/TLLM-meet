@@ -79,10 +79,7 @@ describe('Socket.IO join authorization', () => {
                 }
                 updatePeerInfo() {}
             },
-            getActiveRooms: () => [],
             nodemailer: { sendEmailAlert() {} },
-            serverRecordingEnabled: true,
-            createRecUploadToken: sinon.stub().returns('recording-token'),
         });
         vm.runInContext(`${authorizationSource}\n${handlersSource}`, context);
         const data = {
@@ -115,7 +112,6 @@ describe('Socket.IO join authorization', () => {
         assert.equal(state.room.removePeer.callCount, 0);
         assert.equal(Object.keys(state.presenters).length, 0);
         assert.equal(state.room.toJson.callCount, 0);
-        assert.equal(state.context.createRecUploadToken.callCount, 0);
     }
 
     for (const flags of [
@@ -148,7 +144,6 @@ describe('Socket.IO join authorization', () => {
         state.data.peer_info.peer_name = 'Custom display name';
         const result = await joinExistingRoom(state);
         assert.equal(result.id, 'room-a');
-        assert.equal(result.recUploadToken, 'recording-token');
         assert.equal(state.room.addPeer.callCount, 1);
     });
 

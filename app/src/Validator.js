@@ -36,17 +36,6 @@ function isValidRoomName(input) {
     return !hasPathTraversal(room);
 }
 
-function isValidRecFileNameFormat(input) {
-    if (!input || typeof input !== 'string') {
-        return false;
-    }
-    const validPattern = /^Rec_[a-zA-Z0-9_.-]+\.webm$/;
-    if (!validPattern.test(input)) {
-        return false;
-    }
-    return !hasPathTraversal(input);
-}
-
 function hasPathTraversal(input) {
     if (!input || typeof input !== 'string') {
         return false;
@@ -73,44 +62,6 @@ function hasPathTraversal(input) {
     }
 
     return false;
-}
-
-function isValidEmail(email) {
-    const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
-    return emailRegex.test(email);
-}
-
-function parseEmailList(input) {
-    if (typeof input !== 'string') {
-        return [];
-    }
-
-    return [...new Set(input.split(',').map((email) => email.trim().toLowerCase()))].filter((email) =>
-        isValidEmail(email)
-    );
-}
-
-function hasAllowedEmailDomains(emails, allowedDomains = []) {
-    if (!Array.isArray(emails) || emails.length === 0) {
-        return false;
-    }
-
-    if (!Array.isArray(allowedDomains) || allowedDomains.length === 0) {
-        return true;
-    }
-
-    const normalizedAllowedDomains = allowedDomains
-        .map((domain) => String(domain).trim().toLowerCase())
-        .filter(Boolean);
-
-    if (normalizedAllowedDomains.length === 0) {
-        return true;
-    }
-
-    return emails.every((email) => {
-        const domain = email.split('@')[1]?.toLowerCase();
-        return normalizedAllowedDomains.includes(domain);
-    });
 }
 
 function isValidData(data) {
@@ -308,11 +259,7 @@ function sanitizeWbCanvasJson(payload, onDrop) {
 module.exports = {
     isValidPassword,
     isValidRoomName,
-    isValidRecFileNameFormat,
     hasPathTraversal,
-    isValidEmail,
-    parseEmailList,
-    hasAllowedEmailDomains,
     isValidData,
     isPrivateOrLoopbackHost,
     isPublicHttpUrl,

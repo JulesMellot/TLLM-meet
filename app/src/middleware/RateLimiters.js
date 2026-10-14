@@ -85,40 +85,9 @@ function createRateLimiters({ getRequesterKey }) {
         keyGenerator: (req) => req.body?.username || ipKeyGenerator(req),
     });
 
-    // Room scheduler
-    const scheduleMeetingCfg = config.features?.scheduleMeeting || {};
-    const scheduleMeetingWindowMs = scheduleMeetingCfg.rateLimit?.windowMs || 60 * MINUTE_MS;
-    const scheduleMeetingLimiter = rateLimit({
-        windowMs: scheduleMeetingWindowMs,
-        max: scheduleMeetingCfg.rateLimit?.max || 5,
-        message: {
-            message: `Too many schedule meeting requests. Please try again after ${minutesLabel(toMinutes(scheduleMeetingWindowMs))}.`,
-        },
-        keyGenerator: getRequesterKey,
-    });
-
-    // Active rooms endpoint (per IP) — public endpoint, so prevent
-    // enumeration / scraping abuse without breaking the public "event zone" UX.
-    const activeRoomsCfg = config.ui?.rooms?.activeRoomsRateLimit || {};
-    const activeRoomsLimiter = createIpLimiter({
-        windowMs: activeRoomsCfg.windowMs || MINUTE_MS,
-        max: activeRoomsCfg.max || 60,
-        text: 'Too many requests.',
-    });
-
-    // Server recording chunk upload (per IP). The /recSync* endpoints accept binary
-    // writes to disk, so cap request volume to mitigate flooding and disk exhaustion
-    // even from an authenticated/joined peer.
-    const recSyncCfg = config.media?.recording?.rateLimit || {};
-    const recSyncLimiter = createIpLimiter({
-        windowMs: recSyncCfg.windowMs || MINUTE_MS,
-        max: recSyncCfg.max || 300,
-        text: 'Too many recording upload requests.',
-    });
-
     // createRoom (per IP), shared by Socket.IO `createRoom` and HTTP /createRoomToken.
     // Prevents unauthenticated sockets from spamming arbitrary room entries
-    // into the in-memory roomList (which feeds /api/v1/activeRooms).
+    // into the in-memory roomList.
     const createRoomCfg = config.features?.createRoomRateLimit || {};
     const createRoomWindowMs = createRoomCfg.windowMs || MINUTE_MS;
     const createRoomMax = createRoomCfg.max || 10;
@@ -136,9 +105,6 @@ function createRateLimiters({ getRequesterKey }) {
 
     return {
         loginLimiter,
-        scheduleMeetingLimiter,
-        activeRoomsLimiter,
-        recSyncLimiter,
         createRoomTokenLimiter,
         checkCreateRoomLimit,
         createRoomLimiterMinutes,

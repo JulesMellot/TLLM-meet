@@ -515,7 +515,6 @@ async function initClient() {
             'Only the host (presenter) has the capability to record the meeting',
             'right'
         );
-        setTippy('switchServerRecording', 'The recording will be stored on the server rather than locally', 'right');
         setTippy('whiteboardGhostButton', 'Toggle transparent background', 'bottom');
         setTippy('whiteboardGridBtn', 'Toggle whiteboard grid', 'bottom');
         setTippy('wbBackgroundColorEl', 'Background color', 'bottom');
@@ -1095,10 +1094,6 @@ function getPeerName() {
     }
     console.log('Direct join', { name: name });
 
-    if (isValidEmail(name)) {
-        getId('notifyEmailInput').value = name;
-    }
-
     if (name === 'random') {
         const randomName = generateRandomName();
         console.log('Direct join', { name: randomName });
@@ -1495,10 +1490,6 @@ async function whoAreYou() {
             }
             setCookie(room_id + '_name', name, 30);
             peer_name = name;
-
-            if (isValidEmail(peer_name)) {
-                getId('notifyEmailInput').value = peer_name;
-            }
         },
     }).then(async () => {
         if (!usernameEmoji.classList.contains('hidden')) {
@@ -2101,7 +2092,6 @@ function roomIsReady() {
         elemDisplay('tabVirtualBackgroundBtn', false);
         elemDisplay('tabVirtualBackground', false);
     }
-    BUTTONS.settings.activeRooms && show(activeRoomsButton);
     BUTTONS.settings.fileSharing && show(fileShareButton);
     BUTTONS.settings.lockRoomButton && show(lockRoomButton);
     BUTTONS.settings.broadcastingButton && show(broadcastingButton);
@@ -2109,7 +2099,6 @@ function roomIsReady() {
     updateJoinLockButtons();
     BUTTONS.settings.sendEmailInvitation && show(sendEmailInvitation);
     !BUTTONS.settings.customNoiseSuppression && hide(noiseSuppressionButton);
-    BUTTONS.settings.tabNotificationsBtn && show(tabNotificationsBtn);
     (BUTTONS.settings.tabNetworkBtn !== undefined ? BUTTONS.settings.tabNetworkBtn : true) && show(tabNetworkBtn);
     if (
         BUTTONS.main.settingsButton &&
@@ -2117,7 +2106,6 @@ function roomIsReady() {
     ) {
         show(openNetworkSettingsButton);
     }
-    if (rc.recording.recSyncServerRecording) show(roomRecordingServer);
     BUTTONS.main.aboutButton && show(aboutButton);
     if (!isMobileDevice) show(pinUnpinGridDiv);
     if (!isSpeechSynthesisSupported) hide(speechMsgDiv);
@@ -2623,9 +2611,6 @@ function handleButtons() {
     tabAspectBtn.onclick = (e) => {
         rc.openTab(e, 'tabAspect');
     };
-    tabNotificationsBtn.onclick = (e) => {
-        rc.openTab(e, 'tabNotifications');
-    };
     tabModeratorBtn.onclick = (e) => {
         rc.openTab(e, 'tabModerator');
     };
@@ -2643,13 +2628,6 @@ function handleButtons() {
     };
     tabLanguagesBtn.onclick = (e) => {
         rc.openTab(e, 'tabLanguages');
-    };
-    notifyEmailCleanBtn.onclick = () => {
-        rc.cleanNotifications();
-        rc.saveNotifications(false);
-    };
-    saveNotificationsBtn.onclick = () => {
-        rc.saveNotifications();
     };
     speakerTestBtn.onclick = () => {
         playSpeaker(speakerSelect?.value, 'speaker');
@@ -2983,9 +2961,6 @@ function handleButtons() {
     };
     stopScreenButton.onclick = () => {
         rc.closeProducer(RoomClient.mediaType.screen);
-    };
-    activeRoomsButton.onclick = () => {
-        rc.showActiveRooms();
     };
     fileShareButton.onclick = () => {
         rc.selectFileToShare(socket.id, true);
@@ -3837,13 +3812,6 @@ function handleSelects() {
         lS.setSettings(localStorageSettings);
         e.target.blur();
     };
-    switchServerRecording.onchange = (e) => {
-        rc.recording.recSyncServerRecording = e.currentTarget.checked;
-        rc.roomMessage('recSyncServer', rc.recording.recSyncServerRecording);
-        localStorageSettings.rec_server = rc.recording.recSyncServerRecording;
-        lS.setSettings(localStorageSettings);
-        e.target.blur();
-    };
     // styling
     keepCustomTheme.onchange = (e) => {
         themeCustom.keep = e.currentTarget.checked;
@@ -4632,8 +4600,6 @@ function loadSettingsFromLocalStorage() {
     switchShortcuts.checked = isShortcutsEnabled;
     switchBroadcasting.checked = isBroadcastingEnabled;
 
-    switchServerRecording.checked = localStorageSettings.rec_server;
-
     keepCustomTheme.checked = themeCustom.keep;
     selectTheme.disabled = themeCustom.keep;
     updateThemeCardsDisabled();
@@ -4875,7 +4841,6 @@ function handleRoomClientEvents() {
             hide(recordingTypeField);
             hide(roomHostOnlyRecording);
             hide(roomRecordingOptions);
-            hide(roomRecordingServer);
             show(recordingMessage);
             hostOnlyRecording = true;
         }

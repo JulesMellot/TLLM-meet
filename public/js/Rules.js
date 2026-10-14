@@ -44,7 +44,6 @@ let BUTTONS = {
         extraButton: true,
     },
     settings: {
-        activeRooms: true,
         fileSharing: true,
         lockRoomButton: true, // presenter
         unlockRoomButton: true, // presenter
@@ -53,7 +52,6 @@ let BUTTONS = {
         joinLockButton: true, // presenter
         sendEmailInvitation: true, // presenter
         micOptionsButton: true,
-        tabNotificationsBtn: true, // presenter
         tabNetworkBtn: true,
         tabModerator: true, // presenter
         tabRecording: true,
@@ -171,7 +169,6 @@ function handleRules(isPresenter, roomSetup = true) {
         BUTTONS.settings.joinLockButton = false;
         BUTTONS.settings.sendEmailInvitation = false;
         BUTTONS.settings.tabModerator = false;
-        BUTTONS.settings.tabNotificationsBtn = false;
         BUTTONS.videoOff.muteAudioButton = false;
         BUTTONS.videoOff.geolocationButton = false;
         BUTTONS.videoOff.banButton = false;
@@ -193,7 +190,7 @@ function handleRules(isPresenter, roomSetup = true) {
 
         // If a presenter-only settings tab was open, reset to the default Room tab so its
         // content isn't left visible after the tab button is hidden.
-        const openPresenterTab = ['tabModerator', 'tabNotifications'].some((id) => {
+        const openPresenterTab = ['tabModerator'].some((id) => {
             const el = rc.getId(id);
             return el && el.style.display === 'block';
         });
@@ -258,7 +255,6 @@ function handleRules(isPresenter, roomSetup = true) {
     updateJoinLockButtons();
     BUTTONS.settings.sendEmailInvitation ? show(sendEmailInvitation) : hide(sendEmailInvitation);
     BUTTONS.settings.micOptionsButton ? show(micOptionsButton) : hide(micOptionsButton);
-    BUTTONS.settings.tabNotificationsBtn ? show(tabNotificationsBtn) : hide(tabNotificationsBtn);
     BUTTONS.settings.tabModerator ? show(tabModeratorBtn) : hide(tabModeratorBtn);
     if (BUTTONS.settings.host_only_recording) {
         show(recordingActionButton);
@@ -378,7 +374,6 @@ function handleRulesBroadcasting() {
     BUTTONS.settings.unlockRoomButton = false;
     BUTTONS.settings.lobbyButton = false;
     BUTTONS.settings.joinLockButton = false;
-    BUTTONS.settings.tabNotificationsBtn = false;
     BUTTONS.videoOff.muteAudioButton = false;
     BUTTONS.videoOff.geolocationButton = false;
     BUTTONS.videoOff.banButton = false;
@@ -417,7 +412,6 @@ function handleRulesBroadcasting() {
     elemDisplay('joinLockButton', false);
     elemDisplay('joinUnlockButton', false);
     elemDisplay('settingsButton', false);
-    elemDisplay('tabNotificationsBtn', false);
 
     elemDisplay('startVideoDeviceDropdown', false);
     elemDisplay('startAudioDeviceDropdown', false);

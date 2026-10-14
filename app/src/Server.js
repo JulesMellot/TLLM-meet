@@ -25,8 +25,6 @@ prod dependencies: {
     jsonwebtoken            : https://www.npmjs.com/package/jsonwebtoken
     mediasoup               : https://www.npmjs.com/package/mediasoup
     mediasoup-client        : https://www.npmjs.com/package/mediasoup-client
-    nodemailer              : https://www.npmjs.com/package/nodemailer
-    sanitize-filename       : https://www.npmjs.com/package/sanitize-filename
     socket.io               : https://www.npmjs.com/package/socket.io
     swagger-ui-express      : https://www.npmjs.com/package/swagger-ui-express
     uuid                    : https://www.npmjs.com/package/uuid
@@ -63,11 +61,6 @@ dev dependencies: {
 
 const express = require('express');
 const { auth, requiresAuth } = require('express-openid-connect');
-const { withFileLock } = require('./MutexManager');
-const { PassThrough } = require('stream');
-const { S3Client } = require('@aws-sdk/client-s3');
-const { Upload } = require('@aws-sdk/lib-storage');
-const { fixDurationOrRemux } = require('./FixDurationOrRemux');
 const cors = require('cors');
 const compression = require('compression');
 const socketIo = require('socket.io');
@@ -79,11 +72,9 @@ const path = require('path');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
-const sanitizeFilename = require('sanitize-filename');
 const helmet = require('helmet');
 const config = require('./config');
 const checkXSS = require('./XSS');
-const mime = require('mime-types');
 const Host = require('./Host');
 const Room = require('./Room');
 const Peer = require('./Peer');
@@ -125,27 +116,12 @@ const getRequesterKey = (req) => {
     return ipKeyGenerator(req);
 };
 
-const {
-    loginLimiter,
-    scheduleMeetingLimiter,
-    activeRoomsLimiter,
-    recSyncLimiter,
-    createRoomTokenLimiter,
-    checkCreateRoomLimit,
-    createRoomLimiterMinutes,
-} = createRateLimiters({ getRequesterKey });
-
-// Room scheduler configuration
-const scheduleMeetingCfg = config.features?.scheduleMeeting || {};
-const scheduleMeetingAllowedDomains = scheduleMeetingCfg.allowedDomains || [];
-const scheduleMeetingMaxRecipients = scheduleMeetingCfg.maxRecipients || 20;
+const { loginLimiter, createRoomTokenLimiter, checkCreateRoomLimit, createRoomLimiterMinutes } = createRateLimiters({
+    getRequesterKey,
+});
 
 // Branding configuration
 const brandHtmlInjection = config?.ui?.brand?.htmlInjection ?? true;
-
-// Email alerts and notifications
-const nodemailer = require('./lib/nodemailer');
-const { SCHEDULE_MEETING_LIMITS } = nodemailer;
 
 // Whisper transcription helpers (pure, unit-testable)
 const { resolveAudioExtension, decodeAudioPayload, filterTranscript } = require('./lib/whisper');
@@ -205,18 +181,6 @@ function decodeToken(jwtToken) {
 
     // Parse the decrypted payload as JSON
     return JSON.parse(decryptedPayload);
-}
-
-// Lifetime of the per-session server recording upload token (must outlive long recordings)
-const recUploadTokenExp = config?.media?.recording?.uploadTokenExp || '24h';
-
-// Create a signed upload token bound to a specific room. It proves the requester
-// actually passed the Socket.IO `join` auth for that room before allowing writes
-// to the recording directory via the /recSync* endpoints.
-function createRecUploadToken(roomId) {
-    return jwt.sign({ scope: 'rec-upload', roomId: String(roomId) }, jwtKeys.recUpload, {
-        expiresIn: recUploadTokenExp,
-    });
 }
 
 // Short-lived token bound to a room, issued by GET /createRoomToken only to requesters the HTTP
@@ -299,39 +263,13 @@ const OIDC = config?.security?.oidc || { enabled: false };
 // directory
 const dir = {
     public: path.join(__dirname, '../../public'),
-    rec: path.join(__dirname, config?.media?.recording?.dir || 'rec'),
 };
-
-// Rec directory create and set max file size
-const recMaxFileSize = config?.media?.recording?.maxFileSize || 1 * 1024 * 1024 * 1024; // 1GB default
-const serverRecordingEnabled = config?.media?.recording?.enabled || false;
-if (serverRecordingEnabled) {
-    log.debug('Server Recording enabled creating dir', dir.rec);
-    if (!fs.existsSync(dir.rec)) {
-        fs.mkdirSync(dir.rec, { recursive: true });
-    }
-}
-
-// ####################################################
-// AWS S3 SETUP
-// ####################################################
-
-const s3Client = new S3Client({
-    region: config?.integrations?.s3?.region, // Set your AWS region
-    credentials: {
-        accessKeyId: config?.integrations?.s3?.accessKeyId,
-        secretAccessKey: config?.integrations?.s3?.secretAccessKey,
-    },
-    endpoint: config?.integrations?.s3?.endpoint || undefined,
-    forcePathStyle: config?.integrations?.s3?.forcePathStyle === true,
-});
 
 // html views
 const views = {
     html: path.join(__dirname, '../../public/views'),
     landing: path.join(__dirname, '../../', 'public/views/landing.html'),
     login: path.join(__dirname, '../../', 'public/views/login.html'),
-    activeRooms: path.join(__dirname, '../../', 'public/views/activeRooms.html'),
     customizeRoom: path.join(__dirname, '../../', 'public/views/customizeRoom.html'),
     newRoom: path.join(__dirname, '../../', 'public/views/newroom.html'),
     notFound: path.join(__dirname, '../../', 'public/views/404.html'),
@@ -341,15 +279,7 @@ const views = {
     whoAreYou: path.join(__dirname, '../../', 'public/views/whoAreYou.html'),
 };
 
-const filesPath = [
-    views.landing,
-    views.newRoom,
-    views.room,
-    views.login,
-    views.whoAreYou,
-    views.activeRooms,
-    views.customizeRoom,
-];
+const filesPath = [views.landing, views.newRoom, views.room, views.login, views.whoAreYou, views.customizeRoom];
 
 const htmlInjector = new HtmlInjector(filesPath, config.ui.brand);
 
@@ -727,11 +657,6 @@ function startServer() {
         }
     });
 
-    // Get Active rooms
-    app.get('/activeRooms', OIDCAuth, (req, res) => {
-        htmlInjector.injectHtml(views.activeRooms, res);
-    });
-
     // Get Customize room
     app.get('/customizeRoom', OIDCAuth, (req, res) => {
         htmlInjector.injectHtml(views.customizeRoom, res);
@@ -747,121 +672,6 @@ function startServer() {
             res.status(200).json({ message: roomActive });
         } else {
             res.status(400).json({ message: 'Unauthorized' });
-        }
-    });
-
-    // Schedule Meeting feature flag
-    app.get('/isScheduleMeetingEnabled', (req, res) => {
-        res.status(200).json({ enabled: config.features?.scheduleMeeting?.enabled || false });
-    });
-
-    // Schedule Meeting - send email with .ics calendar attachment
-    app.post('/scheduleMeeting', OIDCAuth, scheduleMeetingLimiter, async (req, res) => {
-        if (!config.features?.scheduleMeeting?.enabled) {
-            return res.status(403).json({ message: 'Schedule meeting is disabled' });
-        }
-
-        const scheduleMeetingRequiresAuth = scheduleMeetingCfg.requireAuth !== false;
-        const hasAuthProviderEnabled = OIDC.enabled || hostCfg.protected || hostCfg.user_auth;
-
-        const authState = await getScheduleMeetingAuthState(req);
-
-        if (scheduleMeetingRequiresAuth) {
-            if (!hasAuthProviderEnabled) {
-                return res.status(403).json({
-                    message: 'Schedule meeting requires authentication, but no auth provider is enabled',
-                });
-            }
-            if (!authState.authorized) {
-                return res.status(401).json({ message: 'Unauthorized' });
-            }
-        }
-
-        const safeBody = checkXSS(req.body) || {};
-        const str = (v) => (typeof v === 'string' ? v.trim() : '');
-        const title = str(safeBody.title);
-        const description = str(safeBody.description);
-        const dateTime = str(safeBody.dateTime);
-        const recipients = str(safeBody.recipients);
-        const roomName = str(safeBody.roomName);
-        const duration = parseInt(safeBody.duration, 10);
-
-        if (!title || !dateTime || !duration || !recipients || !roomName) {
-            return res.status(400).json({ message: 'Missing required fields' });
-        }
-
-        if (!Validator.isValidRoomName(roomName)) {
-            return res.status(400).json({ message: 'Invalid room name' });
-        }
-
-        if (
-            title.length > SCHEDULE_MEETING_LIMITS.titleMax ||
-            description.length > SCHEDULE_MEETING_LIMITS.descriptionMax
-        ) {
-            return res.status(400).json({ message: 'Title or description is too long' });
-        }
-
-        if (!Number.isFinite(duration) || duration < 1 || duration > 24 * 60) {
-            return res.status(400).json({ message: 'Invalid duration' });
-        }
-
-        const scheduleStartDate = new Date(dateTime);
-        if (Number.isNaN(scheduleStartDate.getTime())) {
-            return res.status(400).json({ message: 'Invalid dateTime' });
-        }
-
-        const recipientList = Validator.parseEmailList(recipients);
-
-        if (recipientList.length === 0) {
-            return res.status(400).json({ message: 'No valid email recipients' });
-        }
-
-        if (recipientList.length > scheduleMeetingMaxRecipients) {
-            return res.status(400).json({
-                message: `Too many recipients. Max allowed is ${scheduleMeetingMaxRecipients}`,
-            });
-        }
-
-        if (!Validator.hasAllowedEmailDomains(recipientList, scheduleMeetingAllowedDomains)) {
-            return res.status(400).json({ message: 'One or more recipients are outside allowed domains' });
-        }
-
-        const requesterIp = authHost.getIP(req);
-
-        log.info('scheduleMeeting request', {
-            requester: authState.requester,
-            ip: requesterIp,
-            recipientCount: recipientList.length,
-            title,
-        });
-
-        try {
-            await nodemailer.sendScheduleMeeting({
-                title,
-                description,
-                dateTime: scheduleStartDate.toISOString(),
-                duration,
-                recipients: recipientList,
-                roomName,
-                hostUrl: config.server.hostUrl,
-            });
-
-            log.info('scheduleMeeting invitations sent', {
-                requester: authState.requester,
-                ip: requesterIp,
-                recipientCount: recipientList.length,
-                roomName,
-            });
-
-            res.status(200).json({ message: 'Meeting scheduled and invitations sent' });
-        } catch (err) {
-            log.error('scheduleMeeting', {
-                error: err.message,
-                requester: authState.requester,
-                ip: requesterIp,
-                recipientCount: recipientList.length,
-            });
-            res.status(500).json({ message: 'Failed to send meeting invitations' });
         }
     });
 
@@ -1147,281 +957,6 @@ function startServer() {
         }
     });
 
-    // ####################################################
-    // RECORDING UTILITY
-    // ####################################################
-
-    function isValidRequest(req, fileName, roomId, durationMs = false, checkContentType = true) {
-        const contentType = req.headers['content-type'];
-        if (checkContentType && contentType !== 'application/octet-stream') {
-            throw new Error('Invalid content type');
-        }
-
-        if (!fileName || sanitizeFilename(fileName) !== fileName || !Validator.isValidRecFileNameFormat(fileName)) {
-            throw new Error('Invalid file name');
-        }
-
-        if (!roomList || typeof roomList.has !== 'function' || !roomList.has(roomId)) {
-            throw new Error('Invalid room ID');
-        }
-
-        if (
-            durationMs &&
-            typeof durationMs !== 'undefined' &&
-            (!Number.isFinite(Number(durationMs)) || Number(durationMs) <= 0)
-        ) {
-            throw new Error('Invalid durationMs');
-        }
-    }
-
-    function getRoomIdFromFilename(fileName) {
-        const parts = fileName.split('_');
-        if (parts.length >= 2) {
-            return parts[1];
-        }
-        throw new Error('Invalid file name format');
-    }
-
-    // Extract the recording upload token from an Authorization: Bearer header or query param
-    function getRecUploadToken(req) {
-        const auth = req.headers['authorization'] || '';
-        if (auth.startsWith('Bearer ')) return auth.slice(7).trim();
-        if (typeof req.query.uploadToken === 'string') return req.query.uploadToken;
-        return null;
-    }
-
-    // Authorize /recSync* requests: recording must be enabled and the caller must
-    // present a valid, unexpired upload token issued on join. The room the token was
-    // issued for is stored on req and later matched against the target file's room.
-    function checkRecUploadToken(req, res, next) {
-        if (!serverRecordingEnabled) {
-            return res.status(403).json({ error: 'Recording disabled' });
-        }
-        try {
-            const token = getRecUploadToken(req);
-            if (!token) {
-                return res.status(401).json({ error: 'Missing upload token' });
-            }
-            const decoded = jwt.verify(token, jwtKeys.recUpload, JWT_VERIFY_OPTIONS);
-            if (!decoded || decoded.scope !== 'rec-upload' || !decoded.roomId) {
-                return res.status(401).json({ error: 'Invalid upload token' });
-            }
-            req.recUploadRoomId = String(decoded.roomId);
-            next();
-        } catch (err) {
-            log.warn('[recSync] Rejected upload with invalid token', { error: err.message });
-            return res.status(401).json({ error: 'Invalid or expired upload token' });
-        }
-    }
-
-    function deleteFile(filePath) {
-        if (!fs.existsSync(filePath)) return false;
-
-        try {
-            fs.unlinkSync(filePath);
-            log.info(`[Upload] File ${filePath} removed from local after S3 upload`);
-        } catch (err) {
-            log.error(`[Upload] Failed to delete local file ${filePath}`, err.message);
-        }
-    }
-
-    // ####################################################
-    // RECORDING HANDLERS
-    // ####################################################
-
-    async function uploadToS3(filePath, fileName, roomId, bucket, s3Client) {
-        if (!fs.existsSync(filePath)) return false;
-
-        return withFileLock(filePath, async () => {
-            const fileStream = fs.createReadStream(filePath);
-            const key = `recordings/${roomId}/${fileName}`;
-
-            const mimeType = mime.lookup(fileName) || 'application/octet-stream';
-
-            log.debug(`[Upload] Uploading ${fileName}`, { bucket: bucket, key: key, mimeType: mimeType });
-
-            const upload = new Upload({
-                client: s3Client,
-                params: {
-                    Bucket: bucket,
-                    Key: key,
-                    Body: fileStream,
-                    ContentType: mimeType,
-                    Metadata: {
-                        'room-id': roomId,
-                        'file-name': fileName,
-                    },
-                },
-            });
-
-            await upload.done();
-
-            return { success: true, fileName, key };
-        });
-    }
-
-    async function saveLocally(filePath, req, recMaxFileSize) {
-        return withFileLock(filePath, () => {
-            return new Promise((resolve, reject) => {
-                const writeStream = fs.createWriteStream(filePath, { flags: 'a' });
-                let receivedBytes = 0;
-
-                req.on('data', (chunk) => {
-                    receivedBytes += chunk.length;
-                    if (receivedBytes > recMaxFileSize) {
-                        req.destroy();
-                        writeStream.destroy();
-                        return reject(new Error('File size exceeds limit'));
-                    }
-                });
-
-                req.pipe(writeStream);
-
-                writeStream.on('finish', () => resolve({ status: 'file_saved_locally', path: filePath }));
-                writeStream.on('error', reject);
-            });
-        });
-    }
-
-    // ####################################################
-    // RECORDING ROUTE HANDLER
-    // ####################################################
-
-    app.post('/recSync', recSyncLimiter, checkRecUploadToken, async (req, res) => {
-        if (!fs.existsSync(dir.rec)) {
-            fs.mkdirSync(dir.rec, { recursive: true });
-        }
-
-        try {
-            const start = Date.now();
-
-            const { fileName } = checkXSS(req.query);
-            const roomId = getRoomIdFromFilename(fileName);
-
-            isValidRequest(req, fileName, roomId);
-
-            // The upload token must have been issued for this exact room
-            if (req.recUploadRoomId !== roomId) {
-                throw new Error('Invalid room ID');
-            }
-
-            const filePath = path.resolve(dir.rec, fileName);
-            const passThrough = new PassThrough();
-
-            let totalBytes = 0;
-
-            passThrough.on('data', (chunk) => {
-                totalBytes += chunk.length;
-            });
-
-            req.pipe(passThrough);
-
-            const localStream = passThrough.pipe(new PassThrough());
-
-            await saveLocally(filePath, localStream, recMaxFileSize);
-
-            const duration = ((Date.now() - start) / 1000).toFixed(2);
-            const sizeMB = (totalBytes / 1024 / 1024).toFixed(2);
-
-            log.info(`[Upload] Saved ${fileName} (${sizeMB} MB) in ${duration}s`);
-
-            return res.status(200).json({ status: 'upload_complete', fileName });
-        } catch (error) {
-            log.error('Upload error:', error.message);
-
-            if (error.message.includes('exceeds limit')) {
-                res.status(413).json({ error: 'File too large' });
-            } else if (['Invalid content type', 'Invalid file name', 'Invalid room ID'].includes(error.message)) {
-                res.status(400).json({ error: error.message });
-            } else if (error.message.includes('already in progress')) {
-                res.status(429).json({ error: 'Upload already in progress' });
-            } else {
-                res.status(500).json({ error: 'Internal Server Error' });
-            }
-        }
-    });
-
-    app.post('/recSyncFixWebm', recSyncLimiter, checkRecUploadToken, async (req, res) => {
-        try {
-            const { fileName, durationMs } = checkXSS(req.query);
-            const roomId = getRoomIdFromFilename(fileName);
-
-            isValidRequest(req, fileName, roomId, durationMs, false);
-
-            // The upload token must have been issued for this exact room
-            if (req.recUploadRoomId !== roomId) {
-                return res.status(403).json({ message: 'Upload token room mismatch' });
-            }
-
-            const filePath = path.resolve(dir.rec, fileName);
-
-            if (!fs.existsSync(filePath)) {
-                return res.status(404).json({ message: 'File not found' });
-            }
-
-            if (durationMs && fs.existsSync(filePath)) {
-                try {
-                    fixDurationOrRemux(filePath, Number(durationMs));
-                } catch (e) {
-                    console.warn('Finalize fix skipped:', e?.message || e);
-                }
-            }
-
-            return res.status(200).json({ message: 'OK' });
-        } catch (err) {
-            console.error('recSyncFixWebm error', err);
-            return res.status(500).json({ message: 'Internal error' });
-        }
-    });
-
-    app.post('/recSyncFinalize', recSyncLimiter, checkRecUploadToken, async (req, res) => {
-        try {
-            const shouldUploadToS3 = config?.integrations?.s3?.enabled && config?.media?.recording?.uploadToS3;
-            if (!shouldUploadToS3 || !serverRecordingEnabled) {
-                return res.status(403).json({ error: 'Recording disabled' });
-            }
-            const start = Date.now();
-
-            const { fileName, durationMs } = checkXSS(req.query);
-            const roomId = getRoomIdFromFilename(fileName);
-
-            isValidRequest(req, fileName, roomId, durationMs, false);
-
-            // The upload token must have been issued for this exact room
-            if (req.recUploadRoomId !== roomId) {
-                return res.status(403).json({ error: 'Upload token room mismatch' });
-            }
-
-            const filePath = path.resolve(dir.rec, fileName);
-
-            if (!fs.existsSync(filePath)) {
-                return res.status(500).json({ error: 'Rec Finalization failed file not exists' });
-            }
-
-            if (durationMs && fs.existsSync(filePath)) {
-                try {
-                    fixDurationOrRemux(filePath, Number(durationMs));
-                } catch (e) {
-                    log.warn('Finalize fix skipped:', e?.message || e);
-                }
-            }
-
-            const bucket = config?.integrations?.s3?.bucket;
-            const s3 = await uploadToS3(filePath, fileName, roomId, bucket, s3Client);
-
-            const duration = ((Date.now() - start) / 1000).toFixed(2);
-
-            log.info(`[Rec Finalization] done ${fileName} in ${duration}s`, { ...s3 });
-
-            deleteFile(filePath); // Delete local file after successful upload
-
-            return res.status(200).json({ status: 's3_upload_complete', ...s3 });
-        } catch (error) {
-            log.error('Rec Finalization error', error.message);
-            return res.status(500).json({ error: 'Rec Finalization failed' });
-        }
-    });
-
     // Join roomId redirect to /join?room=roomId
     app.get('/:roomId', (req, res) => {
         const { roomId } = checkXSS(req.params);
@@ -1638,35 +1173,6 @@ function startServer() {
     });
 
     // ####################################################
-    // AUTHORIZED API IF ALLOWED
-    // ####################################################
-
-    // request active rooms endpoint
-    app.get(restApi.basePath + '/activeRooms', activeRoomsLimiter, (req, res) => {
-        // Check if endpoint allowed
-        if (!config.ui?.rooms?.showActive) {
-            return res.status(403).json({
-                error: 'This endpoint has been disabled. Please contact the administrator for further information.',
-            });
-        }
-        // Public endpoint gated only by config.ui.rooms.showActive: when enabled it
-        // intentionally returns the active rooms list without authorization so the
-        // event-zone dashboard (/activeRooms) can display it.
-        const { host } = req.headers;
-        const api = new ServerApi(host);
-
-        // Get active rooms
-        const activeRooms = api.getActiveRooms(roomList);
-        res.json({ activeRooms: activeRooms });
-
-        // log.debug the output if all done
-        log.debug('MiroTalk get active rooms - Authorized', {
-            header: req.headers,
-            body: req.body,
-            activeRooms: activeRooms,
-        });
-    });
-
     // not match any of page before, so 404 not found
     app.use((req, res) => {
         res.sendFile(views.notFound);
@@ -1739,12 +1245,10 @@ function startServer() {
                     listenInfos: config.mediasoup?.webRtcTransport?.listenInfos,
                     worker_bin: mediasoup?.workerBin,
                 },
-                server_recording: config?.media?.recording?.enabled ? config.media.recording : false,
             },
 
             // Communication Integrations
             integrations: {
-                email_alerts: config?.integrations?.email?.alert ? config.integrations.email : false,
             },
 
             // UI & Branding
@@ -1875,11 +1379,6 @@ function startServer() {
 
             worker.on('died', () => {
                 log.error('Mediasoup worker died, exiting in 5 seconds...', worker.pid);
-
-                nodemailer.sendEmailAlert('alert', {
-                    subject: 'Worker Died',
-                    body: `The Worker with PID ${worker.pid} has died unexpectedly!`,
-                });
 
                 setTimeout(() => process.exit(1), 5000);
             });
@@ -2143,10 +1642,6 @@ function startServer() {
 
             room.addPeer(new Peer(socket.id, data));
 
-            const activeRooms = getActiveRooms();
-
-            log.debug('[Join] - current active rooms', activeRooms);
-
             if (!(socket.room_id in presenters)) presenters[socket.room_id] = {};
 
             // Set the presenters
@@ -2198,44 +1693,12 @@ function startServer() {
                 return cb('isLobby');
             }
 
-            // Email body payload
-            const emailPayload = {
-                room_id: room.id,
-                peer_name: peer_name,
-                domain: socket.handshake.headers.host.split(':')[0],
-                os: os_name ? `${os_name} ${os_version}` : '',
-                browser: browser_name ? `${browser_name} ${browser_version}` : '',
-            };
-
-            const firstJoin = room.getPeersCount() === 1;
-            const guestJoin = room.getPeersCount() === 2;
-
-            // SCENARIO: Notify when the first user joins the room (global email alert)
-            if (firstJoin) {
-                nodemailer.sendEmailAlert('join', emailPayload);
-            }
-
-            // SCENARIO: Notify when the first guest user join room and presenter in (room email notification)
-            if (guestJoin) {
-                const notifications = room.getRoomNotifications();
-                log.debug('Room notifications on guest join', { notifications: notifications });
-                if (notifications?.mode?.email && notifications?.events?.join) {
-                    nodemailer.sendEmailNotifications('join', emailPayload, notifications);
-                }
-            }
-
             // Notify main room when a peer joins a breakout room
             if (socket.room_id.includes('_breakout_')) {
                 notifyMainRoomBreakoutCountChanged(socket.room_id);
             }
 
             const roomJson = room.toJson();
-
-            // Issue a per-session, room-bound token authorizing this peer to upload
-            // its own server recording chunks via the /recSync* endpoints.
-            if (serverRecordingEnabled) {
-                roomJson.recUploadToken = createRecUploadToken(room.id);
-            }
 
             cb(roomJson);
         });
@@ -3227,31 +2690,6 @@ function startServer() {
                 log.debug('updatePeerInfo broadcast data');
                 room.broadCast(socket.id, 'updatePeerInfo', data);
             }
-        });
-
-        socket.on('updateRoomNotifications', (dataObject, cb) => {
-            if (!roomExists(socket)) return;
-
-            if (config.integrations?.email?.notify !== true) {
-                const message =
-                    'Email notifications are disabled by the admin. Enable this feature in your self-hosted instance for full functionality.';
-                log.debug(message);
-                return cb({ error: message });
-            }
-
-            const data = checkXSS(dataObject);
-
-            if (!Validator.isValidData(data)) return;
-
-            const room = getRoom(socket);
-
-            const isPresenter = isPeerPresenter(socket.room_id, socket.id, data.peer_name, data.peer_uuid);
-
-            if (!isPresenter) return;
-
-            room.updateRoomNotifications(data);
-
-            return cb({ message: true });
         });
 
         socket.on('updateRoomModerator', (dataObject) => {
@@ -4398,9 +3836,6 @@ function startServer() {
 
                 log.debug('[Disconnect] - Last peer - current presenters grouped by roomId', presenters);
 
-                const activeRooms = getActiveRooms();
-
-                log.debug('[Disconnect] - Last peer - current active rooms', activeRooms);
             }
 
             removeIP(socket);
@@ -4456,9 +3891,6 @@ function startServer() {
 
                 log.debug('[REMOVE ME] - Last peer - current presenters grouped by roomId', presenters);
 
-                const activeRooms = getActiveRooms();
-
-                log.debug('[REMOVE ME] - Last peer - current active rooms', activeRooms);
             }
 
             removeIP(socket);
@@ -4696,21 +4128,6 @@ function startServer() {
         const jwtToken = jwt.sign({ data: encryptedPayload }, jwtKeys.auth, { expiresIn: expireValue });
 
         return jwtToken;
-    }
-
-    function getActiveRooms() {
-        const roomIds = Array.from(roomList.keys());
-        const roomPeersArray = roomIds.map((roomId) => {
-            const room = roomList.get(roomId);
-            const peerCount = (room && room.getPeersCount()) || 0;
-            const broadcasting = (room && room.isBroadcasting()) || false;
-            return {
-                room: roomId,
-                broadcasting: broadcasting,
-                peers: peerCount,
-            };
-        });
-        return roomPeersArray;
     }
 
     function isAllowedRoomAccess(logMessage, req, hostCfg, roomList, roomId) {
@@ -4961,43 +4378,6 @@ function getBearerToken(req) {
         return null;
     }
     return authHeader.split(' ')[1] || null;
-}
-
-async function getScheduleMeetingAuthState(req) {
-    const denied = { authorized: false, requester: 'anonymous' };
-
-    if (OIDC.enabled && req.oidc?.isAuthenticated()) {
-        return {
-            authorized: true,
-            requester: req.oidc?.user?.email || req.oidc?.user?.name || req.oidc?.user?.sub || 'oidc-user',
-        };
-    }
-
-    if (hostCfg.protected && allowedIP(getIP(req))) {
-        return { authorized: true, requester: 'host-ip-auth' };
-    }
-
-    if (hostCfg.user_auth) {
-        const token = getBearerToken(req);
-        if (!token) return denied;
-
-        try {
-            if (!(await isValidToken(token))) return denied;
-
-            const { username, password } = checkXSS(decodeToken(token));
-            const isPeerValid = await isAuthPeer(username, password);
-
-            return isPeerValid ? { authorized: true, requester: username } : denied;
-        } catch (error) {
-            log.warn('scheduleMeeting auth token validation failed', {
-                error: error.message,
-                ip: authHost.getIP(req),
-            });
-            return denied;
-        }
-    }
-
-    return denied;
 }
 
 // ####################################################

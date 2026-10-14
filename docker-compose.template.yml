@@ -17,8 +17,6 @@ services:
         volumes:
             - ./app/src/config.js:/src/app/src/config.js:ro
             - ./.env:/src/.env:ro
-            # Mandatory volume if `RECORDING_ENABLED=true` in the .env
-            # - ./app/rec:/src/app/rec
             # Optional volumes for real-time updates:
             # - ./app/:/src/app/:ro
             # - ./public/:/src/public/:ro

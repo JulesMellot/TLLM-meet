@@ -168,50 +168,6 @@ module.exports = {
 
     media: {
         /**
-         * Recording Configuration
-         * =======================
-         * Server side recording functionality.
-         *
-         * Core Settings:
-         * ------------------------
-         * - enabled        : Enable recording functionality
-         * - uploadToS3     : Upload recording to AWS S3 bucket [true/false]
-         * - endpoint       : Leave empty ('') to store recordings locally OR
-         *   - Set to a valid URL (e.g., 'http://localhost:8080/') to:
-         *      - Push recordings to a remote server
-         *      - Store in cloud storage services
-         *      - Send to processing pipelines
-         * - dir            : Storage directory for recordings (Relative to app/src/ default: app/rec)
-         * - maxFileSize    : Maximum recording size (1GB default)
-         *
-         * Upload Security:
-         * ------------------------
-         * - uploadTokenExp : Lifetime of the per-session upload token issued on join and
-         *                    required by the /recSync* endpoints (default '24h'). Must be
-         *                    long enough to outlast the longest expected recording.
-         * - rateLimit      : Per-IP rate limit for /recSync* upload requests
-         *                    (default: 300 requests / 60s) to mitigate flooding.
-         *
-         * Docker Note:
-         * ------------
-         * - When running in Docker, ensure the recording directory exists and is properly mounted:
-         *   1. Create the directory (e.g., 'app/rec')
-         *   2. Configure as volume in docker-compose.yml
-         *   3. Set appropriate permissions
-         *   4. Restart container after changes
-         */
-        recording: {
-            enabled: process.env.RECORDING_ENABLED === 'true',
-            uploadToS3: process.env.RECORDING_UPLOAD_TO_S3 === 'true',
-            endpoint: process.env.RECORDING_ENDPOINT || '',
-            dir: process.env.RECORDING_DIR || '../rec',
-            maxFileSize: process.env.RECORDING_MAX_FILE_SIZE || 1 * 1024 * 1024 * 1024, // 1GB
-            uploadTokenExp: process.env.RECORDING_UPLOAD_TOKEN_EXP || '24h',
-            rateLimit: {
-                windowMs: parseInt(process.env.RECORDING_RATE_LIMIT_WINDOW_MS) || 60 * 1000,
-                max: parseInt(process.env.RECORDING_RATE_LIMIT_MAX) || 300,
-            },
-        },
     },
 
     // ==============================================
@@ -516,111 +472,6 @@ module.exports = {
         },
 
         /**
-         * Email Notification Configuration
-         * ===============================
-         * SMTP settings for system alerts and notifications
-         *
-         * Core Settings:
-         * -------------
-         * - alert      : Enable/disable email alerts [true/false] (default: false)
-         * - notify     : Enable/disable room email notifications [true/false] (default: false)
-         * - host       : SMTP server address (default: 'localhost')
-         * - port       : SMTP port (default: 1025 for Mailpit, 587 for most providers)
-         * - username   : SMTP auth username
-         * - password   : SMTP auth password (store ONLY in .env)
-         * - from       : Sender email address (default: same as username)
-         * - sendTo     : Recipient email for alerts and notifications
-         *
-         * Common Providers:
-         * ----------------
-         * Gmail:
-         * - host: smtp.gmail.com
-         * - port: 587
-         *
-         * Office365:
-         * - host: smtp.office365.com
-         * - port: 587
-         *
-         * SendGrid:
-         * - host: smtp.sendgrid.net
-         * - port: 587
-         *
-         * Mailpit (local testing):
-         * - host: localhost
-         * - port: 1025
-         * - docker-compose-mailpit.yml
-         */
-        email: {
-            alert: process.env.EMAIL_ALERTS_ENABLED === 'true',
-            notify: process.env.EMAIL_NOTIFICATIONS === 'true',
-            host: process.env.EMAIL_HOST || 'localhost',
-            port: parseInt(process.env.EMAIL_PORT) || 1025,
-            username: process.env.EMAIL_USERNAME || 'test',
-            password: process.env.EMAIL_PASSWORD || 'test',
-            from: process.env.EMAIL_FROM || process.env.EMAIL_USERNAME,
-            sendTo: process.env.EMAIL_SEND_TO || 'test@mirotalk.com',
-        },
-
-        /**
-         * Example for AWS S3 Storage Configuration
-         * ===========================
-         * Enables cloud file storage using Amazon Simple Storage Service (S3).
-         *
-         * Core Settings:
-         * --------------
-         * - enabled: Enable/disable AWS S3 integration [true/false]
-         * - accessKeyId: AWS access key ID (store in .env)
-         * - secretAccessKey: AWS secret access key (store in .env)
-         * - region: AWS region where the S3 bucket is located
-         * - bucket: Name of the S3 bucket to use for storage
-         *
-         * Advanced Settings:
-         * --------------
-         * - endpoint: Custom S3 endpoint URL (if empty to auto-resolve from region). Useful for S3-compatible services like MinIO, Wasabi, DigitalOcean Spaces, etc.
-         * - forcePathStyle: Set to true for S3-compatible services like MinIO, Wasabi, etc.
-         *
-         * Service Setup:
-         * -------------
-         * 1. Create an S3 Bucket:
-         *    - Sign in to AWS Management Console
-         *    - Navigate to S3 service
-         *    - Click "Create bucket"
-         *    - Choose unique name (e.g., 'mirotalk')
-         *    - Select region (must match AWS_REGION in config)
-         *    - Enable desired settings (versioning, logging, etc.)
-         *
-         * 2. Get Security Credentials:
-         *    - Create IAM user with programmatic access
-         *    - Attach 'AmazonS3FullAccess' policy (or custom minimal policy)
-         *    - Save Access Key ID and Secret Access Key
-         *
-         * 3. Configure CORS (for direct uploads):
-         *    [
-         *      {
-         *        "AllowedHeaders": ["*"],
-         *        "AllowedMethods": ["PUT", "POST"],
-         *        "AllowedOrigins": ["*"],
-         *        "ExposeHeaders": []
-         *      }
-         *    ]
-         *
-         * Technical Details:
-         * -----------------
-         * - Default region: us-east-2 (Ohio)
-         * - Direct upload uses presigned URLs (expire after 1 hour by default)
-         * - Recommended permissions for direct upload:
-         *   - s3:PutObject
-         *   - s3:GetObject
-         *   - s3:DeleteObject
-         */
-        s3: {
-            enabled: process.env.S3_ENABLED === 'true',
-            accessKeyId: process.env.S3_ACCESS_KEY_ID || 'your-access-key-id',
-            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || 'your-secret-access-key',
-            bucket: process.env.S3_BUCKET || 'mirotalk',
-            region: process.env.S3_REGION || 'us-east-2',
-            endpoint: process.env.S3_ENDPOINT || '',
-            forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
         },
     },
 
@@ -640,23 +491,6 @@ module.exports = {
          * ==============================================
          * - https://codecanyon.net/item/mirotalk-sfu-webrtc-realtime-video-conferences/40769970
          */
-        rooms: {
-            /**
-             * Room Display Settings
-             * ---------------------
-             * - showActive: Show active rooms in the UI (default: false)
-             *   https://sfu.mirotalk.com/activeRooms
-             * - activeRoomsRateLimit: Throttle the public /api/v1/activeRooms
-             *   endpoint per IP to prevent enumeration/scraping abuse without
-             *   breaking the public "event zone" UX.
-             */
-            showActive: process.env.SHOW_ACTIVE_ROOMS === 'true',
-            activeRoomsRateLimit: {
-                windowMs:
-                    Math.max(parseInt(process.env.ACTIVE_ROOMS_RATE_LIMIT_WINDOW_MINUTES, 10) || 1, 1) * 60 * 1000,
-                max: Math.max(parseInt(process.env.ACTIVE_ROOMS_RATE_LIMIT_MAX, 10) || 60, 1),
-            },
-        },
         brand: {
             /**
              * Application Branding
@@ -902,7 +736,6 @@ module.exports = {
             },
             // Settings panel buttons and options
             settings: {
-                activeRooms: process.env.SHOW_ROOMS !== 'false',
                 fileSharing: process.env.ENABLE_FILE_SHARING !== 'false',
                 lockRoomButton: process.env.SHOW_LOCK_ROOM !== 'false',
                 unlockRoomButton: process.env.SHOW_UNLOCK_ROOM !== 'false',
@@ -911,7 +744,6 @@ module.exports = {
                 joinLockButton: process.env.SHOW_JOIN_LOCK !== 'false',
                 sendEmailInvitation: process.env.SHOW_EMAIL_INVITE !== 'false',
                 micOptionsButton: process.env.SHOW_MIC_OPTIONS !== 'false',
-                tabNotificationsBtn: process.env.SHOW_NOTIFICATIONS_TAB !== 'false',
                 tabNetworkBtn: process.env.SHOW_NETWORK_TAB !== 'false',
                 tabModerator: process.env.SHOW_MODERATOR_TAB !== 'false',
                 tabRecording: process.env.SHOW_RECORDING_TAB !== 'false',
@@ -1053,36 +885,10 @@ module.exports = {
         },
 
         /**
-         * Meeting Scheduler
-         * ---------------------
-         * - enabled: Show "Schedule Meeting" button on landing/newroom pages
-         * - Requires email configuration (integrations.email) to send invitations
-         * - Sends .ics calendar attachments with meeting details
-         * - requireAuth: Require authenticated requester before sending invitations
-         * - maxRecipients: Maximum recipients accepted per request
-         * - allowedDomains: Optional recipient domain allow-list (empty = all domains)
-         * - rateLimit: Throttle requests to prevent abuse
-         */
-        scheduleMeeting: {
-            enabled: process.env.SCHEDULE_MEETING_ENABLED === 'true',
-            requireAuth: process.env.SCHEDULE_MEETING_REQUIRE_AUTH !== 'false',
-            maxRecipients: Math.max(parseInt(process.env.SCHEDULE_MEETING_MAX_RECIPIENTS, 10) || 20, 1),
-            allowedDomains: (process.env.SCHEDULE_MEETING_ALLOWED_DOMAINS || '')
-                .split(splitChar)
-                .map((domain) => domain.trim().toLowerCase())
-                .filter(Boolean),
-            rateLimit: {
-                windowMs:
-                    Math.max(parseInt(process.env.SCHEDULE_MEETING_RATE_LIMIT_WINDOW_MINUTES, 10) || 60, 1) * 60 * 1000,
-                max: Math.max(parseInt(process.env.SCHEDULE_MEETING_RATE_LIMIT_MAX, 10) || 5, 1),
-            },
-        },
-
-        /**
          * Socket.IO createRoom and HTTP /createRoomToken rate limit (per IP)
          * -------------------------------------------------------------------
          * Prevents unauthenticated sockets from spamming arbitrary entries
-         * into the in-memory roomList (which feeds /api/v1/activeRooms),
+         * into the in-memory roomList,
          * and throttles room creation token requests.
          */
         createRoomRateLimit: {

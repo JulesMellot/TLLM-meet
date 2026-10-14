@@ -585,9 +585,6 @@
                     <button id="tabModeratorBtn" class="fas fa-user-shield tablinks">
                         <p class="tabButtonText">Moderator</p>
                     </button>
-                    <button id="tabNotificationsBtn" class="fas fa-bell tablinks hidden">
-                        <p class="tabButtonText">Notifications</p>
-                    </button>
                     <button id="tabRecordingBtn" class="fas fa-record-vinyl tablinks">
                         <p class="tabButtonText">Recording</p>
                     </button>
@@ -654,10 +651,6 @@
                         </table>
                         <hr />
                         <div class="room-action-grid">
-                            <button id="activeRoomsButton" class="hidden btn-custom room-action-card">
-                                <i class="fa-solid fa-circle-dot"></i>
-                                <p>Active rooms</p>
-                            </button>
                             <button id="joinLockButton" class="hidden btn-custom room-action-card">
                                 <i class="fas fa-door-closed orange"></i>
                                 <p class="orange">Lock room</p>
@@ -1073,48 +1066,6 @@
                         <br />
                     </div>
 
-                    <div id="tabNotifications" class="tabcontent">
-                        <div class="settings-section-intro">
-                            <h3>Email notifications</h3>
-                            <p>Choose which room events should send an email alert.</p>
-                        </div>
-                        <div id="notificationsModeDiv">
-                            <div class="title">
-                                <i class="fas fa-envelope"></i>
-                                <p>Email</p>
-                            </div>
-                            <input type="text" id="notifyEmailInput" class="form-control" placeholder="Enter email" />
-                        </div>
-                        <br />
-                        <div class="title">
-                            <i class="fas fa-bell"></i>
-                            <p>Events:</p>
-                        </div>
-                        <table class="settingsTable">
-                            <tr id="notifyUserJoinBtn">
-                                <td>
-                                    <div class="title">
-                                        <i class="fas fa-user-plus"></i>
-                                        <p>First User Join</p>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="form-check form-switch form-switch-md title">
-                                        <input id="switchNotifyUserJoin" class="form-check-input" type="checkbox" />
-                                    </div>
-                                </td>
-                            </tr>
-                        </table>
-                        <div class="buttons-container">
-                            <button id="notifyEmailCleanBtn" class="btn-custom">
-                                <i class="fas fa-trash"></i> Clean
-                            </button>
-                            <button id="saveNotificationsBtn" class="btn-custom">
-                                <i class="fas fa-save"></i> Save Notifications
-                            </button>
-                        </div>
-                    </div>
-
                     <div id="tabModerator" class="tabcontent">
                         <div class="settings-section-intro">
                             <h3>Participant permissions</h3>
@@ -1380,23 +1331,6 @@
                                         <div class="form-check form-switch form-switch-md title">
                                             <input
                                                 id="switchHostOnlyRecording"
-                                                class="form-check-input"
-                                                type="checkbox"
-                                            />
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr id="roomRecordingServer" class="hidden">
-                                    <td>
-                                        <div class="title">
-                                            <i class="fas fa-cloud-arrow-up"></i>
-                                            <p>Save recording on server</p>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="form-check form-switch form-switch-md title">
-                                            <input
-                                                id="switchServerRecording"
                                                 class="form-check-input"
                                                 type="checkbox"
                                             />
@@ -3113,14 +3047,6 @@
 
         <template id="popupServerAwayTemplate">
             <div>The server seems away or in maintenance, please wait until it come back up.</div>
-        </template>
-
-        <template id="popupRecordingServerAdviceTemplate">
-            <div class="popup-template-copy popup-template-copy--left">
-                <b>Your recording session will be stored on the server.</b><br /><br />
-                If you do not agree, please switch off this option.<br />
-                The recording will then be stored in your browser and downloaded to your device after stopping.
-            </div>
         </template>
 
         <template id="popupRecordingInfoTemplate">

@@ -49,7 +49,6 @@ class LocalStorage {
             chat_pin: true, // Auto pin chat on open
             keyboard_shortcuts: false, // keyboard shortcuts
             host_only_recording: false, // presenter
-            rec_server: false, // The recording will be stored on the server rather than locally
             video_obj_fit: 2, // cover
             video_controls: 0, // off
             theme: 0, // dark
