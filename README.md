@@ -81,7 +81,6 @@ href="https://docs.mirotalk.com/mirotalk-sfu/self-hosting/">Documentation</a> ·
 | 🎥 **Resolution**  | Up to 8K @ 60fps                                                                                                                                    | Up to 1080p                 |
 | 🌍 **Languages**   | 133 languages                                                                                                                                       | ~30-80                      |
 | 🔌 **API**         | Full REST API included                                                                                                                              | Paid add-on                 |
-| 📡 **RTMP/OBS**    | Built-in RTMP streaming                                                                                                                             | Third-party needed          |
 | 🧩 **Rebrand**     | Full source code, white-label ready                                                                                                                 | Limited branding options    |
 | 📦 **Deploy**      | Docker, Node.js, one-click install                                                                                                                  | N/A (SaaS only)             |
 
@@ -212,8 +211,6 @@ For detailed guides and references, visit the **[official documentation](https:/
 - [Host Protection Mode](https://docs.mirotalk.com/mirotalk-sfu/host-protection/)
 - [Integration](https://docs.mirotalk.com/mirotalk-sfu/integration/)
 - [Direct Room Join](https://docs.mirotalk.com/mirotalk-sfu/join-room/)
-- [RTMP Setup](https://docs.mirotalk.com/mirotalk-sfu/rtmp/)
-- [SIP phone](https://docs.mirotalk.com/mirotalk-sfu/sip/)
 - [REST API Documentation](https://docs.mirotalk.com/mirotalk-sfu/api/)
 - [Scalability](https://docs.mirotalk.com/mirotalk-sfu/scalability/)
 - [Updates](https://docs.mirotalk.com/mirotalk-sfu/updates/)

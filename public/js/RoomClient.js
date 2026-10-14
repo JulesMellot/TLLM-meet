@@ -55,7 +55,6 @@ const html = {
     sendMsg: 'fas fa-paper-plane',
     sendVideo: 'fab fa-youtube',
     geolocation: 'fas fa-location-dot',
-    remoteControl: 'fas fa-computer-mouse',
     ban: 'fas fa-ban',
     kickOut: 'fas fa-times',
     presenterRole: 'fa-solid fa-user-shield',
@@ -150,7 +149,6 @@ const image = {
     broadcasting: '../images/broadcasting.png',
     geolocation: '../images/geolocation.png',
     network: '../images/network.gif',
-    rtmp: '../images/rtmp.png',
     save: '../images/save.png',
     transcription: '../images/transcription.png',
     back: '../images/back.png',
@@ -213,12 +211,6 @@ const _EVENTS = {
     roomUnlock: 'roomUnlock',
     hostOnlyRecordingOn: 'hostOnlyRecordingOn',
     hostOnlyRecordingOff: 'hostOnlyRecordingOff',
-    startRTMP: 'startRTMP',
-    stopRTMP: 'stopRTMP',
-    endRTMP: 'endRTMP',
-    startRTMPfromURL: 'startRTMPfromURL',
-    stopRTMPfromURL: 'stopRTMPfromURL',
-    endRTMPfromURL: 'endRTMPfromURL',
 };
 
 // Enums
@@ -291,9 +283,6 @@ class RoomClient {
         this.iceRestarting = false;
         this.iceProducerRestarting = false;
         this.iceConsumerRestarting = false;
-
-        // RTMP selected file name
-        this.selectedRtmpFilename = '';
 
         // Moderator
         this._moderator = {
@@ -430,10 +419,6 @@ class RoomClient {
 
         this.transcription = transcription;
 
-        // RTMP Streamer
-        this.rtmpFileStreamer = false;
-        this.rtmpUrltSreamer = false;
-
         // File transfer settings
         this.fileToSend = null;
         this.fileReader = null;
@@ -464,7 +449,6 @@ class RoomClient {
         this.recSyncTime = 4000; // 4 sec
         this.recSyncChunkSize = 1000000; // 1MB
         this.recUploadToken = ''; // Per-session token authorizing /recSync* uploads (issued on join)
-        this.rtmpStreamToken = ''; // Per-session token authorizing the /rtmp streamer page (issued on join)
         this.sessionId = ''; // Server-side unique conference-instance ID (issued on join)
 
         // Encodings
@@ -714,9 +698,6 @@ class RoomClient {
                 // Store the per-session token used to authorize server recording uploads
                 if (room.recUploadToken) this.recUploadToken = room.recUploadToken;
 
-                // Store the per-session token used to authorize the RTMP streamer page
-                if (room.rtmpStreamToken) this.rtmpStreamToken = room.rtmpStreamToken;
-
                 // Store the server-side unique conference-instance ID for this room instance
                 if (room.sessionId) this.sessionId = room.sessionId;
 
@@ -875,31 +856,12 @@ class RoomClient {
             if (room.followMe && room.followMe.enabled && !isPresenter) {
                 this._pendingFollowMe = room.followMe;
             }
-            this.remoteControlEnabled = room.remoteControlEnabled || false;
-            this.remoteControlDownloadUrl = room.remoteControlDownloadUrl;
             // Whisper server-side transcription
             this.whisperEnabled = room.whisperEnabled || false;
             if (typeof transcription !== 'undefined' && transcription) {
                 transcription.whisper.isEnabled = this.whisperEnabled;
                 transcription.whisper.segmentMs = (room.whisperSegmentSeconds || 5) * 1000;
                 this.whisperEnabled ? show('transcriptWhisperLi') : hide('transcriptWhisperLi');
-            }
-            // Check che RTMP config
-            if (room.rtmp) {
-                console.log('RTMP config', room.rtmp);
-                const { enabled, fromFile, fromUrl, fromStream, allowCustomUrl } = room.rtmp;
-                this.initRtmpQualitySelect(room.rtmp);
-                elemDisplay('tabRTMPStreamingBtn', enabled, 'flex');
-                elemDisplay('rtmpFromFile', fromFile);
-                elemDisplay('rtmpFromUrl', fromUrl);
-                elemDisplay('rtmpFromStream', fromStream);
-                elemDisplay('rtmpCustomDestination', allowCustomUrl);
-                elemDisplay('rtmpDestinationToggle', allowCustomUrl, 'inline-flex');
-                initRtmpModeTabs({ fromFile, fromUrl, fromStream });
-                if (allowCustomUrl) this.initRtmpCustomDestination();
-                if (!fromFile && !fromUrl && !fromStream) {
-                    elemDisplay('tabRTMPStreamingBtn', false);
-                }
             }
             // There is polls
             if (room.thereIsPolls) {
@@ -1364,10 +1326,6 @@ class RoomClient {
         this.socket.on('updateRoomModerator', this.handleUpdateRoomModeratorData);
         this.socket.on('updateRoomModeratorALL', this.handleUpdateRoomModeratorALLData);
         this.socket.on('recordingAction', this.handleRecordingActionData);
-        this.socket.on('endRTMP', this.handleEndRTMP);
-        this.socket.on('errorRTMP', this.handleErrorRTMP);
-        this.socket.on('endRTMPfromURL', this.handleEndRTMPfromURL);
-        this.socket.on('errorRTMPfromURL', this.handleErrorRTMPfromURL);
         this.socket.on('updatePolls', this.handleUpdatePolls);
         this.socket.on('editorChange', this.handleEditorChange);
         this.socket.on('editorActions', this.handleEditorActions);
@@ -1579,7 +1537,7 @@ class RoomClient {
     };
 
     handleCmdData = (data) => {
-        console.log('SocketOn Peer cmd:', data.type === 'remoteControlOK' ? { ...data, data: '[redacted]' } : data);
+        console.log('SocketOn Peer cmd:', data);
         this.handleCmd(data);
     };
 
@@ -1662,22 +1620,6 @@ class RoomClient {
     handleRecordingActionData = (data) => {
         console.log('SocketOn Recording action:', data);
         this.handleRecordingAction(data);
-    };
-
-    handleEndRTMP = (data) => {
-        this.endRTMP(data);
-    };
-
-    handleErrorRTMP = (data) => {
-        this.errorRTMP(data);
-    };
-
-    handleEndRTMPfromURL = (data) => {
-        this.endRTMPfromURL(data);
-    };
-
-    handleErrorRTMPfromURL = (data) => {
-        this.errorRTMPfromURL(data);
     };
 
     handleUpdatePolls = (data) => {
@@ -4175,7 +4117,7 @@ class RoomClient {
     }
 
     async handleConsumer(id, type, stream, peer_name, peer_info) {
-        let elem, vb, d, p, i, cm, au, pip, fs, ts, sf, sm, sv, gl, rcb, ban, ko, pb, pm, pv, pn, ha, hg, mv, dw, role;
+        let elem, vb, d, p, i, cm, au, pip, fs, ts, sf, sm, sv, gl, ban, ko, pb, pm, pv, pn, ha, hg, mv, dw, role;
 
         let eDiv, eBtn, eVc; // expand buttons
 
@@ -4242,7 +4184,6 @@ class RoomClient {
                 cm = this.createButton(id + '___' + remotePeerId + '___video', html.videoOn);
                 au = this.createButton(remotePeerId + '__audio', remotePeerAudio ? html.audioOn : html.audioOff);
                 gl = this.createButton(id + '___' + remotePeerId + '___geoLocation', html.geolocation);
-                rcb = this.createButton(id + '___' + remotePeerId + '___remoteControl', html.remoteControl);
                 ban = this.createButton(id + '___' + remotePeerId + '___ban', html.ban);
                 ko = this.createButton(id + '___' + remotePeerId + '___kickOut', html.kickOut);
                 role = this.createButton(
@@ -4311,9 +4252,6 @@ class RoomClient {
                     eVc.appendChild(this.createDropdownItem(sm, 'Private Message', eVc));
                 BUTTONS.consumerVideo.geolocationButton &&
                     eVc.appendChild(this.createDropdownItem(gl, 'Geo Location', eVc));
-                this.remoteControlEnabled &&
-                    isPresenter &&
-                    eVc.appendChild(this.createDropdownItem(rcb, 'Remote control', eVc));
                 BUTTONS.consumerVideo.sendFileButton && eVc.appendChild(this.createDropdownItem(sf, 'Send File', eVc));
                 BUTTONS.consumerVideo.sendVideoButton &&
                     eVc.appendChild(this.createDropdownItem(sv, 'Send Video/Audio', eVc));
@@ -4374,7 +4312,6 @@ class RoomClient {
                 BUTTONS.consumerVideo.muteAudioButton && this.handleAU(au.id, remotePeerId);
                 this.handleCV(pv.id);
                 this.handleGL(gl.id, remotePeerId);
-                this.handleRC(rcb.id, remotePeerId);
                 this.handleBAN(ban.id, remotePeerId);
                 this.handleKO(ko.id, remotePeerId);
                 this.handleRole(role.id, remotePeerId, remotePeerPresenter);
@@ -4552,7 +4489,7 @@ class RoomClient {
 
     setVideoOff(peer_info, remotePeer = false) {
         //console.log('setVideoOff', peer_info);
-        let d, vb, i, h, au, sf, sm, sv, gl, rcb, ban, ko, hg, p, pm, pb, pv, pn, st, ri, role;
+        let d, vb, i, h, au, sf, sm, sv, gl, ban, ko, hg, p, pm, pb, pv, pn, st, ri, role;
         let eDiv, eBtn, eVc;
 
         const { peer_id, peer_name, peer_avatar, peer_audio, peer_presenter } = peer_info;
@@ -4591,7 +4528,6 @@ class RoomClient {
             sm = this.createButton('remotePeer___' + peer_id + '___sendMsg', html.sendMsg);
             sv = this.createButton('remotePeer___' + peer_id + '___sendVideo', html.sendVideo);
             gl = this.createButton('remotePeer___' + peer_id + '___geoLocation', html.geolocation);
-            rcb = this.createButton('remotePeer___' + peer_id + '___remoteControl', html.remoteControl);
             ban = this.createButton('remotePeer___' + peer_id + '___ban', html.ban);
             ko = this.createButton('remotePeer___' + peer_id + '___kickOut', html.kickOut);
             hg = this.createButton('remotePeer___' + peer_id + '___hideFromGrid', html.hideFromGrid);
@@ -4651,9 +4587,6 @@ class RoomClient {
             BUTTONS.videoOff.hideFromGridButton && eVc.appendChild(this.createDropdownItem(hg, 'Hide from grid', eVc));
             BUTTONS.videoOff.sendMessageButton && eVc.appendChild(this.createDropdownItem(sm, 'Private Message', eVc));
             BUTTONS.videoOff.geolocationButton && eVc.appendChild(this.createDropdownItem(gl, 'Geo Location', eVc));
-            this.remoteControlEnabled &&
-                isPresenter &&
-                eVc.appendChild(this.createDropdownItem(rcb, 'Remote control', eVc));
             BUTTONS.videoOff.sendFileButton && eVc.appendChild(this.createDropdownItem(sf, 'Send File', eVc));
             BUTTONS.videoOff.sendVideoButton && eVc.appendChild(this.createDropdownItem(sv, 'Send Video/Audio', eVc));
             BUTTONS.videoOff.banButton && eVc.appendChild(this.createDropdownItem(ban, 'Ban', eVc, 'red'));
@@ -4703,7 +4636,6 @@ class RoomClient {
             this.handleSF(sf.id, peer_name, peer_id);
             this.handleSV(sv.id, peer_name, peer_id);
             this.handleGL(gl.id, peer_id);
-            this.handleRC(rcb.id, peer_id);
             this.handleBAN(ban.id, peer_id);
             this.handleKO(ko.id, peer_id);
             this.handleHFG(hg.id, peer_id);
@@ -4730,7 +4662,6 @@ class RoomClient {
             this.setTippy(pv.id, '🔊 Volume', 'bottom');
             this.setTippy(pn.id, 'Pin', 'bottom');
             this.setTippy(gl.id, 'Geolocation', 'bottom');
-            this.setTippy(rcb.id, 'Remote control', 'bottom');
             this.setTippy(ban.id, 'Ban', 'bottom');
             this.setTippy(ko.id, 'Eject', 'bottom');
             this.setTippy(hg.id, 'Hide from grid', 'bottom');
@@ -4814,8 +4745,6 @@ class RoomClient {
         this.saveRecording('Client exiting the room');
         this.microphoneRequest++;
         this.disableRNNoiseSuppression();
-        if (this.rtmpFilestreamer) this.stopRTMP();
-        if (this.rtmpUrlstreamer) this.stopRTMPfromURL();
 
         const clean = () => {
             this._isConnected = false;
@@ -4855,10 +4784,6 @@ class RoomClient {
                 this.socket.off('updateRoomModerator');
                 this.socket.off('updateRoomModeratorALL');
                 this.socket.off('recordingAction');
-                this.socket.off('endRTMP');
-                this.socket.off('errorRTMP');
-                this.socket.off('endRTMPfromURL');
-                this.socket.off('errorRTMPfromURL');
                 this.socket.off('updatePolls');
                 this.socket.off('editorChange');
                 this.socket.off('editorActions');
@@ -11656,25 +11581,6 @@ class RoomClient {
     }
 
     // ####################################################
-    // HANDLE REMOTE CONTROL
-    // ###################################################
-
-    handleRC(uid, peer_id) {
-        const btnRc = this.getId(uid);
-        if (btnRc) {
-            btnRc.addEventListener('click', () => {
-                isPresenter
-                    ? this.askPeerRemoteControl(peer_id)
-                    : this.userLog(
-                          'warning',
-                          'Only the presenter can ask remote control to the participants',
-                          'top-end'
-                      );
-            });
-        }
-    }
-
-    // ####################################################
     // HANDLE BAN
     // ###################################################
 
@@ -11882,16 +11788,6 @@ class RoomClient {
                     this.handleGL(gl.id, remotePeerId);
                 }
             );
-            this.reconcilePresenterMenuItem(
-                eVc,
-                `${prefix}remoteControl`,
-                canModerate && this.remoteControlEnabled,
-                () => {
-                    const rcb = this.createButton(`${prefix}remoteControl`, html.remoteControl);
-                    eVc.appendChild(this.createDropdownItem(rcb, 'Remote control', eVc));
-                    this.handleRC(rcb.id, remotePeerId);
-                }
-            );
             this.reconcilePresenterMenuItem(eVc, `${prefix}ban`, canModerate && BUTTONS.consumerVideo.banButton, () => {
                 const ban = this.createButton(`${prefix}ban`, html.ban);
                 eVc.appendChild(this.createDropdownItem(ban, 'Ban', eVc, 'red'));
@@ -11965,16 +11861,6 @@ class RoomClient {
                     const gl = this.createButton(`${prefix}geoLocation`, html.geolocation);
                     eVc.appendChild(this.createDropdownItem(gl, 'Geo Location', eVc));
                     this.handleGL(gl.id, peerId);
-                }
-            );
-            this.reconcilePresenterMenuItem(
-                eVc,
-                `${prefix}remoteControl`,
-                canModerate && this.remoteControlEnabled,
-                () => {
-                    const rcb = this.createButton(`${prefix}remoteControl`, html.remoteControl);
-                    eVc.appendChild(this.createDropdownItem(rcb, 'Remote control', eVc));
-                    this.handleRC(rcb.id, peerId);
                 }
             );
         });
@@ -12121,16 +12007,6 @@ class RoomClient {
                 this.handleGeoPeerLocation(cmd);
                 break;
             case 'geoLocationKO':
-                this.sound('alert');
-                this.userLog('warning', cmd.data, 'top-end', 5000);
-                break;
-            case 'remoteControl':
-                this.confirmPeerRemoteControl(cmd);
-                break;
-            case 'remoteControlOK':
-                this.handleRemoteControlOK(cmd);
-                break;
-            case 'remoteControlKO':
                 this.sound('alert');
                 this.userLog('warning', cmd.data, 'top-end', 5000);
                 break;
@@ -13571,528 +13447,6 @@ class RoomClient {
                     `https://www.google.com/maps/search/?api=1&query=${geoLocation.latitude},${geoLocation.longitude}`,
                     true
                 );
-            }
-        });
-    }
-
-    // ####################################################
-    // HANDLE REMOTE CONTROL (RustDesk handshake)
-    // ####################################################
-
-    getRemotePeerName(peer_id) {
-        // this.peers is only filled at join time, so peers who joined later are read from the DOM
-        const name = this.getId(peer_id + '__name')?.textContent || this.peers.get(peer_id)?.peer_info?.peer_name;
-        return name?.trim() || 'Participant';
-    }
-
-    async askPeerRemoteControl(peer_id) {
-        if (!this.remoteControlEnabled || !isPresenter) return;
-        const result = await Swal.fire({
-            background: swalBackground,
-            position: 'center',
-            title: 'Request remote control?',
-            html: renderRoomTemplate('popupRemoteControlConfirmTemplate', {
-                text: { name: this.getRemotePeerName(peer_id) },
-            }),
-            showCancelButton: true,
-            confirmButtonText: 'Send request',
-            cancelButtonText: 'Cancel',
-            focusCancel: true,
-            showClass: { popup: 'animate__animated animate__fadeInDown' },
-            hideClass: { popup: 'animate__animated animate__fadeOutUp' },
-        });
-        if (!result.isConfirmed || !this.remoteControlEnabled || !isPresenter) return;
-        this.remoteControlPeerId = peer_id;
-        this.emitCmd({
-            type: 'remoteControl',
-            from_peer_name: this.peer_name,
-            from_peer_id: this.peer_id,
-            from_peer_uuid: this.peer_uuid,
-            peer_id: peer_id,
-            broadcast: false,
-        });
-        this.userLog('success', 'Remote control requested. Waiting for confirmation...', 'top-end', 6000);
-    }
-
-    sendPeerRemoteControl(peer_id, type, data) {
-        this.emitCmd({
-            type: type,
-            from_peer_name: this.peer_name,
-            from_peer_id: this.peer_id,
-            peer_id: peer_id,
-            data: data,
-            broadcast: false,
-        });
-    }
-
-    confirmPeerRemoteControl(cmd) {
-        if (!this.remoteControlEnabled) return;
-        this.sound('notify');
-        let downloadUrl = /^(https?:\/\/|\/(?!\/))/i.test(this.remoteControlDownloadUrl)
-            ? this.remoteControlDownloadUrl
-            : null;
-        // The built-in setup page requires the room token sent with the request
-        if (downloadUrl === '/remote-control/setup' && typeof cmd.setup_token === 'string') {
-            downloadUrl += `?t=${encodeURIComponent(cmd.setup_token)}`;
-        }
-        Swal.fire({
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            background: swalBackground,
-            position: 'center',
-            title: 'Remote control request',
-            html: renderRoomTemplate('popupRemoteControlPromptTemplate', {
-                text: { name: cmd.from_peer_name },
-                attrs: { downloadUrl },
-            }),
-            showDenyButton: true,
-            confirmButtonText: 'Allow control',
-            denyButtonText: 'Deny',
-            focusConfirm: false,
-            didOpen: () => this.getId('remoteControlId').focus(),
-            preConfirm: () => {
-                // RustDesk shows the ID grouped by spaces (123 456 789)
-                const id = this.getId('remoteControlId').value.replace(/\s+/g, '');
-                const password = this.getId('remoteControlPassword').value.trim();
-                if (!/^[\w.@:-]{6,64}$/.test(id)) return Swal.showValidationMessage('Enter a valid RustDesk ID');
-                if (!/^[^\s<>&"'`]{1,64}$/.test(password)) {
-                    return Swal.showValidationMessage('Enter a valid RustDesk password');
-                }
-                return { id, password };
-            },
-            showClass: { popup: 'animate__animated animate__fadeInDown' },
-            hideClass: { popup: 'animate__animated animate__fadeOutUp' },
-        }).then((result) => {
-            result.isConfirmed
-                ? this.sendPeerRemoteControl(cmd.from_peer_id, 'remoteControlOK', result.value)
-                : this.sendPeerRemoteControl(
-                      cmd.from_peer_id,
-                      'remoteControlKO',
-                      `${this.peer_name}: Has declined the remote control request`
-                  );
-        });
-    }
-
-    handleRemoteControlOK(cmd) {
-        // Accept answers only from the peer we asked
-        if (!this.remoteControlEnabled || cmd.from_peer_id !== this.remoteControlPeerId) return;
-        this.remoteControlPeerId = null;
-        const { id, password } = cmd.data;
-        this.sound('notify');
-        Swal.fire({
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            background: swalBackground,
-            position: 'center',
-            title: 'Remote control',
-            html: renderRoomTemplate('popupRemoteControlReadyTemplate', {
-                text: { name: cmd.from_peer_name, id, password },
-            }),
-            showCancelButton: true,
-            confirmButtonText: 'Open RustDesk',
-            cancelButtonText: 'Cancel',
-            didOpen: (popup) => {
-                popup.querySelectorAll('[data-copy]').forEach((btn) => {
-                    btn.addEventListener('click', () =>
-                        copyToClipboard(btn.dataset.copy === 'id' ? id : password, false)
-                    );
-                });
-            },
-            showClass: { popup: 'animate__animated animate__fadeInDown' },
-            hideClass: { popup: 'animate__animated animate__fadeOutUp' },
-        }).then((result) => {
-            // Desktop RustDesk ignores the password parameter, so it must be pasted manually
-            if (result.isConfirmed) {
-                window.location.href = `rustdesk://connection/new/${encodeURIComponent(id)}?password=${encodeURIComponent(password)}`;
-            }
-        });
-    }
-
-    // ##############################################
-    // RTMP Custom Destination
-    // ##############################################
-
-    initRtmpCustomDestination() {
-        const rtmpPresets = {
-            YouTube: { url: 'rtmp://a.rtmp.youtube.com/live2', placeholder: 'YouTube stream key' },
-            Facebook: { url: 'rtmps://live-api-s.facebook.com:443/rtmp', placeholder: 'Facebook stream key' },
-            Twitch: { url: 'rtmp://live.twitch.tv/app', placeholder: 'Twitch stream key' },
-            Custom: { url: '', placeholder: 'Stream key' },
-        };
-
-        const rtmpCustomUrl = this.getId('rtmpCustomUrl');
-        const rtmpCustomStreamKey = this.getId('rtmpCustomStreamKey');
-        const rtmpCustomClear = this.getId('rtmpCustomClear');
-
-        const rtmpDestinationToggle = this.getId('rtmpDestinationToggle');
-        const rtmpCustomDestination = this.getId('rtmpCustomDestination');
-
-        const setDestinationEditorOpen = (open) => {
-            rtmpCustomDestination.classList.toggle('rtmp-collapsed', !open);
-            rtmpDestinationToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-            rtmpDestinationToggle.textContent = open ? 'Done' : 'Change';
-        };
-
-        // Keep the collapsed summary row in sync with the override fields
-        const updateDestinationSummary = () => {
-            const url = rtmpCustomUrl.value.trim();
-            const key = rtmpCustomStreamKey.value.trim();
-            const activePreset = document.querySelector('.btn-rtmp-preset.active');
-            const icon = this.getId('rtmpDestinationIcon');
-            const name = this.getId('rtmpDestinationName');
-            const hint = this.getId('rtmpDestinationHint');
-
-            if (!url && !key) {
-                icon.className = 'fa-solid fa-server';
-                name.textContent = 'Room default';
-                hint.textContent = 'Configured by your administrator';
-                return;
-            }
-            icon.className = activePreset?.querySelector('i')?.className || 'fa-solid fa-globe';
-            name.textContent = activePreset ? activePreset.textContent.trim() : 'Custom server';
-            hint.textContent =
-                url && key ? 'Stream key set' : 'Server URL and stream key are both required, room default is used';
-        };
-
-        const showClearButton = () => {
-            elemDisplay('rtmpCustomClear', rtmpCustomUrl.value || rtmpCustomStreamKey.value ? true : false);
-            updateDestinationSummary();
-        };
-
-        rtmpDestinationToggle.addEventListener('click', () => {
-            setDestinationEditorOpen(rtmpCustomDestination.classList.contains('rtmp-collapsed'));
-        });
-
-        const setActivePreset = (activeBtn) => {
-            document.querySelectorAll('.btn-rtmp-preset').forEach((btn) => btn.classList.remove('active'));
-            activeBtn.classList.add('active');
-        };
-
-        rtmpCustomUrl.addEventListener('input', showClearButton);
-        rtmpCustomStreamKey.addEventListener('input', showClearButton);
-
-        this.getId('rtmpPresetYouTube').addEventListener('click', (e) => {
-            rtmpCustomUrl.value = rtmpPresets.YouTube.url;
-            rtmpCustomStreamKey.placeholder = rtmpPresets.YouTube.placeholder;
-            rtmpCustomStreamKey.value = '';
-            rtmpCustomStreamKey.focus();
-            setActivePreset(e.currentTarget);
-            showClearButton();
-        });
-        this.getId('rtmpPresetFacebook').addEventListener('click', (e) => {
-            rtmpCustomUrl.value = rtmpPresets.Facebook.url;
-            rtmpCustomStreamKey.placeholder = rtmpPresets.Facebook.placeholder;
-            rtmpCustomStreamKey.value = '';
-            rtmpCustomStreamKey.focus();
-            setActivePreset(e.currentTarget);
-            showClearButton();
-        });
-        this.getId('rtmpPresetTwitch').addEventListener('click', (e) => {
-            rtmpCustomUrl.value = rtmpPresets.Twitch.url;
-            rtmpCustomStreamKey.placeholder = rtmpPresets.Twitch.placeholder;
-            rtmpCustomStreamKey.value = '';
-            rtmpCustomStreamKey.focus();
-            setActivePreset(e.currentTarget);
-            showClearButton();
-        });
-        this.getId('rtmpPresetCustom').addEventListener('click', (e) => {
-            rtmpCustomUrl.value = rtmpPresets.Custom.url;
-            rtmpCustomStreamKey.placeholder = rtmpPresets.Custom.placeholder;
-            rtmpCustomUrl.placeholder = 'rtmp://your-server/app';
-            rtmpCustomStreamKey.value = '';
-            rtmpCustomUrl.focus();
-            setActivePreset(e.currentTarget);
-            showClearButton();
-        });
-
-        rtmpCustomClear.addEventListener('click', () => {
-            rtmpCustomUrl.value = '';
-            rtmpCustomStreamKey.value = '';
-            rtmpCustomUrl.placeholder = 'rtmp://a.rtmp.youtube.com/live2';
-            rtmpCustomStreamKey.placeholder = 'Stream key';
-            document.querySelectorAll('.btn-rtmp-preset').forEach((btn) => btn.classList.remove('active'));
-            showClearButton();
-            setDestinationEditorOpen(false);
-        });
-    }
-
-    getCustomRtmpUrl() {
-        const rtmpCustomUrl = this.getId('rtmpCustomUrl')?.value?.trim();
-        const rtmpCustomStreamKey = this.getId('rtmpCustomStreamKey')?.value?.trim();
-        if (rtmpCustomUrl && rtmpCustomStreamKey) {
-            const separator = rtmpCustomUrl.endsWith('/') ? '' : '/';
-            return rtmpCustomUrl + separator + rtmpCustomStreamKey;
-        }
-        return null;
-    }
-
-    // ##############################################
-    // RTMP from FILE
-    // ##############################################
-
-    getRTMP() {
-        this.socket.request('getRTMP').then(function (filenames) {
-            console.log('RTMP files', filenames);
-            if (filenames.length === 0) {
-                const fileNameDiv = rc.getId('file-name');
-                fileNameDiv.textContent = 'No file found to stream';
-                //elemDisplay('startRtmpButton', false);
-            }
-
-            //const f = Array.from({ length: 20 }, (_, index) => `My-file-video-to-stream-to-rtmp-server ${index + 1}`);
-
-            const fileListTbody = rc.getId('file-list');
-            fileListTbody.innerHTML = '';
-
-            // The list is rebuilt on every open/refresh, so drop a selection that no longer exists
-            const previousSelection = filenames.includes(rc.selectedRtmpFilename) ? rc.selectedRtmpFilename : '';
-            rc.selectedRtmpFilename = '';
-            if (filenames.length) rc.getId('file-name').textContent = '';
-
-            filenames.forEach((filename) => {
-                const fileRow = document.createElement('tr');
-                const fileCell = document.createElement('td');
-                fileCell.textContent = filename;
-                fileCell.className = 'file-item';
-                fileCell.onclick = () => showFilename(fileCell, filename);
-                fileRow.appendChild(fileCell);
-                fileListTbody.appendChild(fileRow);
-                if (filename === previousSelection) showFilename(fileCell, filename);
-            });
-
-            function showFilename(clickedItem, filename) {
-                const fileNameDiv = rc.getId('file-name');
-                fileNameDiv.textContent = `Selected file: ${filename}`;
-                rc.selectedRtmpFilename = filename;
-                const fileItems = document.querySelectorAll('.file-item');
-                fileItems.forEach((item) => item.classList.remove('selected'));
-
-                if (clickedItem) {
-                    clickedItem.classList.add('selected');
-                }
-            }
-        });
-    }
-
-    async startRTMP() {
-        if (!this.isRTMPVideoSupported(filterXSS(this.selectedRtmpFilename))) {
-            this.getId('file-name').textContent = '';
-            return this.userLog(
-                'warning',
-                "The provided File is not valid. Please ensure it's .mp4, webm or ogg video file",
-                'top-end'
-            );
-        }
-
-        this.socket
-            .request('startRTMP', {
-                file: filterXSS(this.selectedRtmpFilename),
-                peer_name: filterXSS(this.peer_name),
-                peer_uuid: filterXSS(this.peer_uuid),
-                customRtmpUrl: this.getCustomRtmpUrl(),
-            })
-            .then(function (rtmp) {
-                rc.event(_EVENTS.startRTMP);
-                rc.showRTMP(rtmp, 'file');
-                rc.rtmpFileStreamer = true;
-            });
-    }
-
-    stopRTMP() {
-        if (this.rtmpFileStreamer) {
-            this.socket.request('stopRTMP');
-            this.rtmpFileStreamer = false;
-            this.cleanRTMPUrl();
-            console.log('RTMP STOP');
-            this.event(_EVENTS.stopRTMP);
-        }
-    }
-
-    endRTMP(data) {
-        const rtmpMessage = `${data.rtmpUrl} processing finished!`;
-        this.rtmpFileStreamer = false;
-        this.userLog('info', rtmpMessage, 'top-end');
-        console.log(rtmpMessage);
-        this.cleanRTMPUrl();
-        this.socket.request('endOrErrorRTMP');
-        this.event(_EVENTS.endRTMP);
-    }
-
-    errorRTMP(data) {
-        const rtmpError = `${data.message}`;
-        this.rtmpFileStreamer = false;
-        this.userLog('error', rtmpError, 'top-end');
-        console.error(rtmpError);
-        this.cleanRTMPUrl();
-        this.socket.request('endOrErrorRTMP');
-        this.event(_EVENTS.endRTMP);
-    }
-
-    // ##############################################
-    // RTMP from URL
-    // ##############################################
-
-    startRTMPfromURL(inputVideoURL) {
-        if (!this.isRTMPVideoSupported(filterXSS(inputVideoURL))) {
-            this.getId('rtmpStreamURL').value = '';
-            return this.userLog(
-                'warning',
-                'The provided URL is not valid. Please ensure it links to an .mp4 video file',
-                'top-end'
-            );
-        }
-
-        this.socket
-            .request('startRTMPfromURL', {
-                inputVideoURL: filterXSS(inputVideoURL),
-                peer_name: filterXSS(this.peer_name),
-                peer_uuid: filterXSS(this.peer_uuid),
-                customRtmpUrl: this.getCustomRtmpUrl(),
-            })
-            .then(function (rtmp) {
-                rc.event(_EVENTS.startRTMPfromURL);
-                rc.showRTMP(rtmp, 'url');
-                rc.rtmpUrlStreamer = true;
-            });
-    }
-
-    stopRTMPfromURL() {
-        if (this.rtmpUrlStreamer) {
-            this.socket.request('stopRTMPfromURL');
-            this.rtmpUrlStreamer = false;
-            this.cleanRTMPUrl();
-            console.log('RTMP from URL STOP');
-            this.event(_EVENTS.stopRTMPfromURL);
-        }
-    }
-
-    endRTMPfromURL(data) {
-        const rtmpMessage = `${data.rtmpUrl} processing finished!`;
-        this.rtmpUrlStreamer = false;
-        this.userLog('info', rtmpMessage, 'top-end');
-        console.log(rtmpMessage);
-        this.cleanRTMPUrl();
-        this.socket.request('endOrErrorRTMPfromURL');
-        this.event(_EVENTS.endRTMPfromURL);
-    }
-
-    errorRTMPfromURL(data) {
-        const rtmpError = `${data.message}`;
-        this.rtmpUrlStreamer = false;
-        this.userLog('error', rtmpError, 'top-end');
-        console.error(rtmpError);
-        this.cleanRTMPUrl();
-        this.socket.request('endOrErrorRTMPfromURL');
-        this.event(_EVENTS.endRTMPfromURL);
-    }
-
-    // ##############################################
-    // RTMP common
-    // ##############################################
-
-    initRtmpQualitySelect({ allowQualitySelection, videoQuality, maxVideoQuality }) {
-        const qualities = ['480p', '720p', '1080p', '1440p'];
-        const select = this.getId('rtmpQuality');
-        const field = this.getId('rtmpQualityField');
-        if (!select || !field) return;
-
-        field.style.display = allowQualitySelection ? '' : 'none';
-        const maxIndex = qualities.includes(maxVideoQuality) ? qualities.indexOf(maxVideoQuality) : 2; // 1080p
-        const defaultQuality = qualities.includes(videoQuality) ? videoQuality : '720p';
-
-        select.innerHTML = '';
-        select.appendChild(new Option(`Server default (${defaultQuality})`, ''));
-        qualities.slice(0, maxIndex + 1).forEach((q) => select.appendChild(new Option(q, q)));
-    }
-
-    openRTMPStreamer() {
-        const themeColor = encodeURIComponent(themeCustom.color);
-
-        const customRtmpUrl = this.getCustomRtmpUrl();
-
-        const activePreset = document.querySelector('.btn-rtmp-preset.active');
-        const streamType = activePreset ? activePreset.textContent.trim() : customRtmpUrl ? 'Custom' : '';
-
-        const options =
-            `&vr=${videoQuality.value}` +
-            `&vf=${videoFps.value}` +
-            `&sf=${screenFps.value}` +
-            `&ts=${selectTheme.value}` +
-            (this.getId('rtmpQuality')?.value ? `&rq=${encodeURIComponent(this.getId('rtmpQuality').value)}` : '') +
-            (themeCustom.keep ? `&tc=${themeColor}` : '') +
-            (customRtmpUrl ? `&customRtmpUrl=${encodeURIComponent(customRtmpUrl)}` : '') +
-            (streamType ? `&st=${encodeURIComponent(streamType)}` : '') +
-            (this.rtmpStreamToken ? `&rt=${encodeURIComponent(this.rtmpStreamToken)}` : '');
-
-        const url = `/rtmp?v=${videoSelect.value}&a=${microphoneSelect.value}${options}`;
-
-        openURL(url, true);
-    }
-
-    isRTMPVideoSupported(video) {
-        if (video.endsWith('.mp4') || video.endsWith('.webm')) return true;
-        return false;
-    }
-
-    copyRTMPUrl(url) {
-        if (!url) return this.userLog('info', 'No RTMP URL detected', 'top-end');
-        copyToClipboard(url);
-    }
-
-    cleanRTMPUrl() {
-        const rtmpUrl = rc.getId('rtmpLiveUrl');
-        rtmpUrl.value = '';
-        elemDisplay('rtmpUrlLiveContainer', true, 'grid');
-    }
-
-    showRTMP(rtmp, type = 'file') {
-        console.log('rtmp', rtmp);
-
-        if (!rtmp) {
-            switch (type) {
-                case 'file':
-                    this.event(_EVENTS.endRTMP);
-                    break;
-                case 'url':
-                    this.event(_EVENTS.endRTMPfromURL);
-                    break;
-                default:
-                    break;
-            }
-            return this.userLog(
-                'warning',
-                'Unable to start the RTMP stream. Please ensure the RTMP server is running. If the problem persists, contact the administrator',
-                'top-end',
-                6000
-            );
-        }
-
-        const isCustomDestination = this.getCustomRtmpUrl() !== null;
-
-        if (isCustomDestination) {
-            elemDisplay('rtmpUrlLiveContainer', false);
-        } else {
-            elemDisplay('rtmpUrlLiveContainer', true, 'grid');
-            const rtmpUrl = rc.getId('rtmpLiveUrl');
-            rtmpUrl.value = filterXSS(rtmp);
-        }
-
-        Swal.fire({
-            background: swalBackground,
-            imageUrl: image.rtmp,
-            position: 'center',
-            title: 'LIVE',
-            html: isCustomDestination
-                ? `<p style="background:transparent; color:rgb(8, 189, 89);">Streaming to external platform</p>`
-                : `<p style="background:transparent; color:rgb(8, 189, 89);">${rtmp}</p>`,
-            showDenyButton: false,
-            showCancelButton: false,
-            confirmButtonText: isCustomDestination ? 'OK' : 'Copy URL',
-            showClass: { popup: 'animate__animated animate__fadeInDown' },
-            hideClass: { popup: 'animate__animated animate__fadeOutUp' },
-        }).then((result) => {
-            if (result.isConfirmed && !isCustomDestination) {
-                copyToClipboard(rtmp);
             }
         });
     }

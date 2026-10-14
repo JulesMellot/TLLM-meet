@@ -30,7 +30,6 @@ const splitChar = ',';
 // 1. Environment Detection & System Configuration
 // ==============================================
 
-const PLATFORM = os.platform();
 const IS_DOCKER = fs.existsSync('/.dockerenv');
 const ENVIRONMENT = process.env.NODE_ENV || 'development';
 const ANNOUNCED_IP = process.env.SFU_ANNOUNCED_IP || '';
@@ -45,12 +44,6 @@ const RTC_MIN_PORT = parseInt(process.env.SFU_MIN_PORT) || 40000;
 const RTC_MAX_PORT = parseInt(process.env.SFU_MAX_PORT) || 40100;
 const NUM_CPUS = os.cpus().length;
 const NUM_WORKERS = Math.min(process.env.SFU_NUM_WORKERS || NUM_CPUS, NUM_CPUS);
-
-// ==============================================
-// 3. FFmpeg Path Configuration
-// ==============================================
-
-const RTMP_FFMPEG_PATH = process.env.RTMP_FFMPEG_PATH || getFFmpegPath(PLATFORM);
 
 // ==============================================
 // Main Configuration Export
@@ -218,161 +211,6 @@ module.exports = {
                 windowMs: parseInt(process.env.RECORDING_RATE_LIMIT_WINDOW_MS) || 60 * 1000,
                 max: parseInt(process.env.RECORDING_RATE_LIMIT_MAX) || 300,
             },
-        },
-
-        /**
-         * RTMP Configuration
-         * =================
-         * Configures Real-Time Messaging Protocol (RTMP) for audio/video/data streaming.
-         *
-         * Core Settings
-         * ------------
-         * - enabled            : Enable/disable RTMP streaming (default: false)
-         * - fromFile           : Enable local file streaming (default: true)
-         * - fromUrl            : Enable URL streaming (default: true)
-         * - fromStream         : Enable live stream input (default: true)
-         * - maxStreams         : Maximum simultaneous streams (default: 1)
-         * - allowCustomUrl     : Allow presenters to set a custom RTMP destination (default: false)
-         * - useNodeMediaServer : Use NodeMediaServer instead of nginx-rtmp (default: true)
-         * - server             : RTMP server URL (default: 'rtmp://localhost:1935')
-         * - appName            : Application name (default: 'live')
-         * - streamKey          : Optional authentication key (auto-generated UUID if empty)
-         * - secret             : Must match NodeMediaServer's config.js (default: 'mirotalkRtmpSecret')
-         * - apiSecret          : WebRTC→RTMP API secret. NO DEFAULT: set RTMP_API_SECRET to a strong,
-         *                        random value. When empty, /activeStreams, /initRTMP, /streamRTMP and
-         *                        /stopRTMP reject every request.
-         * - expirationHours    : Stream URL expiry in hours (default: 4)
-         * - dir                : Video storage directory (Relative to app/src/ default: app/rtmp)
-         * - ffmpegPath         : FFmpeg binary path (auto-detected)
-         * - platform           : Current OS platform (auto-detected)
-         *
-         * Output Quality (applies to live, file and URL streams)
-         * ------------------------------------------------------
-         * - videoQuality          : Default output profile: 480p | 720p | 1080p | 1440p (default: 720p)
-         * - maxVideoQuality       : Highest profile presenters may pick from the RTMP tab (default: 1080p)
-         * - allowQualitySelection : Let presenters pick the quality from the RTMP tab (default: true)
-         * - videoBitrate          : Video bitrate in kbps for the default profile, 0 = profile default
-         *                           (480p: 1500, 720p: 3000, 1080p: 4500, 1440p: 9000)
-         * - videoFps              : Output frame rate (default: 30, max: 60)
-         * - videoPreset           : x264 preset, ultrafast..veryslow (default: veryfast, slower = better quality, more CPU)
-         * - audioBitrate          : AAC audio bitrate in kbps (default: 128)
-         * YouTube recommends 1080p30 at 4500-9000 kbps; raise RTMP_VIDEO_QUALITY / RTMP_VIDEO_BITRATE for sharper
-         * streams (1080p needs roughly twice the CPU of 720p).
-         *
-         * Server Management
-         * ----------------
-         * NodeMediaServer (mirotalk/nms:latest):
-         *   - Start: npm run nms-start
-         *   - Stop:  npm run nms-stop
-         *   - Logs:  npm run nms-logs
-         *
-         * NGINX-RTMP (mirotalk/rtmp:latest):
-         *   - Start: npm run rtmp-start
-         *   - Stop:  npm run rtmp-stop
-         *   - Logs:  npm run rtmp-logs
-         *
-         * Implementation Notes:
-         * --------------------
-         * 1. For NodeMediaServer:
-         *    - Mandatory values: appName (falls back to 'live'), streamKey (auto-generated)
-         *    - URL format: rtmp://host:port/appName/streamKey?sign=expiration-token
-         *
-         * 2. Default Behavior:
-         *    - If server URL is empty, uses localhost:1935
-         *    - If no streamKey provided, generates UUIDv4
-         *    - When useNodeMediaServer=true, generates signed URLs with expiration
-         *
-         * Custom RTMP Destinations (YouTube, Facebook, Twitch)
-         * ---------------------------------------------------
-         * When allowCustomUrl=true, presenters can stream directly to external platforms
-         * from the meeting room UI. They select a preset or enter a custom RTMP URL,
-         * paste their stream key, and start streaming. Only rtmp:// and rtmps:// schemes
-         * are accepted by the server for security.
-         *
-         * YouTube Live:
-         *   - Go to https://studio.youtube.com → Go Live → Stream
-         *   - Copy your "Stream key" from the stream settings
-         *   - RTMP URL: rtmp://a.rtmp.youtube.com/live2
-         *   - Full URL: rtmp://a.rtmp.youtube.com/live2/YOUR_STREAM_KEY
-         *   - Env setup (server-wide default):
-         *       RTMP_SERVER=rtmp://a.rtmp.youtube.com
-         *       RTMP_APP_NAME=live2
-         *       RTMP_STREAM_KEY=xxxx-xxxx-xxxx-xxxx
-         *       RTMP_USE_NODE_MEDIA_SERVER=false
-         *
-         * Facebook Live:
-         *   - Go to https://www.facebook.com/live/producer → Use Stream Key
-         *   - Copy the "Stream key" shown
-         *   - RTMP URL: rtmps://live-api-s.facebook.com:443/rtmp
-         *   - Full URL: rtmps://live-api-s.facebook.com:443/rtmp/YOUR_STREAM_KEY
-         *   - Note: Facebook requires rtmps:// (TLS encrypted)
-         *   - Env setup (server-wide default):
-         *       RTMP_SERVER=rtmps://live-api-s.facebook.com:443
-         *       RTMP_APP_NAME=rtmp
-         *       RTMP_STREAM_KEY=your-facebook-stream-key
-         *       RTMP_USE_NODE_MEDIA_SERVER=false
-         *
-         * Twitch:
-         *   - Go to https://dashboard.twitch.tv/settings/stream
-         *   - Copy your "Primary Stream key"
-         *   - RTMP URL: rtmp://live.twitch.tv/app
-         *   - Full URL: rtmp://live.twitch.tv/app/YOUR_STREAM_KEY
-         *   - Env setup (server-wide default):
-         *       RTMP_SERVER=rtmp://live.twitch.tv
-         *       RTMP_APP_NAME=app
-         *       RTMP_STREAM_KEY=live_xxxxxxxxxxxx
-         *       RTMP_USE_NODE_MEDIA_SERVER=false
-         *
-         * Custom RTMP Server:
-         *   - Use any RTMP/RTMPS ingest endpoint
-         *   - Full URL: rtmp://your-server:1935/app/stream-key
-         *   - Env setup (server-wide default):
-         *       RTMP_SERVER=rtmp://your-server:1935
-         *       RTMP_APP_NAME=app
-         *       RTMP_STREAM_KEY=your-stream-key
-         *       RTMP_USE_NODE_MEDIA_SERVER=false
-         *
-         * Per-room custom destination (no env changes needed):
-         *   - Set RTMP_ALLOW_CUSTOM_URL=true in .env
-         *   - Presenters will see preset buttons (YouTube/Facebook/Twitch/Custom)
-         *     in the RTMP tab of the meeting room
-         *   - They select a platform, paste their stream key, and start streaming
-         *   - The custom URL overrides the server default for that specific stream only
-         *
-         * Requirements:
-         * -------------
-         * - RTMP server must be running (or streaming to external platform)
-         * - Port 1935 must be accessible (or 443 for rtmps)
-         * - FFmpeg must be installed
-         *
-         * Documentation:
-         * --------------
-         * - https://docs.mirotalk.com/mirotalk-sfu/rtmp/
-         */
-        rtmp: {
-            enabled: process.env.RTMP_ENABLED === 'true',
-            fromFile: process.env.RTMP_FROM_FILE !== 'false',
-            fromUrl: process.env.RTMP_FROM_URL !== 'false',
-            fromStream: process.env.RTMP_FROM_STREAM !== 'false',
-            maxStreams: parseInt(process.env.RTMP_MAX_STREAMS) || 1,
-            allowCustomUrl: process.env.RTMP_ALLOW_CUSTOM_URL === 'true',
-            useNodeMediaServer: process.env.RTMP_USE_NODE_MEDIA_SERVER !== 'false',
-            server: process.env.RTMP_SERVER || 'rtmp://localhost:1935',
-            appName: process.env.RTMP_APP_NAME || 'live',
-            streamKey: process.env.RTMP_STREAM_KEY || '',
-            secret: process.env.RTMP_SECRET || 'mirotalkRtmpSecret',
-            apiSecret: process.env.RTMP_API_SECRET || '',
-            expirationHours: parseInt(process.env.RTMP_EXPIRATION_HOURS) || 4,
-            dir: process.env.RTMP_DIR || '../rtmp',
-            ffmpegPath: RTMP_FFMPEG_PATH,
-            platform: PLATFORM,
-            videoQuality: process.env.RTMP_VIDEO_QUALITY || '720p',
-            maxVideoQuality: process.env.RTMP_MAX_VIDEO_QUALITY || '1080p',
-            allowQualitySelection: process.env.RTMP_ALLOW_QUALITY_SELECTION !== 'false',
-            videoBitrate: parseInt(process.env.RTMP_VIDEO_BITRATE) || 0,
-            videoFps: parseInt(process.env.RTMP_VIDEO_FPS) || 30,
-            videoPreset: process.env.RTMP_VIDEO_PRESET || 'veryfast',
-            audioBitrate: parseInt(process.env.RTMP_AUDIO_BITRATE) || 128,
         },
     },
 
@@ -1073,8 +911,6 @@ module.exports = {
                 joinLockButton: process.env.SHOW_JOIN_LOCK !== 'false',
                 sendEmailInvitation: process.env.SHOW_EMAIL_INVITE !== 'false',
                 micOptionsButton: process.env.SHOW_MIC_OPTIONS !== 'false',
-                tabRTMPStreamingBtn: process.env.SHOW_RTMP_TAB !== 'false',
-                tabSipPhoneBtn: process.env.SHOW_SIP_TAB !== 'false',
                 tabNotificationsBtn: process.env.SHOW_NOTIFICATIONS_TAB !== 'false',
                 tabNetworkBtn: process.env.SHOW_NETWORK_TAB !== 'false',
                 tabModerator: process.env.SHOW_MODERATOR_TAB !== 'false',
@@ -1239,35 +1075,6 @@ module.exports = {
                 windowMs:
                     Math.max(parseInt(process.env.SCHEDULE_MEETING_RATE_LIMIT_WINDOW_MINUTES, 10) || 60, 1) * 60 * 1000,
                 max: Math.max(parseInt(process.env.SCHEDULE_MEETING_RATE_LIMIT_MAX, 10) || 5, 1),
-            },
-        },
-
-        /**
-         * Remote Control (RustDesk)
-         * -------------------------
-         * Optional, disabled by default. Browsers cannot inject OS-level mouse/keyboard input,
-         * so MiroTalk only brokers the consent handshake: a presenter confirms before sending a request, the
-         * participant accepts and shares their RustDesk ID + one-time password, and the presenter
-         * opens the RustDesk client (https://rustdesk.com). No input data goes through this server.
-         * - enabled: Show "Remote control" in the presenter's participants menu
-         * - downloadUrl: Where participants can get the RustDesk client. Defaults to the built-in
-         *   setup page (/remote-control/setup) when server.idServer is set, else rustdesk.com
-         * - downloadUrlPublic: false = /remote-control/setup needs the short-lived token sent with a request;
-         *   true = open to anyone with the URL
-         * - server: Your self-hosted RustDesk server, shown on the public setup page
-         *   (key = contents of id_ed25519.pub, never the private key)
-         */
-        remoteControl: {
-            enabled: process.env.REMOTE_CONTROL_ENABLED === 'true',
-            downloadUrl:
-                process.env.REMOTE_CONTROL_DOWNLOAD_URL ||
-                (process.env.REMOTE_CONTROL_SERVER_HOST ? '/remote-control/setup' : 'https://rustdesk.com/'),
-            downloadUrlPublic: process.env.REMOTE_CONTROL_DOWNLOAD_URL_PUBLIC === 'true',
-            server: {
-                idServer: process.env.REMOTE_CONTROL_SERVER_HOST || '',
-                relayServer: process.env.REMOTE_CONTROL_SERVER_RELAY || '',
-                apiServer: process.env.REMOTE_CONTROL_SERVER_API || '',
-                key: process.env.REMOTE_CONTROL_SERVER_KEY || '',
             },
         },
 
@@ -1684,31 +1491,4 @@ function scanAllInterfaces(ifaces, excludes) {
 function findValidAddress(addresses) {
     return addresses?.find((addr) => addr.family === 'IPv4' && !addr.internal && !addr.address.startsWith('169.254.'))
         ?.address;
-}
-
-/**
- * Get FFmpeg Path
- * ---------------
- * - Checks common installation locations
- * - Platform-specific paths
- */
-function getFFmpegPath(platform) {
-    const paths = {
-        darwin: ['/usr/local/bin/ffmpeg', '/opt/homebrew/bin/ffmpeg'],
-        linux: ['/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg'],
-        win32: ['C:\\ffmpeg\\bin\\ffmpeg.exe', 'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe'],
-    };
-
-    const platformPaths = paths[platform] || ['/usr/bin/ffmpeg'];
-
-    for (const path of platformPaths) {
-        try {
-            fs.accessSync(path);
-            return path;
-        } catch (e) {
-            continue;
-        }
-    }
-
-    return platformPaths[0];
 }
