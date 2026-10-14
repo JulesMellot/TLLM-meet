@@ -30,7 +30,6 @@ prod dependencies: {
     mediasoup               : https://www.npmjs.com/package/mediasoup
     mediasoup-client        : https://www.npmjs.com/package/mediasoup-client
     nodemailer              : https://www.npmjs.com/package/nodemailer
-    openai                  : https://www.npmjs.com/package/openai
     qs                      : https://www.npmjs.com/package/qs
     sanitize-filename       : https://www.npmjs.com/package/sanitize-filename
     socket.io               : https://www.npmjs.com/package/socket.io
@@ -111,7 +110,6 @@ const Discord = require('./Discord');
 const Mattermost = require('./Mattermost');
 const restrictAccessByIP = require('./middleware/IpWhitelist');
 const { applyEmbedHeaders, embedAllowedOrigins, embedCsp } = require('./middleware/EmbedHeaders');
-const { createVideoAIService } = require('./videoai/service');
 const packageJson = require('../../package.json');
 
 // Rate limiters
@@ -421,21 +419,6 @@ const defaultStats = {
     src: 'https://stats.mirotalk.com/script.js',
     id: '41d26670-f275-45bb-af82-3ce91fe57756',
 };
-
-// OpenAI/ChatGPT
-let chatGPT;
-if (config?.integrations?.chatGPT?.enabled) {
-    if (config?.integrations?.chatGPT?.apiKey) {
-        const { OpenAI } = require('openai');
-        const configuration = {
-            basePath: config?.integrations?.chatGPT?.basePath,
-            apiKey: config?.integrations?.chatGPT?.apiKey,
-        };
-        chatGPT = new OpenAI(configuration);
-    } else {
-        log.warn('ChatGPT seems enabled, but you missing the apiKey!');
-    }
-}
 
 // OpenID Connect
 const OIDC = config?.security?.oidc || { enabled: false };
@@ -2175,17 +2158,6 @@ function startServer() {
                     worker_bin: mediasoup?.workerBin,
                 },
                 rtmp: rtmpCfg?.enabled ? rtmpCfg : false,
-                videoAI: config.integrations?.videoAI?.enabled
-                    ? {
-                          enabled: true,
-                          defaultProvider: config.integrations.videoAI.defaultProvider || 'liveavatar',
-                          sessionTimeLimit: config.integrations.videoAI.sessionTimeLimit || 0,
-                          providers: {
-                              liveavatar: !!config.integrations.videoAI.liveavatar?.enabled,
-                              anam: !!config.integrations.videoAI.anam?.enabled,
-                          },
-                      }
-                    : false,
                 server_recording: config?.media?.recording?.enabled ? config.media.recording : false,
             },
 
@@ -2194,8 +2166,6 @@ function startServer() {
                 discord: config.integrations?.discord?.enabled ? config.integrations.discord : false,
                 mattermost: config.integrations?.mattermost?.enabled ? config.integrations.mattermost : false,
                 slack: slackEnabled ? config.integrations?.slack : false,
-                chatGPT: config.integrations?.chatGPT?.enabled ? config.integrations.chatGPT : false,
-                deepSeek: config.integrations?.deepSeek?.enabled ? config.integrations.deepSeek : false,
                 email_alerts: config?.integrations?.email?.alert ? config.integrations.email : false,
             },
 
@@ -3817,8 +3787,6 @@ function startServer() {
                 case 'screen_annotations_cant_draw':
                 case 'chat_cant_privately':
                 case 'chat_cant_publicly':
-                case 'chat_cant_chatgpt':
-                case 'chat_cant_deep_seek':
                 case 'media_cant_sharing':
                 case 'polls_cant_create':
                     room.broadCast(socket.id, 'updateRoomModerator', moderator);
@@ -4503,7 +4471,7 @@ function startServer() {
             const { room, peer } = getRoomAndPeer(socket);
 
             // Persist peer_video=false so new participants joining later
-            // can correctly see the videoOff tile (e.g. after a VideoAI avatar is stopped)
+            // can correctly see the videoOff tile when they join later
             if (peer) peer.updatePeerInfo({ type: 'video', status: false });
 
             room.broadCast(socket.id, 'setVideoOff', data);
@@ -4584,26 +4552,14 @@ function startServer() {
 
             // Enforce moderator chat restrictions server-side
             const isPublicMessage = data.to_peer_id === 'all';
-            const isChatGPTMessage = data.to_peer_id === 'ChatGPT';
-            const isDeepSeekMessage = data.to_peer_id === 'DeepSeek';
             if (room._moderator) {
-                if (isChatGPTMessage && room._moderator.chat_cant_chatgpt) {
-                    log.debug('Blocking ChatGPT message: disabled by moderator', { peer_name });
+                if (isPublicMessage && room._moderator.chat_cant_publicly) {
+                    log.debug('Blocking public message: disabled by moderator', { peer_name });
                     return;
                 }
-                if (isDeepSeekMessage && room._moderator.chat_cant_deep_seek) {
-                    log.debug('Blocking DeepSeek message: disabled by moderator', { peer_name });
+                if (!isPublicMessage && room._moderator.chat_cant_privately) {
+                    log.debug('Blocking private message: disabled by moderator', { peer_name });
                     return;
-                }
-                if (!isChatGPTMessage && !isDeepSeekMessage) {
-                    if (isPublicMessage && room._moderator.chat_cant_publicly) {
-                        log.debug('Blocking public message: disabled by moderator', { peer_name });
-                        return;
-                    }
-                    if (!isPublicMessage && room._moderator.chat_cant_privately) {
-                        log.debug('Blocking private message: disabled by moderator', { peer_name });
-                        return;
-                    }
                 }
             }
 
@@ -4622,8 +4578,6 @@ function startServer() {
             }
 
             const { to_peer_id, isTyping } = dataObject;
-
-            if (['ChatGPT', 'DeepSeek'].includes(to_peer_id)) return;
 
             // Throttle "typing" signals per socket, "stopped" signals are always relayed
             const now = Date.now();
@@ -4658,181 +4612,6 @@ function startServer() {
             if (!Validator.isValidData(data)) return;
             const { room } = getRoomAndPeer(socket);
             room.broadCast(socket.id, 'chatReaction', data);
-        });
-
-        socket.on('getChatGPT', async ({ time, room, name, prompt, context }, cb) => {
-            if (!roomExists(socket)) {
-                return cb({ message: 'Room not found' });
-            }
-
-            const roomObj = getRoom(socket);
-            if (roomObj && roomObj._moderator && roomObj._moderator.chat_cant_chatgpt) {
-                log.debug('Blocking ChatGPT request: disabled by moderator', { name });
-                return cb({ message: 'The moderator does not allow you to chat with ChatGPT' });
-            }
-
-            if (!config?.integrations?.chatGPT?.enabled) {
-                return cb({ message: 'ChatGPT integration is disabled. Please try again later!' });
-            }
-
-            // https://platform.openai.com/docs/api-reference/completions/create
-            try {
-                if (!prompt || !Array.isArray(context)) {
-                    throw new Error('Invalid input: Prompt or context is missing or invalid');
-                }
-                // Add the prompt to the context
-                context.push({ role: 'user', content: prompt });
-
-                // Call OpenAI's API to generate response (with retry on transient 5xx errors)
-                const MAX_RETRIES = 3;
-                let completion;
-                for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-                    try {
-                        completion = await chatGPT.chat.completions.create({
-                            model: config?.integrations?.chatGPT?.model || 'gpt-3.5-turbo',
-                            messages: context,
-                            max_tokens: config?.integrations?.chatGPT?.max_tokens || 1024,
-                            temperature: config?.integrations?.chatGPT?.temperature || 0.7,
-                        });
-                        break; // success
-                    } catch (retryError) {
-                        const isTransient = retryError.status >= 500 && retryError.status < 600;
-                        if (isTransient && attempt < MAX_RETRIES) {
-                            const delay = Math.pow(2, attempt) * 500; // 1s, 2s backoff
-                            log.warn(
-                                `ChatGPT transient error (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms`,
-                                {
-                                    status: retryError.status,
-                                    message: retryError.message,
-                                }
-                            );
-                            await new Promise((resolve) => setTimeout(resolve, delay));
-                        } else {
-                            throw retryError;
-                        }
-                    }
-                }
-
-                // Extract the assistant's response
-                const message = completion.choices[0].message.content.trim();
-                if (!message) {
-                    throw new Error('ChatGPT returned an empty response.');
-                }
-
-                // Add response to context
-                context.push({ role: 'assistant', content: message });
-
-                // Log the conversation details
-                log.debug('ChatGPT Response', {
-                    time,
-                    room,
-                    name,
-                    prompt,
-                    response: message,
-                    context,
-                });
-
-                // Callback response to client
-                cb({ message, context });
-            } catch (error) {
-                if (error.name === 'APIError') {
-                    log.error('ChatGPT', {
-                        name: error.name,
-                        status: error.status,
-                        message: error.message,
-                        code: error.code,
-                        type: error.type,
-                    });
-                    return cb({ message: `ChatGPT API Error: ${error.message}` });
-                } else {
-                    // Handle general errors
-                    log.error('ChatGPT Error', error);
-                    cb({ message: `Error: ${error.message}` });
-                }
-            }
-        });
-
-        socket.on('getDeepSeek', async ({ time, room, name, prompt, context }, cb) => {
-            if (!roomExists(socket)) {
-                return cb({ message: 'Room not found' });
-            }
-
-            const roomObj = getRoom(socket);
-            if (roomObj && roomObj._moderator && roomObj._moderator.chat_cant_deep_seek) {
-                log.debug('Blocking DeepSeek request: disabled by moderator', { name });
-                return cb({ message: 'The moderator does not allow you to chat with DeepSeek' });
-            }
-
-            if (!config?.integrations?.deepSeek?.enabled) {
-                return cb({ message: 'DeepSeek integration is disabled. Please try again later!' });
-            }
-
-            try {
-                if (!prompt || !Array.isArray(context)) {
-                    throw new Error('Invalid input: Prompt or context is missing or invalid.');
-                }
-
-                // Add the prompt to the context
-                context.push({ role: 'user', content: prompt });
-
-                // Call DeepSeek's API to generate response
-                const response = await axios.post(
-                    `${config?.integrations?.deepSeek?.basePath}chat/completions`,
-                    {
-                        model: config?.integrations?.deepSeek?.model || 'deepseek-v4-flash',
-                        messages: context,
-                        max_tokens: config?.integrations?.deepSeek?.max_tokens || 1024,
-                        temperature: config?.integrations?.deepSeek?.temperature || 0.7,
-                    },
-                    {
-                        headers: {
-                            Authorization: `Bearer ${config?.integrations?.deepSeek?.apiKey}`,
-                            'Content-Type': 'application/json',
-                        },
-                    }
-                );
-
-                // Extract the assistant's response
-                // Reasoning models (e.g. deepseek-reasoner) may return text in `reasoning_content`
-                const choice = response.data?.choices?.[0];
-                const message = (choice?.message?.content || choice?.message?.reasoning_content || '').trim();
-                if (!message) {
-                    log.warn('DeepSeek empty response', {
-                        finishReason: choice?.finish_reason,
-                        data: response.data,
-                    });
-                    throw new Error('DeepSeek returned an empty response.');
-                }
-
-                // Add response to context
-                context.push({ role: 'assistant', content: message });
-
-                // Log the conversation details
-                log.debug('DeepSeek Response', {
-                    time,
-                    room,
-                    name,
-                    prompt,
-                    response: message,
-                    context,
-                });
-
-                // Send the response back to the client
-                cb({ message, context });
-            } catch (error) {
-                // Handle API-specific errors
-                if (error.response) {
-                    log.error('DeepSeek API Error', {
-                        status: error.response.status,
-                        data: error.response.data,
-                    });
-                    return cb({ message: `DeepSeek API Error: ${error.response.data?.message || error.message}` });
-                }
-
-                // Handle general errors
-                log.error('DeepSeek Error', error);
-                cb({ message: `Error: ${error.message}` });
-            }
         });
 
         // https://platform.openai.com/docs/api-reference/audio/createTranscription
@@ -4897,162 +4676,6 @@ function startServer() {
             } catch (error) {
                 log.error('Whisper transcription error', error?.response?.data || error.message);
                 cb({ error: `Whisper error: ${error?.response?.data?.error?.message || error.message}` });
-            }
-        });
-
-        const videoAIService = createVideoAIService(config?.integrations?.videoAI, axios, log);
-
-        // https://docs.liveavatar.com/reference/list_public_avatars_v1_avatars_public_get
-        // https://docs.liveavatar.com/reference/list_user_avatars_v1_avatars_get
-        // https://anam.ai/docs/api-reference/avatars/list-avatars
-        socket.on('getAvatarList', async ({ provider }, cb) => {
-            try {
-                const data = await videoAIService.getAvatarList(provider);
-                cb({ response: { avatars: data.avatars }, provider: data.provider });
-            } catch (error) {
-                cb({
-                    error:
-                        error.response?.status === 500
-                            ? 'Internal server error'
-                            : error.normalizedMessage || error.message,
-                });
-            }
-        });
-
-        // https://docs.liveavatar.com/reference/list_voices_v1_voices_get
-        // https://anam.ai/docs/api-reference/voices/list-voices
-        socket.on('getVoiceList', async ({ provider }, cb) => {
-            try {
-                const data = await videoAIService.getVoiceList(provider);
-                cb({ response: { voices: data.voices }, provider: data.provider });
-            } catch (error) {
-                cb({
-                    error:
-                        error.response?.status === 500
-                            ? 'Internal server error'
-                            : error.normalizedMessage || error.message,
-                });
-            }
-        });
-
-        // https://docs.liveavatar.com/reference/get_voice_preview_by_id_v1_voices__voice_id__preview_get
-        // https://anam.ai/docs/api-reference/voices/list-voices
-        socket.on('previewVoice', async ({ voice_id, provider }, cb) => {
-            try {
-                const data = await videoAIService.previewVoice(provider, voice_id);
-                if (data.audio) return cb({ audio: data.audio });
-                cb({ error: 'No audio preview available for this voice' });
-            } catch (error) {
-                cb({ error: error.normalizedMessage || 'Voice preview not available' });
-            }
-        });
-
-        // https://docs.liveavatar.com/reference/create_session_token_v1_sessions_token_post
-        // https://anam.ai/docs/api-reference/sessions/create-session-token
-        socket.on('createSessionToken', async ({ quality, avatar_id, voice_id, avatar_model, provider }, cb) => {
-            if (!roomExists(socket)) return;
-            try {
-                const data = await videoAIService.createSessionToken(provider, {
-                    quality,
-                    avatarId: avatar_id,
-                    voiceId: voice_id,
-                    avatarModel: avatar_model,
-                });
-                cb(data);
-            } catch (error) {
-                cb({
-                    error:
-                        error.response?.status === 500
-                            ? 'Internal server error'
-                            : error.normalizedMessage || error.message,
-                });
-            }
-        });
-
-        // https://docs.liveavatar.com/reference/start_session_v1_sessions_start_post
-        // https://anam.ai/docs/javascript-sdk/reference/basic-usage
-        socket.on('startSession', async ({ session_token, provider }, cb) => {
-            if (!roomExists(socket)) return;
-            try {
-                const data = await videoAIService.startSession(provider, session_token);
-                return cb(data);
-            } catch (error) {
-                return cb({
-                    error:
-                        error.response?.status === 500
-                            ? 'Internal server error'
-                            : error.normalizedMessage || error.message,
-                });
-            }
-        });
-
-        socket.on('talkToOpenAI', async ({ text, context }, cb) => {
-            if (!roomExists(socket)) return;
-
-            if (!config?.integrations?.videoAI?.enabled) return cb({ error: 'Video AI seems disabled, try later!' });
-
-            try {
-                const systemLimit = config?.integrations?.videoAI?.systemLimit;
-                const arr = {
-                    messages: [...context, { role: 'system', content: systemLimit }, { role: 'user', content: text }],
-                    model: 'gpt-3.5-turbo',
-                };
-                const MAX_RETRIES = 3;
-                let chatCompletion;
-                for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-                    try {
-                        chatCompletion = await chatGPT.chat.completions.create(arr);
-                        break; // success
-                    } catch (retryError) {
-                        const isTransient = retryError.status >= 500 && retryError.status < 600;
-                        if (isTransient && attempt < MAX_RETRIES) {
-                            const delay = Math.pow(2, attempt) * 500; // 1s, 2s backoff
-                            log.warn(
-                                `talkToOpenAI transient error (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms`,
-                                {
-                                    status: retryError.status,
-                                    message: retryError.message,
-                                }
-                            );
-                            await new Promise((resolve) => setTimeout(resolve, delay));
-                        } else {
-                            throw retryError;
-                        }
-                    }
-                }
-                const chatText = chatCompletion.choices[0].message.content;
-                context.push({ role: 'system', content: chatText });
-                context.push({ role: 'assistant', content: chatText });
-
-                const data = { response: chatText, context: context };
-
-                log.debug('talkToOpenAI', data);
-
-                cb(data);
-            } catch (error) {
-                log.error('talkToOpenAI', error.response?.data || error.message);
-                cb({
-                    error:
-                        error.response?.data?.message ||
-                        (error.response?.status === 500 ? 'Internal server error' : error.message),
-                });
-            }
-        });
-
-        // https://docs.liveavatar.com/reference/stop_session_v1_sessions_stop_post
-        // https://anam.ai/docs/api-reference/sessions/stop-session
-        socket.on('stopSession', async ({ session_id, provider }, cb) => {
-            if (!roomExists(socket)) return;
-            try {
-                const data = await videoAIService.stopSession(provider, session_id);
-                return cb(data);
-            } catch (error) {
-                return cb({
-                    error:
-                        error.response?.status === 500
-                            ? 'Internal server error'
-                            : error.normalizedMessage || error.message,
-                });
             }
         });
 
