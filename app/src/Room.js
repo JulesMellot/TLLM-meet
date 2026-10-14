@@ -67,6 +67,8 @@ module.exports = class Room {
 
         // Polls
         this.polls = [];
+        // TLLM*meet: participants a presenter allowed to share (screen, whiteboard, editor, files, videos)
+        this.sharers = new Set();
 
         this.isHostProtected = config?.security?.host?.protected || false;
 
@@ -101,6 +103,7 @@ module.exports = class Room {
             whisperEnabled: config?.integrations?.whisper?.enabled || false,
             whisperSegmentSeconds: config?.integrations?.whisper?.segmentSeconds || 5,
             thereIsPolls: this.thereIsPolls(),
+            sharers: [...this.sharers],
             shareMediaData: this.shareMediaData,
             dominantSpeaker: this.activeSpeakerObserverEnabled,
             peers: JSON.stringify([...this.peers]),
@@ -570,6 +573,7 @@ module.exports = class Room {
     }
 
     removePeer(socket_id) {
+        this.sharers.delete(socket_id);
         if (!this.peers.has(socket_id)) return;
 
         const peer = this.getPeer(socket_id);

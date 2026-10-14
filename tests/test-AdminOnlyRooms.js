@@ -472,6 +472,65 @@ describe('Only the admin can create a meeting (integration)', function () {
         });
     });
 
+    describe('Sharing permission', () => {
+        const ROOM = 'partage-' + crypto.randomBytes(3).toString('hex');
+        let admin;
+        let bob;
+        let carol;
+        const received = [];
+
+        before(async () => {
+            const cookie = await login(ADMIN);
+            admin = await connect(cookie);
+            bob = await connect();
+            carol = await connect();
+            sockets.push(admin, bob, carol);
+            await joinRoom(admin, ROOM, peerInfo('Jules'), (await createToken(ROOM, cookie)).json.token);
+            await joinRoom(bob, ROOM, peerInfo('Bob'));
+            await joinRoom(carol, ROOM, peerInfo('Carol'));
+            carol.on('editorChange', (data) => received.push(data));
+        });
+
+        it('drops whiteboard / editor / file / video events from a guest who was not allowed', async () => {
+            bob.emit('editorChange', { text: 'from bob' });
+            await wait(300);
+            assert.equal(received.length, 0);
+        });
+
+        it('lets the admin, but not a guest, grant the permission to one person', async () => {
+            const permissions = [];
+            carol.on('sharePermission', (data) => permissions.push(data));
+            carol.emit('setSharePermission', { peer_id: bob.id, allowed: true });
+            await wait(300);
+            assert.equal(permissions.length, 0, 'a guest cannot grant');
+            admin.emit('setSharePermission', { peer_id: bob.id, allowed: true });
+            await wait(300);
+            assert.deepEqual(permissions, [{ peer_id: bob.id, peer_name: 'Bob', allowed: true }]);
+            bob.emit('editorChange', { text: 'allowed now' });
+            await wait(300);
+            assert.equal(received.length, 1);
+            const info = await emit(carol, 'getRoomInfo', {});
+            assert.deepEqual(info.sharers, [bob.id]);
+        });
+
+        it('applies to that person only, and can be withdrawn', async () => {
+            carol.emit('editorChange', { text: 'carol is not allowed' });
+            await wait(300);
+            assert.equal(received.length, 1);
+            admin.emit('setSharePermission', { peer_id: bob.id, allowed: false });
+            await wait(300);
+            bob.emit('editorChange', { text: 'withdrawn' });
+            await wait(300);
+            assert.equal(received.length, 1);
+        });
+
+        it('always lets the admin share', async () => {
+            admin.emit('editorChange', { text: 'admin' });
+            await wait(300);
+            assert.equal(received.length, 2);
+        });
+    });
+
     it('revokes the session on logout (replaying the old cookie fails)', async () => {
         const cookie = await login(ADMIN2);
         assert.equal((await createToken('logout-room', cookie)).status, 200);

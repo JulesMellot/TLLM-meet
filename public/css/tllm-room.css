@@ -1495,3 +1495,14 @@ body.tllm-room #videoPinMediaContainer {
     color: inherit !important;
     font-size: 14px !important;
 }
+
+/* Without the permission to share: whiteboard and editor are read-only */
+body.tllm-cannot-share #whiteboard canvas,
+body.tllm-cannot-share #editorRoom .ql-editor {
+    pointer-events: none !important;
+}
+body.tllm-cannot-share #whiteboardOptions > *:not(:has(#whiteboardCloseBtn)),
+body.tllm-cannot-share #editorRoom .ql-toolbar,
+body.tllm-cannot-share #editorHeader button:not(#editorCloseBtn) {
+    display: none !important;
+}

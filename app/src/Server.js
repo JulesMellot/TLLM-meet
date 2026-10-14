@@ -1381,6 +1381,11 @@ function startServer() {
                 return callback({ error: 'In lobby' });
             }
 
+            // TLLM*meet: screen sharing is for presenters and for the people they allowed
+            if (appData?.mediaType === 'screenType' && !canShareSocket(socket)) {
+                return callback({ error: 'Screen sharing not allowed' });
+            }
+
             const peerInfo = getPeerInfo(peer);
 
             const data = {
@@ -2367,6 +2372,7 @@ function startServer() {
 
         socket.on('fileInfo', (dataObject) => {
             if (!roomExists(socket)) return;
+            if (!canShareSocket(socket)) return log.debug('fileInfo denied: sharing not allowed');
 
             const data = checkXSS(dataObject);
 
@@ -2386,6 +2392,7 @@ function startServer() {
 
         socket.on('file', (data) => {
             if (!roomExists(socket)) return;
+            if (!canShareSocket(socket)) return log.debug('file denied: sharing not allowed');
 
             const room = getRoom(socket);
 
@@ -2394,6 +2401,7 @@ function startServer() {
 
         socket.on('fileAbort', (dataObject) => {
             if (!roomExists(socket)) return;
+            if (!canShareSocket(socket)) return log.debug('fileAbort denied: sharing not allowed');
 
             const data = checkXSS(dataObject);
 
@@ -2418,6 +2426,7 @@ function startServer() {
 
         socket.on('shareVideoAction', (dataObject) => {
             if (!roomExists(socket)) return;
+            if (!canShareSocket(socket)) return log.debug('shareVideoAction denied: sharing not allowed');
 
             const data = checkXSS(dataObject);
 
@@ -2453,6 +2462,7 @@ function startServer() {
 
         socket.on('wbCanvasToJson', (dataObject) => {
             if (!roomExists(socket)) return;
+            if (!canShareSocket(socket)) return log.debug('wbCanvasToJson denied: sharing not allowed');
 
             // Security: cap whiteboard payload size. Fabric canvas JSON should comfortably
             // fit in well under 2 MB; anything larger is either accidental (huge embedded
@@ -2514,6 +2524,7 @@ function startServer() {
 
         socket.on('whiteboardObject', (dataObject) => {
             if (!roomExists(socket)) return;
+            if (!canShareSocket(socket)) return log.debug('whiteboardObject denied: sharing not allowed');
 
             const room = getRoom(socket);
             const peer = room.getPeer(socket.id);
@@ -2556,6 +2567,7 @@ function startServer() {
 
         socket.on('whiteboardPointer', (dataObject) => {
             if (!roomExists(socket)) return;
+            if (!canShareSocket(socket)) return log.debug('whiteboardPointer denied: sharing not allowed');
 
             const room = getRoom(socket);
             if (!room.getWhiteboardParticipantNames()) return;
@@ -2589,6 +2601,7 @@ function startServer() {
 
         socket.on('whiteboardAction', (dataObject) => {
             if (!roomExists(socket)) return;
+            if (!canShareSocket(socket)) return log.debug('whiteboardAction denied: sharing not allowed');
 
             const room = getRoom(socket);
 
@@ -3224,6 +3237,24 @@ function startServer() {
             if (input && room.editPoll(ref, input.question, input.options)) sendPolls(room);
         });
 
+        // TLLM*meet: a presenter allows (or no longer allows) one participant to share
+        socket.on('setSharePermission', (dataObject) => {
+            if (!roomExists(socket)) return;
+            const room = getRoom(socket);
+            if (!isSocketPresenter(socket, room)) return log.debug('setSharePermission denied: not a presenter');
+            const data = checkXSS(dataObject);
+            const target = typeof data?.peer_id === 'string' ? room.getPeer(data.peer_id) : null;
+            if (!target) return;
+            const allowed = data.allowed === true;
+            if (allowed) room.sharers.add(data.peer_id);
+            else room.sharers.delete(data.peer_id);
+            room.sendToAll('sharePermission', {
+                peer_id: data.peer_id,
+                peer_name: target.peer_info?.peer_name ?? target.peer_name,
+                allowed,
+            });
+        });
+
         socket.on('closePoll', (dataObject) => {
             if (!roomExists(socket)) return;
             const room = getRoom(socket);
@@ -3247,6 +3278,7 @@ function startServer() {
 
         socket.on('editorChange', (dataObject) => {
             if (!roomExists(socket)) return;
+            if (!canShareSocket(socket)) return log.debug('editorChange denied: sharing not allowed');
 
             //const data = checkXSS(dataObject);
             const data = dataObject;
@@ -3258,6 +3290,7 @@ function startServer() {
 
         socket.on('editorActions', (dataObject) => {
             if (!roomExists(socket)) return;
+            if (!canShareSocket(socket)) return log.debug('editorActions denied: sharing not allowed');
 
             const data = checkXSS(dataObject);
 
@@ -3270,6 +3303,7 @@ function startServer() {
 
         socket.on('editorUpdate', (dataObject) => {
             if (!roomExists(socket)) return;
+            if (!canShareSocket(socket)) return log.debug('editorUpdate denied: sharing not allowed');
 
             //const data = checkXSS(dataObject);
             const data = dataObject;
@@ -3481,6 +3515,13 @@ function startServer() {
             peer.peer_info?.peer_name ?? peer.peer_name,
             peer.peer_info?.peer_uuid ?? peer.peer_uuid
         );
+    }
+
+    // TLLM*meet: screen, whiteboard, editor, files and videos: presenters, and the people they allowed
+    function canShareSocket(socket) {
+        const room = roomList.get(socket.room_id);
+        if (!room) return false;
+        return isSocketPresenter(socket, room) || room.sharers.has(socket.id);
     }
 
     // Each participant gets its own view: totals for all, who voted what for presenters only

@@ -66,7 +66,11 @@
         newPollOpen: false,
         showVoters: {},
         recordingBy: new Set(),
+        sharers: new Set(), // participants a presenter allowed to share
     });
+
+    // Screen, whiteboard, editor, files and videos: presenters, and the people they allowed (checked by the server too)
+    const canShare = () => amPresenter() || T.sharers.has(rc?.peer_id);
 
     // ####################################################
     // PATCHES: route MiroTalk's panels and windows to the new layout
@@ -312,7 +316,8 @@
         cam.disabled = !isShown('stopVideoButton') && !isShown('startVideoButton');
 
         const share = $('tllmShare');
-        share.hidden = !isShown('startScreenButton') && !isShown('stopScreenButton');
+        share.hidden = !canShare() || (!isShown('startScreenButton') && !isShown('stopScreenButton'));
+        document.body.classList.toggle('tllm-cannot-share', !canShare());
         share.setAttribute('aria-pressed', String(sharing));
         share.querySelector('.tllm-lb').textContent = sharing ? 'Arrêter le partage' : "Partager l'écran";
 
@@ -573,12 +578,14 @@
             share += item('click:fileShareExtraButton', 'fas fa-paperclip', 'Envoyer un fichier');
         if ($('tabVideoShareBtn') && cfg().settings?.tabVideoShareBtn !== false)
             share += item('settings:tabVideoShareBtn', 'fab fa-youtube', 'Partager une vidéo');
-        if (share) html += heading('Partager') + share;
+        // Nothing to share without the permission of a presenter
+        if (share && canShare()) html += heading('Partager') + share;
 
         let meeting = '';
         if (isShown('transcriptionButton'))
             meeting += item('click:transcriptionButton', 'fas fa-closed-captioning', 'Sous-titres');
-        if (isShown('startRecButton')) meeting += item('click:startRecButton', 'fas fa-circle-dot', 'Enregistrer');
+        if (amPresenter() && isShown('startRecButton'))
+            meeting += item('click:startRecButton', 'fas fa-circle-dot', 'Enregistrer');
         if (isShown('stopRecButton'))
             meeting += item('click:stopRecButton', 'fas fa-circle-stop', "Arrêter l'enregistrement");
         if (isShown('breakoutRoomButton'))
@@ -658,6 +665,10 @@
             return rc.setPresenterRole(id, grant === '1');
         }
         if (act.startsWith('eject:')) return rc.peerAction('me', act.slice(6), 'eject', true, false);
+        if (act.startsWith('share:')) {
+            const [, id, allowed] = act.split(':');
+            return rc.socket.emit('setSharePermission', { peer_id: id, allowed: allowed === '1' });
+        }
         if (act.startsWith('pin:')) {
             const tile = document.querySelector(
                 `#videoMediaContainer .Camera[data-peer-id="${CSS.escape(act.slice(4))}"]`
@@ -682,6 +693,11 @@
             html += peer.presenter
                 ? item(`role:${peer.id}:0`, 'fas fa-person-chalkboard', 'Retirer le rôle de présentateur')
                 : item(`role:${peer.id}:1`, 'fas fa-person-chalkboard', 'Rendre présentateur');
+            if (!peer.presenter) {
+                html += T.sharers.has(peer.id)
+                    ? item(`share:${peer.id}:0`, 'fas fa-display', 'Ne plus autoriser à partager')
+                    : item(`share:${peer.id}:1`, 'fas fa-display', 'Autoriser à partager');
+            }
             html += item(`eject:${peer.id}`, 'fas fa-right-from-bracket', 'Retirer de la visio', 'tllm-danger');
         }
         showPop(anchor, html, { align: 'right', key: 'peer-' + peer.id });
@@ -833,7 +849,7 @@
             <div class="tllm-to-row"><label for="tllmTo">À</label><select id="tllmTo">${options}</select></div>
             <div class="tllm-compose">
                 <button type="button" class="tllm-icon-btn" id="tllmEmojiBtn" aria-label="Insérer un emoji">${icon('far fa-face-smile')}</button>
-                ${isShown('fileShareExtraButton') ? `<button type="button" class="tllm-icon-btn" id="tllmAttachBtn" aria-label="Envoyer un fichier">${icon('fas fa-paperclip')}</button>` : ''}
+                ${canShare() && isShown('fileShareExtraButton') ? `<button type="button" class="tllm-icon-btn" id="tllmAttachBtn" aria-label="Envoyer un fichier">${icon('fas fa-paperclip')}</button>` : ''}
                 <textarea id="tllmChatInput" rows="1" placeholder="Écrire un message…" aria-label="Message" maxlength="4000"></textarea>
                 <button type="button" class="tllm-send" id="tllmSendBtn" aria-label="Envoyer">${icon('fas fa-paper-plane')}</button>
             </div>`;
@@ -934,6 +950,7 @@
         }
         if (!room?.peers) return;
         const previous = new Map(T.peers.map((p) => [p.id, p]));
+        T.sharers = new Set(Array.isArray(room.sharers) ? room.sharers : []);
         const entries = new Map(JSON.parse(room.peers));
         T.peers = [...entries.entries()].map(([id, peer]) => {
             const info = peer.peer_info || peer;
@@ -974,6 +991,7 @@
                 <span class="tllm-pname">${esc(p.name)} <span class="tllm-role">${p.you ? 'Vous' : ''}${p.you && p.presenter ? ' · ' : ''}${p.presenter ? 'présentateur' : ''}</span></span>
                 <span class="tllm-st">
                     ${p.hand ? `<span class="tllm-st-hand">${icon('fas fa-hand')}</span>` : ''}
+                    ${!p.presenter && T.sharers.has(p.id) ? `<span title="Peut partager">${icon('fas fa-display')}</span>` : ''}
                     <span class="${p.audio ? '' : 'tllm-st-off'}" title="${p.audio ? 'Micro actif' : 'Micro coupé'}">${icon(p.audio ? 'fas fa-microphone' : 'fas fa-microphone-slash')}</span>
                     <span class="${p.video ? '' : 'tllm-st-off'}" title="${p.video ? 'Caméra active' : 'Caméra coupée'}">${icon(p.video ? 'fas fa-video' : 'fas fa-video-slash')}</span>
                 </span>
@@ -1039,6 +1057,26 @@
             T.refreshPeersSoon();
         });
         rc.socket.on('updatePeerInfo', () => T.refreshPeersSoon());
+        rc.socket.on('sharePermission', (data) => {
+            if (!data?.peer_id) return;
+            if (data.allowed) T.sharers.add(data.peer_id);
+            else T.sharers.delete(data.peer_id);
+            const mine = data.peer_id === rc.peer_id;
+            if (mine) {
+                T.sys(data.allowed ? 'Vous pouvez maintenant partager' : 'Vous ne pouvez plus partager');
+                bubble({
+                    iconCls: 'fas fa-display',
+                    title: data.allowed ? 'Vous pouvez maintenant partager' : 'Vous ne pouvez plus partager',
+                    text: data.allowed ? 'Écran, tableau blanc, éditeur et fichiers' : '',
+                    duration: 6000,
+                });
+                if (!data.allowed && isShown('stopScreenButton')) clickId('stopScreenButton');
+            } else {
+                T.sys(`${data.peer_name} ${data.allowed ? 'peut maintenant partager' : 'ne peut plus partager'}`);
+            }
+            T.renderBar();
+            if (T.panel) renderPanel();
+        });
         rc.socket.on('setVideoOff', () => T.refreshPeersSoon());
     }
 
