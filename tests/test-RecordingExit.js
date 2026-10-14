@@ -188,7 +188,7 @@ describe('recording finalization before room exit', () => {
         h.timers.shift()();
         await exit;
         assert.ok(h.events.indexOf('cleanup') < h.events.indexOf('exit-room'));
-        assert.deepEqual(h.events.at(-1), ['navigate', 'https://meet.example/newroom']);
+        assert.deepEqual(h.events.at(-1), ['navigate', 'https://meet.example/']);
         assert.equal(h.client.hasPendingRecordingSave(), false);
         assert.equal(h.context.recordedBlobs.length, 0);
     });
@@ -264,7 +264,7 @@ describe('recording finalization before room exit', () => {
         download.resolve();
         await exit;
         assert.equal(h.events.filter((event) => event === 'exit-room').length, 1);
-        assert.equal(h.events.at(-1)[1], 'https://meet.example/newroom');
+        assert.equal(h.events.at(-1)[1], 'https://meet.example/');
     });
 
     for (const action of ['survey', 'newroom', 'back']) {
@@ -285,7 +285,7 @@ describe('recording finalization before room exit', () => {
             await exit;
             await tick();
             if (action === 'back') assert.equal(h.events.at(-1), 'back');
-            else assert.equal(h.events.at(-1)[1], action === 'survey' ? 'https://survey.example' : '/newroom');
+            else assert.equal(h.events.at(-1)[1], action === 'survey' ? 'https://survey.example' : '/');
         });
     }
 
@@ -398,7 +398,7 @@ describe('recording finalization before room exit', () => {
         await h.context.completeRoomExit();
         assert.equal(h.events.includes('progress'), false);
         assert.equal(h.events.includes('exit-room'), true);
-        assert.deepEqual(h.events.at(-1), ['navigate', 'https://meet.example/newroom']);
+        assert.deepEqual(h.events.at(-1), ['navigate', 'https://meet.example/']);
     });
 
     it('keeps the mobile download link and room open until saving is explicitly confirmed', async () => {
@@ -521,7 +521,7 @@ describe('recording finalization before room exit', () => {
         const h = createHarness();
         h.context.rc = null;
         h.context.initLeaveMeeting();
-        assert.deepEqual(h.events.at(-1), ['navigate', '/newroom']);
+        assert.deepEqual(h.events.at(-1), ['navigate', '/']);
         assert.doesNotThrow(() => h.listeners.beforeunload({ preventDefault() {} }));
     });
 
@@ -572,7 +572,7 @@ describe('recording finalization before room exit', () => {
                 assert.equal(dialogs.current, null);
                 assert.equal(h.events.filter((event) => event === 'offline-exit').length, 1);
                 assert.equal(h.events.filter((event) => event === 'exit-room').length, 1);
-                assert.deepEqual(h.events.at(-1), ['navigate', 'https://meet.example/newroom']);
+                assert.deepEqual(h.events.at(-1), ['navigate', 'https://meet.example/']);
                 assert.equal(h.context.recShowInfo, true);
                 assert.equal(h.client._forcedExitPending, false);
                 assert.equal(
@@ -608,7 +608,7 @@ describe('recording finalization before room exit', () => {
         assert.equal(dialogs.current, null);
         assert.equal(h.client.hasPendingRecordingSave(), false);
         assert.equal(h.context.isLeavingRoom, false);
-        assert.deepEqual(h.events.at(-1), ['navigate', 'https://meet.example/newroom']);
+        assert.deepEqual(h.events.at(-1), ['navigate', 'https://meet.example/']);
     });
 
     it('ignores duplicate forced-exit commands without replacing the save dialog', async () => {
@@ -652,7 +652,7 @@ describe('recording finalization before room exit', () => {
         dialogs.finish({ isDenied: true });
         await exit;
         assert.equal(dialogs.current, null);
-        assert.deepEqual(h.events.at(-1), ['navigate', 'https://meet.example/newroom']);
+        assert.deepEqual(h.events.at(-1), ['navigate', 'https://meet.example/']);
     });
 
     it('does not replace the recording progress dialog when an exiting peer is ejected', async () => {

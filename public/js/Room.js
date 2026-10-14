@@ -61,7 +61,7 @@ let survey = {
 
 let redirect = {
     enabled: true,
-    url: '/newroom',
+    url: '/',
 };
 
 let recCodecs = null;
@@ -4881,8 +4881,8 @@ function handleRoomClientEvents() {
 // ####################################################
 
 function initLeaveMeeting() {
-    if (!rc) return openURL('/newroom');
-    return completeRoomExit(false, false, '/newroom');
+    if (!rc) return openURL('/');
+    return completeRoomExit(false, false, '/');
 }
 
 async function leaveRoom(allowCancel = true, disconnectAll = false) {
@@ -4972,7 +4972,7 @@ function redirectOnLeave(disconnectAll = false) {
     endRoomSession();
     rc.exitRoom(disconnectAll);
 
-    const url = new URL(redirect && redirect.enabled ? redirect.url : '/newroom', window.location.href).href;
+    const url = new URL(redirect && redirect.enabled ? redirect.url : '/', window.location.href).href;
     openURL(url);
 }
 

@@ -229,7 +229,6 @@ const views = {
     landing: path.join(__dirname, '../../', 'public/views/landing.html'),
     login: path.join(__dirname, '../../', 'public/views/login.html'),
     customizeRoom: path.join(__dirname, '../../', 'public/views/customizeRoom.html'),
-    newRoom: path.join(__dirname, '../../', 'public/views/newroom.html'),
     notFound: path.join(__dirname, '../../', 'public/views/404.html'),
     permission: path.join(__dirname, '../../', 'public/views/permission.html'),
     privacy: path.join(__dirname, '../../', 'public/views/privacy.html'),
@@ -237,7 +236,7 @@ const views = {
     whoAreYou: path.join(__dirname, '../../', 'public/views/whoAreYou.html'),
 };
 
-const filesPath = [views.landing, views.newRoom, views.room, views.login, views.whoAreYou, views.customizeRoom];
+const filesPath = [views.landing, views.room, views.login, views.whoAreYou, views.customizeRoom];
 
 const htmlInjector = new HtmlInjector(filesPath, config.ui.brand);
 
