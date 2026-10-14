@@ -79,7 +79,6 @@ describe('Socket.IO join authorization', () => {
                 }
                 updatePeerInfo() {}
             },
-            nodemailer: { sendEmailAlert() {} },
         });
         vm.runInContext(`${authorizationSource}\n${handlersSource}`, context);
         const data = {

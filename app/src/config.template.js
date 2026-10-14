@@ -163,14 +163,6 @@ module.exports = {
     },
 
     // ==============================================
-    // 3. Media Handling Configuration
-    // ==============================================
-
-    media: {
-        /**
-    },
-
-    // ==============================================
     // 4. Security & Authentication
     // ==============================================
 
@@ -469,9 +461,6 @@ module.exports = {
             language: process.env.WHISPER_LANGUAGE || '',
             segmentSeconds: parseInt(process.env.WHISPER_SEGMENT_SECONDS) || 5,
             maxAudioBytes: parseInt(process.env.WHISPER_MAX_AUDIO_BYTES) || 25 * 1024 * 1024,
-        },
-
-        /**
         },
     },
 
