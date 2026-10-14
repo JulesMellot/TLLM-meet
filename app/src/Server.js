@@ -84,6 +84,7 @@ const Validator = require('./Validator');
 const RoomPassword = require('./RoomPassword');
 const HtmlInjector = require('./HtmlInjector');
 const { CollabStore } = require('./Collab');
+const { DatePolls, DatePollError } = require('./DatePolls');
 const log = new Logger('Server');
 const yaml = require('js-yaml');
 const swaggerUi = require('swagger-ui-express');
@@ -108,6 +109,8 @@ const {
     createRoomTokenLimiter,
     checkCreateRoomLimit,
     createRoomLimiterMinutes,
+    rdvAnswerLimiter,
+    rdvReadLimiter,
 } = createRateLimiters({ getRequesterKey });
 
 // Branding configuration
@@ -235,13 +238,44 @@ const views = {
     privacy: path.join(__dirname, '../../', 'public/views/privacy.html'),
     room: path.join(__dirname, '../../', 'public/views/Room.html'),
     whoAreYou: path.join(__dirname, '../../', 'public/views/whoAreYou.html'),
+    rdv: path.join(__dirname, '../../', 'public/views/rdv.html'),
+    rdvAdmin: path.join(__dirname, '../../', 'public/views/rdvAdmin.html'),
 };
 
-const filesPath = [views.landing, views.room, views.login, views.whoAreYou, views.customizeRoom];
+const filesPath = [
+    views.landing,
+    views.room,
+    views.login,
+    views.whoAreYou,
+    views.customizeRoom,
+    views.rdv,
+    views.rdvAdmin,
+];
 
 const htmlInjector = new HtmlInjector(filesPath, config.ui.brand);
 
 const roomList = new Map(); // All Rooms
+
+// TLLM*meet: date polls, kept in DATA_DIR/rendez-vous.json (see DatePolls.js). On Coolify,
+// DATA_DIR is a persistent volume, so polls survive a redeploy.
+const dataDir = process.env.DATA_DIR || path.join(__dirname, '../../data');
+const meetingTimeZone = (() => {
+    const zone = process.env.MEETING_TIMEZONE || 'Europe/Paris';
+    try {
+        new Intl.DateTimeFormat('fr-FR', { timeZone: zone });
+        return zone;
+    } catch {
+        log.warn('MEETING_TIMEZONE is not a valid time zone, using Europe/Paris', { zone });
+        return 'Europe/Paris';
+    }
+})();
+const datePolls = new DatePolls({
+    file: path.join(dataDir, 'rendez-vous.json'),
+    timeZone: meetingTimeZone,
+    makeRoomId,
+    log,
+});
+setInterval(() => datePolls.checkDeadlines(), 60 * 1000).unref();
 
 // TLLM*meet: editor and whiteboard content, kept per room by the server (see Collab.js)
 const collab = new CollabStore({}, (roomId, exceptSocketId, event, payload) => {
@@ -417,6 +451,105 @@ function startServer() {
         res.set('Cache-Control', 'no-store');
         return res.json({ room, url: '/join/' + encodeURIComponent(room) });
     });
+
+    // ---------- TLLM*meet: date polls (see DatePolls.js) ----------
+    const RDV_ID = /^[a-z0-9]{10}$/;
+    const rdvOwner = (req) => adminAuth.fromRequest(req);
+    const rdvReply = (res, fn) => {
+        res.set('Cache-Control', 'no-store');
+        try {
+            return res.json(fn());
+        } catch (err) {
+            if (err instanceof DatePollError) return res.status(err.status).json({ error: err.message });
+            log.error('Date polls', { error: err.message });
+            return res.status(500).json({ error: 'Erreur du serveur.' });
+        }
+    };
+    const rdvAdminOnly = (handler) => (req, res) => {
+        const admin = rdvOwner(req);
+        if (!admin) return res.status(401).json({ error: 'unauthorized' });
+        return rdvReply(res, () => handler(req, admin));
+    };
+
+    app.get('/rdv', (req, res) => htmlInjector.injectHtml(views.rdvAdmin, res));
+    app.get('/rdv/:id', (req, res) => {
+        if (!RDV_ID.test(req.params.id)) return res.status(404).sendFile(views.notFound);
+        return htmlInjector.injectHtml(views.rdv, res);
+    });
+
+    // Calendar subscription: empty until the date is set, then the meeting and its link
+    app.get('/rdv/:id/agenda.ics', (req, res) => {
+        const poll = datePolls.get(req.params.id);
+        if (!poll) return res.status(404).type('text/plain').send('Not found');
+        res.set({
+            'Content-Type': 'text/calendar; charset=utf-8',
+            'Cache-Control': 'no-cache',
+            'Content-Disposition': 'inline; filename="agenda.ics"',
+        });
+        return res.send(datePolls.feed(poll, host));
+    });
+
+    // One event to add by hand, once the date is set
+    app.get('/rdv/:id/rendez-vous.ics', (req, res) => {
+        const poll = datePolls.get(req.params.id);
+        const file = poll && datePolls.eventFile(poll, host);
+        if (!file) return res.status(404).type('text/plain').send('Not found');
+        res.set({
+            'Content-Type': 'text/calendar; charset=utf-8',
+            'Cache-Control': 'no-cache',
+            'Content-Disposition': 'attachment; filename="rendez-vous.ics"',
+        });
+        return res.send(file);
+    });
+
+    app.get(
+        '/api/rdv',
+        rdvAdminOnly((req, admin) => ({
+            timeZone: meetingTimeZone,
+            polls: datePolls.list(admin.username).map((p) => datePolls.summary(p)),
+        }))
+    );
+    app.post(
+        '/api/rdv',
+        rdvAdminOnly((req, admin) => {
+            const poll = datePolls.create(admin.username, admin.displayname, req.body);
+            return { id: poll.id, url: `/rdv/${poll.id}` };
+        })
+    );
+    app.get('/api/rdv/:id', rdvReadLimiter, (req, res) =>
+        rdvReply(res, () => {
+            const poll = datePolls.get(req.params.id);
+            if (!poll) throw new DatePollError('Sondage introuvable.', 404);
+            const admin = rdvOwner(req);
+            return datePolls.view(poll, { admin: !!admin && admin.username === poll.owner });
+        })
+    );
+    app.post('/api/rdv/:id/answers', rdvAnswerLimiter, (req, res) =>
+        rdvReply(res, () => datePolls.answer(req.params.id, req.body))
+    );
+    app.put('/api/rdv/:id/answers/:pid', rdvAnswerLimiter, (req, res) =>
+        rdvReply(res, () => ({
+            ok: datePolls.updateAnswer(req.params.id, req.params.pid, req.get('x-answer-token'), req.body),
+        }))
+    );
+    app.delete(
+        '/api/rdv/:id/answers/:pid',
+        rdvAdminOnly((req, admin) => ({ ok: datePolls.removeAnswer(req.params.id, admin.username, req.params.pid) }))
+    );
+    app.post(
+        '/api/rdv/:id/fix',
+        rdvAdminOnly((req, admin) =>
+            datePolls.view(datePolls.fix(req.params.id, admin.username, req.body?.slot), { admin: true })
+        )
+    );
+    app.post(
+        '/api/rdv/:id/close',
+        rdvAdminOnly((req, admin) => datePolls.view(datePolls.close(req.params.id, admin.username), { admin: true }))
+    );
+    app.delete(
+        '/api/rdv/:id',
+        rdvAdminOnly((req, admin) => ({ ok: datePolls.remove(req.params.id, admin.username) }))
+    );
 
     // Logout: revoke the admin session and clear the cookie
     app.get('/logout', (req, res) => {
@@ -3664,6 +3797,7 @@ async function gracefulShutdown(signal) {
 
     isShuttingDown = true;
     log.info(`${signal} received, starting graceful shutdown...`);
+    datePolls.saveNow(); // TLLM*meet: date polls written before leaving
 
     try {
         // 1. Stop accepting new connections

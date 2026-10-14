@@ -124,6 +124,14 @@ function createRateLimiters({ getRequesterKey }) {
 
     const checkCreateRoomLimit = createSlidingWindowLimiter({ windowMs: createRoomWindowMs, max: createRoomMax });
 
+    // TLLM*meet date polls: guests answer without an account, so answers are capped per IP
+    const rdvAnswerLimiter = createIpLimiter({
+        windowMs: 10 * MINUTE_MS,
+        max: 30,
+        text: 'Trop de réponses envoyées.',
+    });
+    const rdvReadLimiter = createIpLimiter({ windowMs: MINUTE_MS, max: 120, text: 'Too many requests.' });
+
     return {
         loginLimiter,
         loginUserLimiter,
@@ -131,6 +139,8 @@ function createRateLimiters({ getRequesterKey }) {
         createRoomTokenLimiter,
         checkCreateRoomLimit,
         createRoomLimiterMinutes,
+        rdvAnswerLimiter,
+        rdvReadLimiter,
     };
 }
 

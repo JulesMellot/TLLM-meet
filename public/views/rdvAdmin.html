@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title id="title">Caler une réunion · TLLM*meet</title>
+        <link id="icon" rel="icon" href="../images/logo.svg" />
+        <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
+        <meta id="description" name="description" content="Proposer des dates de réunion." />
+        <meta property="og:type" content="{{OG_TYPE}}" />
+        <meta property="og:site_name" content="{{OG_SITE_NAME}}" />
+        <meta property="og:title" content="{{OG_TITLE}}" />
+        <meta property="og:description" content="{{OG_DESCRIPTION}}" />
+        <meta property="og:image" content="{{OG_IMAGE}}" />
+        <meta property="og:url" content="{{OG_URL}}" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="{{OG_TITLE}}" />
+        <meta name="twitter:description" content="{{OG_DESCRIPTION}}" />
+        <meta name="twitter:image" content="{{OG_IMAGE}}" />
+        <link rel="stylesheet" href="../css/tllm-pages.css" />
+        <link rel="stylesheet" href="../css/tllm-rdv.css" />
+        <script defer src="../js/Brand.js"></script>
+        <script defer src="../js/TllmRdvAdmin.js"></script>
+    </head>
+    <body class="tllm-page rdv-page">
+        <main class="tllm-main">
+            <div class="rdv-wrap" id="app">
+                <a class="tllm-brand" href="/"><img src="../images/logo.svg" alt="" /><span>TLLM*meet</span></a>
+                <p class="tllm-muted" id="loading">Chargement…</p>
+                <section id="listView" class="rdv-stack" hidden>
+                    <div class="rdv-head">
+                        <span class="rdv-eyebrow">Organisateur</span>
+                        <h1>Caler une réunion</h1>
+                        <p class="rdv-lead">
+                            Proposez plusieurs dates. Chacun répond avec le lien, sans compte. La date se fixe toute
+                            seule quand tout le monde a répondu.
+                        </p>
+                    </div>
+                    <div class="rdv-row">
+                        <button class="tllm-button" type="button" id="newPollBtn">Proposer des dates</button>
+                        <a class="tllm-muted" href="/">Retour à l'accueil</a>
+                    </div>
+                    <div class="rdv-card">
+                        <h2>Mes sondages de dates</h2>
+                        <div class="rdv-list" id="pollList"></div>
+                    </div>
+                </section>
+
+                <form id="createView" class="rdv-stack" hidden novalidate>
+                    <div class="rdv-head">
+                        <span class="rdv-eyebrow">Nouveau sondage de dates</span>
+                        <h1>Proposer des dates</h1>
+                        <p class="rdv-lead">
+                            Cliquez sur des jours, puis ajoutez un ou plusieurs horaires pour chacun.
+                        </p>
+                    </div>
+                    <div class="rdv-grid2">
+                        <div class="rdv-stack">
+                            <div class="rdv-card rdv-stack">
+                                <label class="rdv-field" for="pTitle"
+                                    >Titre
+                                    <input
+                                        class="tllm-input"
+                                        id="pTitle"
+                                        maxlength="120"
+                                        required
+                                        placeholder="Point mensuel"
+                                /></label>
+                                <label class="rdv-field" for="pDesc"
+                                    >Message pour les participants <small>Facultatif</small>
+                                    <textarea class="tllm-input" id="pDesc" maxlength="1000"></textarea>
+                                </label>
+                                <div class="rdv-field">
+                                    Durée
+                                    <div class="rdv-chips" id="pDuration" role="group" aria-label="Durée"></div>
+                                </div>
+                            </div>
+                            <div class="rdv-card">
+                                <div class="rdv-cal-head">
+                                    <strong id="calTitle"></strong>
+                                    <div class="rdv-row">
+                                        <button
+                                            type="button"
+                                            class="rdv-icon-btn"
+                                            id="calPrev"
+                                            aria-label="Mois précédent"
+                                        >
+                                            &lsaquo;
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="rdv-icon-btn"
+                                            id="calNext"
+                                            aria-label="Mois suivant"
+                                        >
+                                            &rsaquo;
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="rdv-cal" id="cal"></div>
+                            </div>
+                        </div>
+                        <div class="rdv-stack">
+                            <div class="rdv-card">
+                                <h2>Créneaux proposés <span class="tllm-muted" id="slotCount"></span></h2>
+                                <div class="rdv-days" id="slotDays"></div>
+                                <p class="rdv-hint" id="tzNote" style="margin-top: 10px"></p>
+                            </div>
+                            <div class="rdv-card rdv-stack">
+                                <h2 style="margin: 0">Réglages</h2>
+                                <label class="rdv-field" for="pExpected"
+                                    >Nombre de personnes attendues
+                                    <input
+                                        class="tllm-input"
+                                        id="pExpected"
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        inputmode="numeric"
+                                        placeholder="Par exemple 6"
+                                        style="max-width: 160px"
+                                    />
+                                    <small
+                                        >Quand ce nombre de réponses est atteint, le créneau qui a le plus de « Oui »
+                                        est retenu. Laissez vide pour choisir vous-même.</small
+                                    >
+                                </label>
+                                <label class="rdv-field" for="pDeadline"
+                                    >Date limite pour répondre
+                                    <small>Facultatif. Ce jour-là, la date se fixe avec les réponses reçues.</small>
+                                    <input class="tllm-input" id="pDeadline" type="date" style="max-width: 200px" />
+                                </label>
+                                <label class="rdv-check"
+                                    ><input type="checkbox" id="pMaybe" checked /><span
+                                        >Autoriser « Si besoin »<small
+                                            >Pour dire « possible, mais je préfère une autre date ».</small
+                                        ></span
+                                    ></label
+                                >
+                            </div>
+                            <p class="tllm-error" id="createError" role="alert"></p>
+                            <div class="rdv-row">
+                                <button class="tllm-button" type="submit" id="createBtn">
+                                    Créer et obtenir le lien
+                                </button>
+                                <button class="tllm-button rdv-secondary" type="button" id="cancelBtn">Annuler</button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <section id="doneView" class="rdv-stack" hidden>
+                    <div class="rdv-head">
+                        <span class="rdv-eyebrow">Sondage créé</span>
+                        <h1>Le sondage est prêt</h1>
+                        <p class="rdv-lead">
+                            Envoyez ce lien par le moyen de votre choix : messagerie, SMS, groupe. TLLM*meet n'envoie
+                            pas d'e-mail.
+                        </p>
+                    </div>
+                    <div class="rdv-card rdv-stack">
+                        <div class="rdv-link-box">
+                            <code id="doneUrl"></code
+                            ><button class="tllm-button rdv-small" type="button" id="copyDone">Copier</button>
+                        </div>
+                        <div class="rdv-row">
+                            <a class="tllm-button rdv-secondary" id="openDone" href="#">Ouvrir le sondage</a>
+                            <button class="tllm-button rdv-secondary" type="button" id="backToList">
+                                Mes sondages
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+        <div class="rdv-toast" id="toast" role="status" hidden></div>
+        <footer class="tllm-footer">
+            <a href="/privacy">Confidentialité</a>
+            <a href="https://github.com/miroslavpejic85/mirotalksfu" target="_blank" rel="noopener noreferrer"
+                >Basé sur MiroTalk SFU</a
+            >
+        </footer>
+    </body>
+</html>
