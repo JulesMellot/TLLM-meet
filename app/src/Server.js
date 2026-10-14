@@ -2035,7 +2035,6 @@ function startServer() {
                 },
                 jwtCfg: jwtCfg,
                 host: hostCfg?.protected || hostCfg?.user_auth ? hostCfg : { presenters: hostCfg.presenters },
-                ip_lookup: config.integrations?.IPLookup?.enabled ? config.integrations.IPLookup : false,
                 oidc: OIDC?.enabled ? OIDC : false,
                 middleware: {
                     IpWhitelist: config?.security?.middleware?.IpWhitelist?.enabled
@@ -2331,11 +2330,6 @@ function startServer() {
 
             // Get peer IPv4 (::1 Its the loopback address in ipv6, equal to 127.0.0.1 in ipv4)
             const peer_ip = getIpSocket(socket);
-
-            // Get peer Geo Location
-            if (config?.integrations?.IPLookup?.enabled && peer_ip != '::1') {
-                dataObject.peer_geo = await getPeerGeoLocation(peer_ip);
-            }
 
             const data = checkXSS(dataObject);
 
@@ -5825,15 +5819,6 @@ function startServer() {
             log.error('isRoomAllowedForUser - Unexpected error', error);
             return false; // Fail closed
         }
-    }
-
-    async function getPeerGeoLocation(ip) {
-        const endpoint = config?.integrations?.IPLookup?.getEndpoint(ip);
-        log.debug('Get peer geo', { ip: ip, endpoint: endpoint });
-        return axios
-            .get(endpoint)
-            .then((response) => response.data)
-            .catch((error) => log.error(error));
     }
 
     function getIP(req) {

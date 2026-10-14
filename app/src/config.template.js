@@ -876,31 +876,6 @@ module.exports = {
         },
 
         /**
-         * IP Geolocation Service Configuration
-         * ===================================
-         * Enables lookup of geographical information based on IP addresses using the GeoJS.io API.
-         *
-         * Core Settings:
-         * ---------------------
-         * - enabled: Enable/disable the IP lookup functionality [true/false] default false
-         *
-         * Service Details:
-         * --------------
-         * - Uses GeoJS.io free API service (https://www.geojs.io/)
-         * - Returns JSON data containing:
-         *   - Country, region, city
-         *   - Latitude/longitude
-         *   - Timezone and organization
-         * - Rate limits: 60 requests/minute (free tier)
-         */
-        IPLookup: {
-            enabled: process.env.IP_LOOKUP_ENABLED === 'true',
-            getEndpoint(ip) {
-                return `https://get.geojs.io/v1/ip/geo/${ip}.json`;
-            },
-        },
-
-        /**
          * Example for AWS S3 Storage Configuration
          * ===========================
          * Enables cloud file storage using Amazon Simple Storage Service (S3).

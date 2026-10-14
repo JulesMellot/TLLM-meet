@@ -14,7 +14,7 @@ const handlersSource = serverSource.slice(
 );
 const authorizationSource = serverSource.slice(
     serverSource.indexOf('    async function isRoomAllowedForUser('),
-    serverSource.indexOf('    async function getPeerGeoLocation(')
+    serverSource.indexOf('    function getIP(req) {')
 );
 
 describe('Socket.IO join authorization', () => {
