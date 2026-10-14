@@ -2,7 +2,7 @@
 
 /**
  * ==============================================
- * MiroTalk SFU v2.6.25 - Configuration File
+ * TLLM*meet (fork of MiroTalk SFU v2.6.25) - Configuration File
  * ==============================================
  *
  * This file contains all configurable settings for the MiroTalk SFU application.
@@ -1212,13 +1212,13 @@ module.exports = {
             app: {
                 language: process.env.UI_LANGUAGE || 'en',
                 translationMode: process.env.UI_TRANSLATION_MODE || 'google', // auto (native else Google) | native (no Google) | google (default, always Google)
-                name: process.env.APP_NAME || 'MiroTalk SFU',
+                name: process.env.APP_NAME || 'TLLM*meet',
                 title:
                     process.env.APP_TITLE ||
-                    '<h1>MiroTalk SFU</h1> Free browser based Real-time video calls.<br />Simple, Secure, Fast.',
+                    '<h1>TLLM*meet</h1>',
                 description:
                     process.env.APP_DESCRIPTION ||
-                    'Start your next video call with a single click. No download, plug-in, or login is required.',
+                    'Visioconférence privée. Les invités rejoignent par lien, sans compte.',
                 joinDescription: process.env.JOIN_DESCRIPTION || 'Pick a room name.<br />How about this one?',
                 joinButtonLabel: process.env.JOIN_BUTTON_LABEL || 'JOIN ROOM',
                 customizeButtonLabel: process.env.CUSTOMIZE_BUTTON_LABEL || 'CUSTOMIZE ROOM',
@@ -1231,7 +1231,7 @@ module.exports = {
              * Site-wide settings including icons and page-specific content.
              */
             site: {
-                title: process.env.SITE_TITLE || 'MiroTalk SFU - Open Source WebRTC Video Conferencing',
+                title: process.env.SITE_TITLE || 'TLLM*meet',
                 icon: process.env.SITE_ICON_PATH || '../images/logo.svg',
                 appleTouchIcon: process.env.APPLE_TOUCH_ICON_PATH || '../images/logo.svg',
                 newRoomTitle: process.env.NEW_ROOM_TITLE || 'Pick name. <br />Share URL. <br />Start conference.',
@@ -1247,8 +1247,8 @@ module.exports = {
             meta: {
                 description:
                     process.env.META_DESCRIPTION ||
-                    'Build your own Zoom alternative with MiroTalk SFU, an open-source, self-hosted WebRTC platform powered by Mediasoup for scalable video meetings.',
-                keywords: process.env.META_KEYWORDS || 'webrtc, video calls, conference, screen sharing, mirotalk, sfu',
+                    'TLLM*meet, visioconférence privée.',
+                keywords: process.env.META_KEYWORDS || 'visioconférence, réunion',
             },
 
             /**
@@ -1258,13 +1258,13 @@ module.exports = {
              */
             og: {
                 type: process.env.OG_TYPE || 'app-webrtc',
-                siteName: process.env.OG_SITE_NAME || 'MiroTalk SFU',
-                title: process.env.OG_TITLE || 'MiroTalk SFU - Open Source WebRTC Video Conferencing',
+                siteName: process.env.OG_SITE_NAME || 'TLLM*meet',
+                title: process.env.OG_TITLE || 'TLLM*meet',
                 description:
                     process.env.OG_DESCRIPTION ||
-                    'Build your own Zoom alternative with MiroTalk SFU, an open-source self-hosted WebRTC video conferencing platform powered by Mediasoup. Host scalable meetings, webinars, classrooms, screen sharing and real-time collaboration.',
-                image: process.env.OG_IMAGE_URL || 'https://sfu.mirotalk.com/images/mirotalksfu.png',
-                url: process.env.OG_URL || 'https://sfu.mirotalk.com',
+                    'Rejoindre la visio.',
+                image: process.env.OG_IMAGE_URL || `${process.env.SERVER_HOST_URL || 'https://localhost:3010'}/images/tllm-og.png`,
+                url: process.env.OG_URL || process.env.SERVER_HOST_URL || 'https://localhost:3010',
             },
 
             /**
@@ -1293,7 +1293,7 @@ module.exports = {
              * Customizable text and button labels.
              */
             whoAreYou: {
-                title: process.env.WHO_ARE_YOU_TITLE || 'MiroTalk SFU - Waiting for host to start the meeting',
+                title: process.env.WHO_ARE_YOU_TITLE || 'TLLM*meet',
                 waitingRoomHeading: process.env.WHO_ARE_YOU_WAITING_ROOM_HEADING || 'Waiting for host...',
                 waitingRoomDescription:
                     process.env.WHO_ARE_YOU_WAITING_ROOM_DESCRIPTION ||
@@ -1328,49 +1328,41 @@ module.exports = {
              * Supports HTML content for flexible formatting.
              */
             about: {
-                imageUrl: process.env.ABOUT_IMAGE_URL || '../images/mirotalk-logo.gif',
-                title: `WebRTC SFU v${packageJson.version}`,
+                imageUrl: process.env.ABOUT_IMAGE_URL || '../images/logo.svg',
+                title: `TLLM*meet v${packageJson.version}`,
                 html: `
                     <div class="about-content">
                         <p class="about-description">
-                            Self-hosted group video meetings with scalable WebRTC conferencing.
+                            ${process.env.ABOUT_DESCRIPTION || 'Visioconférence privée.'}
                         </p>
-                        <a
-                            class="about-primary-action"
-                            data-umami-event="About button"
-                            href="${process.env.SUPPORT_URL || 'https://docs.mirotalk.com/sites/sfu'}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            <i class="fas fa-info-circle" aria-hidden="true"></i>
-                            <span>${process.env.SUPPORT_TEXT || 'About'}</span>
-                        </a>
                         <dl class="about-details">
                             <div>
-                                <dt>${process.env.AUTHOR_LABEL || 'Author'}</dt>
+                                <dt>Basé sur</dt>
                                 <dd>
                                     <a
-                                        id="linkedin-button"
-                                        data-umami-event="Linkedin button"
-                                        href="${process.env.LINKEDIN_URL || 'https://www.linkedin.com/in/miroslav-pejic-976a07101/'}"
+                                        href="https://github.com/miroslavpejic85/mirotalksfu"
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                    >${process.env.AUTHOR_NAME || 'Miroslav Pejic'}</a>
+                                    >MiroTalk SFU</a> de Miroslav Pejic
                                 </dd>
                             </div>
                             <div>
-                                <dt>${process.env.EMAIL_LABEL || 'Email'}</dt>
+                                <dt>Code source</dt>
                                 <dd>
                                     <a
-                                        id="email-button"
-                                        data-umami-event="Email button"
-                                        href="mailto:${process.env.CONTACT_EMAIL || 'miroslav.pejic.85@gmail.com'}?subject=${process.env.EMAIL_SUBJECT || 'MiroTalk SFU info'}"
-                                    >${process.env.CONTACT_EMAIL || 'miroslav.pejic.85@gmail.com'}</a>
+                                        href="${process.env.SOURCE_URL || 'https://github.com/JulesMellot/TLLM-meet'}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >${process.env.SOURCE_URL || 'https://github.com/JulesMellot/TLLM-meet'}</a>
                                 </dd>
+                            </div>
+                            <div>
+                                <dt>Licence</dt>
+                                <dd>AGPL-3.0</dd>
                             </div>
                         </dl>
                         <footer class="about-footer">
-                            &copy; ${new Date().getFullYear()} ${process.env.COPYRIGHT_TEXT || 'MiroTalk SFU. All rights reserved.'}
+                            MiroTalk SFU &copy; 2021-${new Date().getFullYear()} Miroslav Pejic
                         </footer>
                     </div>
                 `,
@@ -1413,7 +1405,7 @@ module.exports = {
                         connectText: process.env.WIDGET_SUPPORT_CONNECT_TEXT || 'connect in < 5 seconds',
                         onlineText: process.env.WIDGET_SUPPORT_ONLINE_TEXT || 'We are online',
                         offlineText: process.env.WIDGET_SUPPORT_OFFLINE_TEXT || 'We are offline',
-                        poweredBy: process.env.WIDGET_SUPPORT_POWERED_BY || 'Powered by MiroTalk SFU',
+                        poweredBy: process.env.WIDGET_SUPPORT_POWERED_BY || 'TLLM*meet',
                     },
                 },
                 alert: {
