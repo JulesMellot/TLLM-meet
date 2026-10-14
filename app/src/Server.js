@@ -29,7 +29,6 @@ prod dependencies: {
     jsonwebtoken            : https://www.npmjs.com/package/jsonwebtoken
     mediasoup               : https://www.npmjs.com/package/mediasoup
     mediasoup-client        : https://www.npmjs.com/package/mediasoup-client
-    nodemailer              : https://www.npmjs.com/package/nodemailer
     openai                  : https://www.npmjs.com/package/openai
     qs                      : https://www.npmjs.com/package/qs
     socket.io               : https://www.npmjs.com/package/socket.io
@@ -129,19 +128,8 @@ const getRequesterKey = (req) => {
     return ipKeyGenerator(req);
 };
 
-const {
-    loginLimiter,
-    scheduleMeetingLimiter,
-    activeRoomsLimiter,
-    createRoomTokenLimiter,
-    checkCreateRoomLimit,
-    createRoomLimiterMinutes,
-} = createRateLimiters({ getRequesterKey });
-
-// Room scheduler configuration
-const scheduleMeetingCfg = config.features?.scheduleMeeting || {};
-const scheduleMeetingAllowedDomains = scheduleMeetingCfg.allowedDomains || [];
-const scheduleMeetingMaxRecipients = scheduleMeetingCfg.maxRecipients || 20;
+const { loginLimiter, activeRoomsLimiter, createRoomTokenLimiter, checkCreateRoomLimit, createRoomLimiterMinutes } =
+    createRateLimiters({ getRequesterKey });
 
 // Branding configuration
 const brandHtmlInjection = config?.ui?.brand?.htmlInjection ?? true;
@@ -173,10 +161,6 @@ function getRtmpTotalActiveStreamsCount() {
     }
     return count;
 }
-
-// Email alerts and notifications
-const nodemailer = require('./lib/nodemailer');
-const { SCHEDULE_MEETING_LIMITS } = nodemailer;
 
 // Whisper transcription helpers (pure, unit-testable)
 const { resolveAudioExtension, decodeAudioPayload, filterTranscript } = require('./lib/whisper');
@@ -879,121 +863,6 @@ function startServer() {
         const roomWidgetActive = roomId && roomId === widget.roomId && roomList.has(roomId);
         log.debug('isWidgetRoomActive', { roomId, roomWidgetActive });
         res.status(200).json({ message: roomWidgetActive });
-    });
-
-    // Schedule Meeting feature flag
-    app.get('/isScheduleMeetingEnabled', (req, res) => {
-        res.status(200).json({ enabled: config.features?.scheduleMeeting?.enabled || false });
-    });
-
-    // Schedule Meeting - send email with .ics calendar attachment
-    app.post('/scheduleMeeting', OIDCAuth, scheduleMeetingLimiter, async (req, res) => {
-        if (!config.features?.scheduleMeeting?.enabled) {
-            return res.status(403).json({ message: 'Schedule meeting is disabled' });
-        }
-
-        const scheduleMeetingRequiresAuth = scheduleMeetingCfg.requireAuth !== false;
-        const hasAuthProviderEnabled = OIDC.enabled || hostCfg.protected || hostCfg.user_auth;
-
-        const authState = await getScheduleMeetingAuthState(req);
-
-        if (scheduleMeetingRequiresAuth) {
-            if (!hasAuthProviderEnabled) {
-                return res.status(403).json({
-                    message: 'Schedule meeting requires authentication, but no auth provider is enabled',
-                });
-            }
-            if (!authState.authorized) {
-                return res.status(401).json({ message: 'Unauthorized' });
-            }
-        }
-
-        const safeBody = checkXSS(req.body) || {};
-        const str = (v) => (typeof v === 'string' ? v.trim() : '');
-        const title = str(safeBody.title);
-        const description = str(safeBody.description);
-        const dateTime = str(safeBody.dateTime);
-        const recipients = str(safeBody.recipients);
-        const roomName = str(safeBody.roomName);
-        const duration = parseInt(safeBody.duration, 10);
-
-        if (!title || !dateTime || !duration || !recipients || !roomName) {
-            return res.status(400).json({ message: 'Missing required fields' });
-        }
-
-        if (!Validator.isValidRoomName(roomName)) {
-            return res.status(400).json({ message: 'Invalid room name' });
-        }
-
-        if (
-            title.length > SCHEDULE_MEETING_LIMITS.titleMax ||
-            description.length > SCHEDULE_MEETING_LIMITS.descriptionMax
-        ) {
-            return res.status(400).json({ message: 'Title or description is too long' });
-        }
-
-        if (!Number.isFinite(duration) || duration < 1 || duration > 24 * 60) {
-            return res.status(400).json({ message: 'Invalid duration' });
-        }
-
-        const scheduleStartDate = new Date(dateTime);
-        if (Number.isNaN(scheduleStartDate.getTime())) {
-            return res.status(400).json({ message: 'Invalid dateTime' });
-        }
-
-        const recipientList = Validator.parseEmailList(recipients);
-
-        if (recipientList.length === 0) {
-            return res.status(400).json({ message: 'No valid email recipients' });
-        }
-
-        if (recipientList.length > scheduleMeetingMaxRecipients) {
-            return res.status(400).json({
-                message: `Too many recipients. Max allowed is ${scheduleMeetingMaxRecipients}`,
-            });
-        }
-
-        if (!Validator.hasAllowedEmailDomains(recipientList, scheduleMeetingAllowedDomains)) {
-            return res.status(400).json({ message: 'One or more recipients are outside allowed domains' });
-        }
-
-        const requesterIp = authHost.getIP(req);
-
-        log.info('scheduleMeeting request', {
-            requester: authState.requester,
-            ip: requesterIp,
-            recipientCount: recipientList.length,
-            title,
-        });
-
-        try {
-            await nodemailer.sendScheduleMeeting({
-                title,
-                description,
-                dateTime: scheduleStartDate.toISOString(),
-                duration,
-                recipients: recipientList,
-                roomName,
-                hostUrl: config.server.hostUrl,
-            });
-
-            log.info('scheduleMeeting invitations sent', {
-                requester: authState.requester,
-                ip: requesterIp,
-                recipientCount: recipientList.length,
-                roomName,
-            });
-
-            res.status(200).json({ message: 'Meeting scheduled and invitations sent' });
-        } catch (err) {
-            log.error('scheduleMeeting', {
-                error: err.message,
-                requester: authState.requester,
-                ip: requesterIp,
-                recipientCount: recipientList.length,
-            });
-            res.status(500).json({ message: 'Failed to send meeting invitations' });
-        }
     });
 
     // Issue a short-lived token that authorizes the Socket.IO `createRoom` event for this room.
@@ -1874,7 +1743,6 @@ function startServer() {
                 slack: slackEnabled ? config.integrations?.slack : false,
                 chatGPT: config.integrations?.chatGPT?.enabled ? config.integrations.chatGPT : false,
                 deepSeek: config.integrations?.deepSeek?.enabled ? config.integrations.deepSeek : false,
-                email_alerts: config?.integrations?.email?.alert ? config.integrations.email : false,
             },
 
             // UI & Branding
@@ -2035,11 +1903,6 @@ function startServer() {
 
             worker.on('died', () => {
                 log.error('Mediasoup worker died, exiting in 5 seconds...', worker.pid);
-
-                nodemailer.sendEmailAlert('alert', {
-                    subject: 'Worker Died',
-                    body: `The Worker with PID ${worker.pid} has died unexpectedly!`,
-                });
 
                 setTimeout(() => process.exit(1), 5000);
             });
@@ -2377,21 +2240,6 @@ function startServer() {
             };
 
             const firstJoin = room.getPeersCount() === 1;
-            const guestJoin = room.getPeersCount() === 2;
-
-            // SCENARIO: Notify when the first user join room and is awaiting assistance (global email alert)
-            if (firstJoin && !widget.alert.enabled) {
-                nodemailer.sendEmailAlert('join', emailPayload);
-            }
-
-            // SCENARIO: Notify when the first guest user join room and presenter in (room email notification)
-            if (guestJoin) {
-                const notifications = room.getRoomNotifications();
-                log.debug('Room notifications on guest join', { notifications: notifications });
-                if (notifications?.mode?.email && notifications?.events?.join) {
-                    nodemailer.sendEmailNotifications('join', emailPayload, notifications);
-                }
-            }
 
             // SCENARIO: Notify when a user joins the widget room for expert assistance
             if (firstJoin && widget.enabled && widget.alert && widget.alert.enabled && widget.roomId === room.id) {
@@ -3435,31 +3283,6 @@ function startServer() {
                 log.debug('updatePeerInfo broadcast data');
                 room.broadCast(socket.id, 'updatePeerInfo', data);
             }
-        });
-
-        socket.on('updateRoomNotifications', (dataObject, cb) => {
-            if (!roomExists(socket)) return;
-
-            if (config.integrations?.email?.notify !== true) {
-                const message =
-                    'Email notifications are disabled by the admin. Enable this feature in your self-hosted instance for full functionality.';
-                log.debug(message);
-                return cb({ error: message });
-            }
-
-            const data = checkXSS(dataObject);
-
-            if (!Validator.isValidData(data)) return;
-
-            const room = getRoom(socket);
-
-            const isPresenter = isPeerPresenter(socket.room_id, socket.id, data.peer_name, data.peer_uuid);
-
-            if (!isPresenter) return;
-
-            room.updateRoomNotifications(data);
-
-            return cb({ message: true });
         });
 
         socket.on('updateRoomModerator', (dataObject) => {
@@ -5765,43 +5588,6 @@ function getBearerToken(req) {
         return null;
     }
     return authHeader.split(' ')[1] || null;
-}
-
-async function getScheduleMeetingAuthState(req) {
-    const denied = { authorized: false, requester: 'anonymous' };
-
-    if (OIDC.enabled && req.oidc?.isAuthenticated()) {
-        return {
-            authorized: true,
-            requester: req.oidc?.user?.email || req.oidc?.user?.name || req.oidc?.user?.sub || 'oidc-user',
-        };
-    }
-
-    if (hostCfg.protected && allowedIP(getIP(req))) {
-        return { authorized: true, requester: 'host-ip-auth' };
-    }
-
-    if (hostCfg.user_auth) {
-        const token = getBearerToken(req);
-        if (!token) return denied;
-
-        try {
-            if (!(await isValidToken(token))) return denied;
-
-            const { username, password } = checkXSS(decodeToken(token));
-            const isPeerValid = await isAuthPeer(username, password);
-
-            return isPeerValid ? { authorized: true, requester: username } : denied;
-        } catch (error) {
-            log.warn('scheduleMeeting auth token validation failed', {
-                error: error.message,
-                ip: authHost.getIP(req),
-            });
-            return denied;
-        }
-    }
-
-    return denied;
 }
 
 // ####################################################

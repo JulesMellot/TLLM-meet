@@ -117,31 +117,7 @@ describe('test-Validator', () => {
         });
     });
 
-    describe('4. Email list and domain validation', () => {
-        it('should parse, normalize and deduplicate valid emails', () => {
-            const emails = checkValidator.parseEmailList(' Alice@Example.com, bob@example.com, alice@example.com ');
-            emails.should.deepEqual(['alice@example.com', 'bob@example.com']);
-        });
-
-        it('should return empty list for invalid input', () => {
-            checkValidator.parseEmailList(null).should.deepEqual([]);
-            checkValidator.parseEmailList(123).should.deepEqual([]);
-            checkValidator.parseEmailList('').should.deepEqual([]);
-        });
-
-        it('should validate allowed domains when list is provided', () => {
-            const emails = ['alice@example.com', 'bob@company.org'];
-            checkValidator.hasAllowedEmailDomains(emails, ['example.com', 'company.org']).should.be.true();
-            checkValidator.hasAllowedEmailDomains(emails, ['example.com']).should.be.false();
-        });
-
-        it('should allow all domains when allowedDomains is empty', () => {
-            const emails = ['alice@example.com'];
-            checkValidator.hasAllowedEmailDomains(emails, []).should.be.true();
-        });
-    });
-
-    describe('5. SSRF host and URL validation', () => {
+    describe('3. SSRF host and URL validation', () => {
         it('should block private, loopback and link-local literals', () => {
             checkValidator.isPrivateOrLoopbackHost('127.0.0.1').should.be.true();
             checkValidator.isPrivateOrLoopbackHost('169.254.169.254').should.be.true();

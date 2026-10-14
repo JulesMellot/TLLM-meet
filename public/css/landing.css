@@ -3108,7 +3108,6 @@ body {
 
 .button:focus-visible,
 .gen-room-btn:focus-visible,
-.schedule-meeting-btn:focus-visible,
 a:focus-visible {
     outline: 3px solid rgba(53, 208, 160, 0.85);
     outline-offset: 3px;

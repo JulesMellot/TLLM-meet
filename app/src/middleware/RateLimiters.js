@@ -85,18 +85,6 @@ function createRateLimiters({ getRequesterKey }) {
         keyGenerator: (req) => req.body?.username || ipKeyGenerator(req),
     });
 
-    // Room scheduler
-    const scheduleMeetingCfg = config.features?.scheduleMeeting || {};
-    const scheduleMeetingWindowMs = scheduleMeetingCfg.rateLimit?.windowMs || 60 * MINUTE_MS;
-    const scheduleMeetingLimiter = rateLimit({
-        windowMs: scheduleMeetingWindowMs,
-        max: scheduleMeetingCfg.rateLimit?.max || 5,
-        message: {
-            message: `Too many schedule meeting requests. Please try again after ${minutesLabel(toMinutes(scheduleMeetingWindowMs))}.`,
-        },
-        keyGenerator: getRequesterKey,
-    });
-
     // Active rooms endpoint (per IP) — public endpoint, so prevent
     // enumeration / scraping abuse without breaking the public "event zone" UX.
     const activeRoomsCfg = config.ui?.rooms?.activeRoomsRateLimit || {};
@@ -126,7 +114,6 @@ function createRateLimiters({ getRequesterKey }) {
 
     return {
         loginLimiter,
-        scheduleMeetingLimiter,
         activeRoomsLimiter,
         createRoomTokenLimiter,
         checkCreateRoomLimit,

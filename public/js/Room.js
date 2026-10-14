@@ -1171,10 +1171,6 @@ function getPeerName() {
     }
     console.log('Direct join', { name: name });
 
-    if (isValidEmail(name)) {
-        getId('notifyEmailInput').value = name;
-    }
-
     if (name === 'random') {
         const randomName = generateRandomName();
         console.log('Direct join', { name: randomName });
@@ -1571,10 +1567,6 @@ async function whoAreYou() {
             }
             setCookie(room_id + '_name', name, 30);
             peer_name = name;
-
-            if (isValidEmail(peer_name)) {
-                getId('notifyEmailInput').value = peer_name;
-            }
         },
     }).then(async () => {
         if (!usernameEmoji.classList.contains('hidden')) {
@@ -2190,7 +2182,6 @@ function roomIsReady() {
     updateJoinLockButtons();
     BUTTONS.settings.sendEmailInvitation && show(sendEmailInvitation);
     !BUTTONS.settings.customNoiseSuppression && hide(noiseSuppressionButton);
-    BUTTONS.settings.tabNotificationsBtn && show(tabNotificationsBtn);
     (BUTTONS.settings.tabSipPhoneBtn !== undefined ? BUTTONS.settings.tabSipPhoneBtn : true) && show(tabSipPhoneBtn);
     (BUTTONS.settings.tabNetworkBtn !== undefined ? BUTTONS.settings.tabNetworkBtn : true) && show(tabNetworkBtn);
     if (
@@ -2806,9 +2797,6 @@ function handleButtons() {
     tabAspectBtn.onclick = (e) => {
         rc.openTab(e, 'tabAspect');
     };
-    tabNotificationsBtn.onclick = (e) => {
-        rc.openTab(e, 'tabNotifications');
-    };
     tabModeratorBtn.onclick = (e) => {
         rc.openTab(e, 'tabModerator');
     };
@@ -2826,13 +2814,6 @@ function handleButtons() {
     };
     tabLanguagesBtn.onclick = (e) => {
         rc.openTab(e, 'tabLanguages');
-    };
-    notifyEmailCleanBtn.onclick = () => {
-        rc.cleanNotifications();
-        rc.saveNotifications(false);
-    };
-    saveNotificationsBtn.onclick = () => {
-        rc.saveNotifications();
     };
     tabVideoAIBtn.onclick = (e) => {
         rc.openTab(e, 'tabVideoAI');

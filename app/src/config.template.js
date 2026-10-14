@@ -789,52 +789,6 @@ module.exports = {
         },
 
         /**
-         * Email Notification Configuration
-         * ===============================
-         * SMTP settings for system alerts and notifications
-         *
-         * Core Settings:
-         * -------------
-         * - alert      : Enable/disable email alerts [true/false] (default: false)
-         * - notify     : Enable/disable room email notifications [true/false] (default: false)
-         * - host       : SMTP server address (default: 'localhost')
-         * - port       : SMTP port (default: 1025 for Mailpit, 587 for most providers)
-         * - username   : SMTP auth username
-         * - password   : SMTP auth password (store ONLY in .env)
-         * - from       : Sender email address (default: same as username)
-         * - sendTo     : Recipient email for alerts and notifications
-         *
-         * Common Providers:
-         * ----------------
-         * Gmail:
-         * - host: smtp.gmail.com
-         * - port: 587
-         *
-         * Office365:
-         * - host: smtp.office365.com
-         * - port: 587
-         *
-         * SendGrid:
-         * - host: smtp.sendgrid.net
-         * - port: 587
-         *
-         * Mailpit (local testing):
-         * - host: localhost
-         * - port: 1025
-         * - docker-compose-mailpit.yml
-         */
-        email: {
-            alert: process.env.EMAIL_ALERTS_ENABLED === 'true',
-            notify: process.env.EMAIL_NOTIFICATIONS === 'true',
-            host: process.env.EMAIL_HOST || 'localhost',
-            port: parseInt(process.env.EMAIL_PORT) || 1025,
-            username: process.env.EMAIL_USERNAME || 'test',
-            password: process.env.EMAIL_PASSWORD || 'test',
-            from: process.env.EMAIL_FROM || process.env.EMAIL_USERNAME,
-            sendTo: process.env.EMAIL_SEND_TO || 'test@mirotalk.com',
-        },
-
-        /**
          * Slack Integration Configuration
          * ==============================
          * Settings for Slack slash commands and interactivity
@@ -1398,7 +1352,6 @@ module.exports = {
                 micOptionsButton: process.env.SHOW_MIC_OPTIONS !== 'false',
                 tabRTMPStreamingBtn: process.env.SHOW_RTMP_TAB !== 'false',
                 tabSipPhoneBtn: process.env.SHOW_SIP_TAB !== 'false',
-                tabNotificationsBtn: process.env.SHOW_NOTIFICATIONS_TAB !== 'false',
                 tabNetworkBtn: process.env.SHOW_NETWORK_TAB !== 'false',
                 tabModerator: process.env.SHOW_MODERATOR_TAB !== 'false',
                 tabVideoAIBtn: process.env.SHOW_VIDEOAI_TAB !== 'false',
@@ -1540,32 +1493,6 @@ module.exports = {
         redirect: {
             enabled: process.env.REDIRECT_ENABLED === 'true',
             url: process.env.REDIRECT_URL || '',
-        },
-
-        /**
-         * Meeting Scheduler
-         * ---------------------
-         * - enabled: Show "Schedule Meeting" button on landing/newroom pages
-         * - Requires email configuration (integrations.email) to send invitations
-         * - Sends .ics calendar attachments with meeting details
-         * - requireAuth: Require authenticated requester before sending invitations
-         * - maxRecipients: Maximum recipients accepted per request
-         * - allowedDomains: Optional recipient domain allow-list (empty = all domains)
-         * - rateLimit: Throttle requests to prevent abuse
-         */
-        scheduleMeeting: {
-            enabled: process.env.SCHEDULE_MEETING_ENABLED === 'true',
-            requireAuth: process.env.SCHEDULE_MEETING_REQUIRE_AUTH !== 'false',
-            maxRecipients: Math.max(parseInt(process.env.SCHEDULE_MEETING_MAX_RECIPIENTS, 10) || 20, 1),
-            allowedDomains: (process.env.SCHEDULE_MEETING_ALLOWED_DOMAINS || '')
-                .split(splitChar)
-                .map((domain) => domain.trim().toLowerCase())
-                .filter(Boolean),
-            rateLimit: {
-                windowMs:
-                    Math.max(parseInt(process.env.SCHEDULE_MEETING_RATE_LIMIT_WINDOW_MINUTES, 10) || 60, 1) * 60 * 1000,
-                max: Math.max(parseInt(process.env.SCHEDULE_MEETING_RATE_LIMIT_MAX, 10) || 5, 1),
-            },
         },
 
         /**

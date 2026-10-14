@@ -55,7 +55,6 @@ let BUTTONS = {
         micOptionsButton: true,
         tabRTMPStreamingBtn: true, // presenter
         tabSipPhoneBtn: true,
-        tabNotificationsBtn: true, // presenter
         tabNetworkBtn: true,
         tabModerator: true, // presenter
         tabVideoAIBtn: true, // presenter
@@ -177,7 +176,6 @@ function handleRules(isPresenter, roomSetup = true) {
         BUTTONS.settings.sendEmailInvitation = false;
         BUTTONS.settings.tabRTMPStreamingBtn = false;
         BUTTONS.settings.tabModerator = false;
-        BUTTONS.settings.tabNotificationsBtn = false;
         BUTTONS.videoOff.muteAudioButton = false;
         BUTTONS.videoOff.geolocationButton = false;
         BUTTONS.videoOff.banButton = false;
@@ -203,7 +201,7 @@ function handleRules(isPresenter, roomSetup = true) {
 
         // If a presenter-only settings tab was open, reset to the default Room tab so its
         // content isn't left visible after the tab button is hidden.
-        const openPresenterTab = ['tabModerator', 'tabRTMPStreaming', 'tabNotifications', 'tabVideoAI'].some((id) => {
+        const openPresenterTab = ['tabModerator', 'tabRTMPStreaming', 'tabVideoAI'].some((id) => {
             const el = rc.getId(id);
             return el && el.style.display === 'block';
         });
@@ -287,7 +285,6 @@ function handleRules(isPresenter, roomSetup = true) {
     updateJoinLockButtons();
     BUTTONS.settings.sendEmailInvitation ? show(sendEmailInvitation) : hide(sendEmailInvitation);
     BUTTONS.settings.micOptionsButton ? show(micOptionsButton) : hide(micOptionsButton);
-    BUTTONS.settings.tabNotificationsBtn ? show(tabNotificationsBtn) : hide(tabNotificationsBtn);
     BUTTONS.settings.tabModerator ? show(tabModeratorBtn) : hide(tabModeratorBtn);
     if (BUTTONS.settings.host_only_recording) {
         show(recordingActionButton);
@@ -416,7 +413,6 @@ function handleRulesBroadcasting() {
     BUTTONS.settings.lobbyButton = false;
     BUTTONS.settings.joinLockButton = false;
     BUTTONS.settings.tabRTMPStreamingBtn = false;
-    BUTTONS.settings.tabNotificationsBtn = false;
     BUTTONS.videoOff.muteAudioButton = false;
     BUTTONS.videoOff.geolocationButton = false;
     BUTTONS.videoOff.banButton = false;
@@ -456,7 +452,6 @@ function handleRulesBroadcasting() {
     elemDisplay('joinUnlockButton', false);
     elemDisplay('settingsButton', false);
     elemDisplay('tabRTMPStreamingBtn', false);
-    elemDisplay('tabNotificationsBtn', false);
 
     elemDisplay('startVideoDeviceDropdown', false);
     elemDisplay('startAudioDeviceDropdown', false);

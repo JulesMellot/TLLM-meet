@@ -40,15 +40,6 @@ module.exports = class Room {
         this._wbShowParticipantNames = false;
         // ##########################
 
-        this.notifications = {
-            mode: {
-                email: '',
-            },
-            events: {
-                join: false,
-            },
-        };
-
         this._moderator = {
             video_start_privacy: false,
             audio_start_muted: false,
@@ -425,20 +416,6 @@ module.exports = class Room {
             this.activeSpeakerObserver = null;
             log.debug('Active Speaker Observer closed');
         }
-    }
-
-    // ####################################################
-    // ROOM NOTIFICATIONS
-    // ####################################################
-
-    updateRoomNotifications(data) {
-        log.debug('Update room notifications', data);
-        this.notifications = data.notifications;
-    }
-
-    getRoomNotifications() {
-        log.debug('get room notifications', this.notifications);
-        return this.notifications;
     }
 
     // ####################################################

@@ -4449,23 +4449,6 @@ body {
 }
 
 /*--------------------------------------------------------------
-# Settings Notifications
---------------------------------------------------------------*/
-
-#notificationsModeDiv input[type='text'] {
-    width: 100%;
-    color: #fff;
-    padding: 10px;
-    margin: 10px 0;
-    border: var(--border);
-    border-radius: 8px;
-}
-
-#notifyEmailCleanBtn {
-    width: 130px;
-}
-
-/*--------------------------------------------------------------
 # Transcription Room
 --------------------------------------------------------------*/
 
