@@ -189,6 +189,8 @@ body.tllm-room .Camera:has([id$='__audio'].fa-microphone-slash) .username::befor
     color: var(--tllm-danger);
 }
 body.tllm-room .Camera .user-hand {
+    aspect-ratio: auto !important;
+    gap: 0;
     position: absolute !important;
     left: 8px !important;
     top: 8px !important;
@@ -1216,4 +1218,280 @@ body.tllm-room #videoPinMediaContainer {
     border: 0 !important;
     box-shadow: none !important;
     background: transparent !important;
+}
+
+/* ---------- Join screen (see public/js/TllmJoin.js) ---------- */
+.swal2-popup.tllm-join {
+    display: block !important;
+    width: min(940px, calc(100vw - 32px)) !important;
+    max-width: none !important;
+    padding: 24px !important;
+    border: 1px solid var(--tllm-border) !important;
+    border-radius: var(--tllm-radius) !important;
+    background: var(--tllm-surface) !important;
+    color: var(--tllm-text) !important;
+    font-family: var(--tllm-font) !important;
+    text-align: left !important;
+    box-shadow: none !important;
+}
+.tllm-join .swal2-title,
+.tllm-join .swal2-html-container,
+.tllm-join .swal2-input-label {
+    display: none !important;
+}
+/* SweetAlert's own input stays in place (it reads it from there), the visible one is #tllmJoinName */
+.tllm-join > .tllm-join-swal-input {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+.tllm-join-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+.tllm-join-left,
+.tllm-join-right {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.tllm-join #initVideoContainer {
+    position: relative !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    aspect-ratio: 16 / 9;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: var(--tllm-radius) !important;
+    overflow: hidden;
+    background: #0b0d10 !important;
+    box-shadow: none !important;
+}
+.tllm-join #initVideo {
+    width: 100% !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: cover;
+    border-radius: 0 !important;
+}
+.tllm-join-controls {
+    position: absolute;
+    z-index: 5;
+    left: 0;
+    right: 0;
+    bottom: 12px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+.tllm-join-controls button {
+    width: 46px !important;
+    height: 46px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: grid !important;
+    place-items: center;
+    border: 0 !important;
+    border-radius: 50% !important;
+    background: rgba(20, 24, 28, 0.78) !important;
+    color: #fff !important;
+    font-size: 17px !important;
+    box-shadow: none !important;
+    cursor: pointer;
+}
+.tllm-join-controls button.hidden {
+    display: none !important;
+}
+.tllm-join-controls button:hover {
+    background: rgba(40, 46, 54, 0.9) !important;
+}
+.tllm-join-controls button.fa-microphone-slash,
+.tllm-join-controls button.fa-video-slash {
+    background: var(--tllm-danger) !important;
+}
+.tllm-join-meter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--tllm-text-2);
+    font-size: 13px;
+}
+.tllm-join-meter[hidden] {
+    display: none;
+}
+.tllm-join-meter-track {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--tllm-surface-3);
+    overflow: hidden;
+}
+.tllm-join-meter-fill {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: #3fbf7f;
+    transition: width 0.08s linear;
+}
+.tllm-join-title {
+    margin: 0;
+    color: var(--tllm-text);
+    font-size: 22px;
+    font-weight: 600;
+}
+.tllm-join-room {
+    margin: -6px 0 4px;
+    color: var(--tllm-text-2);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+.tllm-join-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+}
+.tllm-join-label {
+    color: var(--tllm-text-2);
+    font-size: 12px;
+    font-weight: 500;
+}
+.tllm-join .tllm-join-name,
+.tllm-join-field select {
+    width: 100% !important;
+    height: 40px !important;
+    margin: 0 !important;
+    padding: 0 12px !important;
+    border: 1px solid var(--tllm-border) !important;
+    border-radius: var(--tllm-radius-sm) !important;
+    background-color: var(--tllm-surface-2) !important;
+    color: var(--tllm-text) !important;
+    font: 14px var(--tllm-font) !important;
+    text-align: left !important;
+    box-shadow: none !important;
+}
+.tllm-join-field select {
+    padding-right: 32px !important;
+}
+.tllm-join .tllm-join-name:focus,
+.tllm-join-field select:focus {
+    border-color: var(--tllm-accent) !important;
+    outline: 2px solid var(--tllm-accent-soft) !important;
+}
+.tllm-join .swal2-validation-message {
+    margin: 0 !important;
+    padding: 8px 10px !important;
+    justify-content: flex-start !important;
+    border-radius: var(--tllm-radius-sm);
+    background: rgba(229, 72, 77, 0.12) !important;
+    color: #ff8a8d !important;
+    font-size: 13px !important;
+}
+.tllm-join-notice {
+    padding: 12px;
+    border: 1px solid rgba(245, 184, 61, 0.4);
+    border-radius: var(--tllm-radius-sm);
+    background: rgba(245, 184, 61, 0.08);
+    font-size: 13px;
+    line-height: 1.45;
+}
+.tllm-join-notice[hidden] {
+    display: none;
+}
+.tllm-join-notice p {
+    margin: 0 0 6px;
+    color: var(--tllm-text);
+}
+.tllm-join-notice-title {
+    font-weight: 600;
+}
+.tllm-join-notice-title i {
+    color: var(--tllm-hand);
+    margin-right: 4px;
+}
+.tllm-join-notice-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+.tllm-join-retry {
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius-sm);
+    background: var(--tllm-surface-2);
+    color: var(--tllm-text);
+    font: 600 13px var(--tllm-font);
+    cursor: pointer;
+}
+.tllm-join-hint {
+    color: var(--tllm-text-2);
+    font-size: 12px;
+}
+.tllm-join .swal2-actions {
+    width: 100% !important;
+    margin: 4px 0 0 !important;
+    padding: 0 !important;
+    justify-content: stretch !important;
+}
+.tllm-join .swal2-confirm {
+    width: 100% !important;
+    height: 44px !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: var(--tllm-radius-sm) !important;
+    background: var(--tllm-accent) !important;
+    color: var(--tllm-accent-ink) !important;
+    font: 600 15px var(--tllm-font) !important;
+    box-shadow: none !important;
+}
+.tllm-join-cancel {
+    align-self: center;
+    padding: 4px 8px;
+    border: 0;
+    background: none;
+    color: var(--tllm-text-2);
+    font: 13px var(--tllm-font);
+    cursor: pointer;
+}
+.tllm-join-cancel:hover {
+    color: var(--tllm-text);
+}
+@media (max-width: 720px) {
+    .swal2-popup.tllm-join {
+        padding: 16px !important;
+    }
+    .tllm-join-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+    }
+    .tllm-join #initVideoContainer {
+        aspect-ratio: 4 / 3;
+    }
+}
+
+/* MiroTalk hides every icon inside the video area (#videoMediaContainer i { display: none }) */
+#videoMediaContainer .tllm-tile-more i {
+    position: static !important;
+    display: inline-block !important;
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: inherit !important;
+    font-size: 14px !important;
 }
