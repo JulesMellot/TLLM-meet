@@ -159,10 +159,6 @@ module.exports = {
          * - 'self'         → only same-origin embedding (frame-ancestors 'self' + X-Frame-Options: SAMEORIGIN).
          * - list           → comma-separated origins, 'self' is always implicitly included.
          *                    Wildcards like https://*.example.com are valid in CSP.
-         *
-         * IMPORTANT: This affects the widget too — the MiroTalk widget embeds
-         * the room in an iframe on the host site, so every site that should
-         * load the widget must be listed here.
          */
         embed: {
             allowedOrigins: process.env.ALLOWED_EMBED_ORIGINS
@@ -1147,51 +1143,6 @@ module.exports = {
                 `,
             },
 
-            /**
-             * Widget Configuration
-             * --------------------
-             * Controls the appearance and behavior of the support widget.
-             * Supports dynamic configuration via environment variables.
-             */
-            widget: {
-                enabled: process.env.WIDGET_ENABLED === 'true',
-                roomId: process.env.WIDGET_ROOM_ID || 'support-room',
-                theme: process.env.WIDGET_THEME || 'dark',
-                widgetState: process.env.WIDGET_STATE || 'minimized',
-                widgetType: process.env.WIDGET_TYPE || 'support',
-                supportWidget: {
-                    position: process.env.WIDGET_SUPPORT_POSITION || 'top-right',
-                    expertImages: process.env.WIDGET_SUPPORT_EXPERT_IMAGES
-                        ? process.env.WIDGET_SUPPORT_EXPERT_IMAGES.split(splitChar)
-                              .map((url) => url.trim())
-                              .filter(Boolean)
-                        : [
-                              'https://photo.cloudron.pocketsolution.net/uploads/original/95/7d/a5f7f7a2c89a5fee7affda5f013c.jpeg',
-                          ],
-                    buttons: {
-                        audio: process.env.WIDGET_SUPPORT_BUTTON_AUDIO !== 'false',
-                        video: process.env.WIDGET_SUPPORT_BUTTON_VIDEO !== 'false',
-                        screen: process.env.WIDGET_SUPPORT_BUTTON_SCREEN !== 'false',
-                        chat: process.env.WIDGET_SUPPORT_BUTTON_CHAT !== 'false',
-                        join: process.env.WIDGET_SUPPORT_BUTTON_JOIN !== 'false',
-                    },
-                    checkOnlineStatus: process.env.WIDGET_SUPPORT_CHECK_ONLINE_STATUS === 'true',
-                    isOnline: process.env.WIDGET_SUPPORT_IS_ONLINE !== 'false',
-                    customMessages: {
-                        heading: process.env.WIDGET_SUPPORT_HEADING || 'Need Help?',
-                        subheading:
-                            process.env.WIDGET_SUPPORT_SUBHEADING || 'Get instant support from our expert team!',
-                        connectText: process.env.WIDGET_SUPPORT_CONNECT_TEXT || 'connect in < 5 seconds',
-                        onlineText: process.env.WIDGET_SUPPORT_ONLINE_TEXT || 'We are online',
-                        offlineText: process.env.WIDGET_SUPPORT_OFFLINE_TEXT || 'We are offline',
-                        poweredBy: process.env.WIDGET_SUPPORT_POWERED_BY || 'Powered by MiroTalk SFU',
-                    },
-                },
-                alert: {
-                    enabled: process.env.WIDGET_ALERT_ENABLED === 'true',
-                    type: process.env.WIDGET_ALERT_TYPE || 'email',
-                },
-            },
             //...
         },
 

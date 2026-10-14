@@ -81,7 +81,6 @@ describe('Socket.IO join authorization', () => {
             },
             getActiveRooms: () => [],
             getRTMPActiveStreams: () => [],
-            widget: { alert: { enabled: false }, enabled: false },
             nodemailer: { sendEmailAlert() {} },
             serverRecordingEnabled: true,
             createRecUploadToken: sinon.stub().returns('recording-token'),

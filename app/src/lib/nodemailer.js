@@ -68,10 +68,6 @@ function sendEmailAlert(event, data) {
             subject = getJoinRoomSubject(data);
             body = getJoinRoomBody(data);
             break;
-        case 'widget':
-            subject = getWidgetRoomSubject(data);
-            body = getWidgetRoomBody(data);
-            break;
         case 'alert':
             subject = getAlertSubject(data);
             body = getAlertBody(data);
@@ -191,19 +187,6 @@ function getJoinRoomBody(data) {
             </tr>
         </table>
     `;
-}
-
-// ==========
-// Widget
-// ==========
-
-function getWidgetRoomSubject(data) {
-    const { room_id } = data;
-    return `${APP_NAME} WIDGET - New user Wait for expert assistance in Room ${room_id}`;
-}
-
-function getWidgetRoomBody(data) {
-    return getJoinRoomBody(data);
 }
 
 // ==========

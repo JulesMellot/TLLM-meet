@@ -327,15 +327,6 @@ if (
     process.exit(1);
 }
 
-const widget = {
-    enabled: config?.ui?.brand?.widget?.enabled,
-    roomId: config?.ui?.brand?.widget?.roomId || 'support-room',
-    alert: {
-        enabled: config?.ui?.brand?.widget?.alert?.enabled,
-        type: config?.ui?.brand?.widget?.alert?.type || 'email',
-    },
-};
-
 const restApi = {
     basePath: '/api/v1', // api endpoint path
     docs: host + '/api/v1/docs', // api docs
@@ -834,14 +825,6 @@ function startServer() {
         } else {
             res.status(400).json({ message: 'Unauthorized' });
         }
-    });
-
-    // Check if Widget room active (exists)
-    app.post('/isWidgetRoomActive', (req, res) => {
-        const { roomId } = checkXSS(req.body);
-        const roomWidgetActive = roomId && roomId === widget.roomId && roomList.has(roomId);
-        log.debug('isWidgetRoomActive', { roomId, roomWidgetActive });
-        res.status(200).json({ message: roomWidgetActive });
     });
 
     // Schedule Meeting feature flag
@@ -2538,8 +2521,8 @@ function startServer() {
             const firstJoin = room.getPeersCount() === 1;
             const guestJoin = room.getPeersCount() === 2;
 
-            // SCENARIO: Notify when the first user join room and is awaiting assistance (global email alert)
-            if (firstJoin && !widget.alert.enabled) {
+            // SCENARIO: Notify when the first user joins the room (global email alert)
+            if (firstJoin) {
                 nodemailer.sendEmailAlert('join', emailPayload);
             }
 
@@ -2549,18 +2532,6 @@ function startServer() {
                 log.debug('Room notifications on guest join', { notifications: notifications });
                 if (notifications?.mode?.email && notifications?.events?.join) {
                     nodemailer.sendEmailNotifications('join', emailPayload, notifications);
-                }
-            }
-
-            // SCENARIO: Notify when a user joins the widget room for expert assistance
-            if (firstJoin && widget.enabled && widget.alert && widget.alert.enabled && widget.roomId === room.id) {
-                switch (widget.alert.type) {
-                    case 'email':
-                        nodemailer.sendEmailAlert('widget', emailPayload);
-                        break;
-                    // case slack, discord, webhook, ...
-                    default:
-                        log.warn('Unknown alert type for widget', { type: widget.type });
                 }
             }
 
