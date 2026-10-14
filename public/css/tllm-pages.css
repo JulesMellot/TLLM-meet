@@ -1,0 +1,277 @@
+/*
+ * TLLM*meet - simple pages (home, login, waiting, permission, privacy, errors)
+ * One accent, system font, follows the system light/dark preference.
+ */
+
+:root {
+    color-scheme: light dark;
+    --tllm-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+    --tllm-bg: #f5f6f7;
+    --tllm-surface: #ffffff;
+    --tllm-border: #dde1e5;
+    --tllm-text: #1c2530;
+    --tllm-text-2: #5b6570;
+    --tllm-accent: #2f6fe4;
+    --tllm-accent-hover: #255ec7;
+    --tllm-accent-ink: #ffffff;
+    --tllm-danger: #c9302c;
+    --tllm-radius: 10px;
+}
+
+:root[data-tllm-style='papier'] {
+    --tllm-bg: #f6f5f2;
+    --tllm-surface: #fffdf9;
+    --tllm-border: #e4e0d8;
+    --tllm-accent: #2f7d5c;
+    --tllm-accent-hover: #26684c;
+    --tllm-radius: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --tllm-bg: #121416;
+        --tllm-surface: #1a1d20;
+        --tllm-border: #30363b;
+        --tllm-text: #e9ebed;
+        --tllm-text-2: #a9afb5;
+        --tllm-accent: #4c8dff;
+        --tllm-accent-hover: #6a9fff;
+        --tllm-danger: #ff6b66;
+    }
+
+    :root[data-tllm-style='papier'] {
+        --tllm-bg: #191816;
+        --tllm-surface: #22201d;
+        --tllm-border: #3a3731;
+        --tllm-text: #efece6;
+        --tllm-text-2: #b3ada3;
+        --tllm-accent: #3f9b74;
+        --tllm-accent-hover: #4fb087;
+    }
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    min-height: 100%;
+}
+
+body.tllm-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding: 0 16px;
+    font-family: var(--tllm-font);
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--tllm-text);
+    background: var(--tllm-bg);
+}
+
+.tllm-main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 0;
+}
+
+.tllm-card {
+    width: 100%;
+    max-width: 420px;
+    padding: 32px 28px;
+    background: var(--tllm-surface);
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius);
+}
+
+.tllm-card.tllm-wide {
+    max-width: 720px;
+}
+
+.tllm-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 28px;
+    font-weight: 600;
+    color: var(--tllm-text);
+    text-decoration: none;
+}
+
+.tllm-brand img {
+    width: 28px;
+    height: 28px;
+}
+
+.tllm-card h1 {
+    margin: 0 0 8px;
+    font-size: 1.4rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.tllm-card h2 {
+    margin: 28px 0 8px;
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+
+.tllm-card p,
+.tllm-card li {
+    margin: 0 0 12px;
+    color: var(--tllm-text-2);
+}
+
+.tllm-card ul {
+    padding-left: 20px;
+}
+
+.tllm-muted {
+    font-size: 0.9rem;
+    color: var(--tllm-text-2);
+}
+
+.tllm-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.tllm-form label {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.tllm-input {
+    width: 100%;
+    padding: 11px 12px;
+    font: inherit;
+    color: var(--tllm-text);
+    background: var(--tllm-bg);
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius);
+}
+
+.tllm-input:focus,
+.tllm-button:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--tllm-accent);
+    outline-offset: 2px;
+}
+
+.tllm-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 16px;
+    font: inherit;
+    font-weight: 600;
+    color: var(--tllm-accent-ink);
+    background: var(--tllm-accent);
+    border: none;
+    border-radius: var(--tllm-radius);
+    cursor: pointer;
+}
+
+.tllm-button:hover {
+    background: var(--tllm-accent-hover);
+}
+
+.tllm-button[disabled] {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.tllm-error {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--tllm-danger);
+}
+
+.tllm-error:empty {
+    display: none;
+}
+
+.tllm-chip {
+    display: inline-block;
+    margin: 4px 0 16px;
+    padding: 4px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.9rem;
+    color: var(--tllm-text);
+    background: var(--tllm-bg);
+    border: 1px solid var(--tllm-border);
+    border-radius: 6px;
+}
+
+.tllm-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0 4px;
+    color: var(--tllm-text);
+}
+
+.tllm-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--tllm-accent);
+    animation: tllm-blink 1.6s ease-in-out infinite;
+}
+
+.tllm-status.is-ready .tllm-dot {
+    animation: none;
+}
+
+@keyframes tllm-blink {
+    50% {
+        opacity: 0.25;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tllm-dot {
+        animation: none;
+    }
+}
+
+.tllm-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 16px;
+    padding: 20px 0 28px;
+    font-size: 0.85rem;
+    color: var(--tllm-text-2);
+}
+
+.tllm-footer a,
+.tllm-card a {
+    color: var(--tllm-accent);
+    text-decoration: none;
+}
+
+.tllm-footer a:hover,
+.tllm-card a:hover {
+    text-decoration: underline;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+.tllm-card a.tllm-brand,
+.tllm-card a.tllm-brand:hover {
+    color: var(--tllm-text);
+    text-decoration: none;
+}

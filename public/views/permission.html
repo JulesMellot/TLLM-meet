@@ -1,136 +1,34 @@
 <!doctype html>
-<html lang="en" class="no-js">
+<html lang="fr">
     <head>
-        <!-- Title and Icon -->
-
-        <title id="title">TLLM*meet</title>
-        <link id="icon" rel="shortcut icon" href="../images/logo.svg" />
-        <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
-
-        <!-- Meta Information -->
-
         <meta charset="utf-8" />
-        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-        <meta
-            id="description"
-            name="description"
-            content="TLLM*meet, visioconférence privée."
-        />
-
-        <!-- StyleSheet -->
-
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:400,600" />
-        <link rel="stylesheet" type="text/css" href="../css/landing.css" />
-
-        <!-- Js scripts -->
-
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title id="title">TLLM*meet</title>
+        <link id="icon" rel="icon" href="../images/logo.svg" />
+        <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
+        <meta id="description" name="description" content="TLLM*meet, visioconférence privée." />
+        <link rel="stylesheet" href="../css/tllm-pages.css" />
         <script defer src="../js/Brand.js"></script>
-
-        <script src="https://unpkg.com/animejs@3.0.1/lib/anime.min.js"></script>
-        <script src="https://unpkg.com/scrollreveal@4.0.0/dist/scrollreveal.min.js"></script>
-
-        <!-- xss -->
-        <script src="https://cdn.jsdelivr.net/npm/xss/dist/xss.min.js"></script>
     </head>
-    <body class="is-boxed has-animations">
-        <div class="body-wrap">
-            <header class="site-header">
-                <div class="container">
-                    <div class="site-header-inner">
-                        <div class="brand header-brand">
-                            <h1 class="m-0">
-                                <a href="/">
-                                    <img
-                                        class="header-logo-image"
-                                        src="../images/logo.svg"
-                                        alt="TLLM*meet"
-                                    />
-                                    <!-- <img
-                                        class="header-logo-image reveal-from-left"
-                                        src="../images/logo.svg"
-                                        alt="TLLM*meet"
-                                        width="96"
-                                        height="auto"
-                                    /> -->
-                                </a>
-                            </h1>
-                        </div>
-                    </div>
-                </div>
-            </header>
-
-            <main>
-                <section class="hero">
-                    <div class="container">
-                        <div class="hero-inner">
-                            <div class="hero-copy">
-                                <h1 class="hero-title mt-0">Access denied.</h1>
-                                <p class="hero-paragraph" id="message"></p>
-                                <p class="hero-paragraph">
-                                    This app will not work without camera or microphone access. Please try again and
-                                    allow it.
-                                </p>
-                                <div class="hero-cta">
-                                    <a id="tryAgainButton" class="button button-primary pulse" href="/newroom"
-                                        >TRY AGAIN</a
-                                    >
-                                    <script>
-                                        (function () {
-                                            const roomId = new URLSearchParams(window.location.search).get('room_id');
-                                            if (roomId) {
-                                                document.getElementById('tryAgainButton').href =
-                                                    '/join/?room=' + encodeURIComponent(roomId);
-                                            }
-                                        })();
-                                    </script>
-                                </div>
-                            </div>
-                            <div class="hero-figure anime-element">
-                                <svg class="placeholder" width="528" height="396" viewBox="0 0 528 396">
-                                    <rect width="528" height="396" style="fill: transparent" />
-                                </svg>
-                                <div class="hero-figure-box hero-figure-box-01" data-rotation="45deg"></div>
-                                <div class="hero-figure-box hero-figure-box-02" data-rotation="-45deg"></div>
-                                <div class="hero-figure-box hero-figure-box-03" data-rotation="0deg"></div>
-                                <div class="hero-figure-box hero-figure-box-04" data-rotation="-135deg"></div>
-                                <div class="hero-figure-box hero-figure-box-05"></div>
-                                <div class="hero-figure-box hero-figure-box-06"></div>
-                                <div class="hero-figure-box hero-figure-box-07"></div>
-                                <div class="hero-figure-box hero-figure-box-08" data-rotation="-22deg"></div>
-                                <div class="hero-figure-box hero-figure-box-09" data-rotation="-52deg"></div>
-                                <div class="hero-figure-box hero-figure-box-10" data-rotation="-50deg"></div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            </main>
-
-            <footer id="footer" class="site-footer">
-                <div class="container">
-                    <div class="site-footer-inner">
-                        <div class="brand footer-brand">
-                            <a href="/">
-                                <img class="header-logo-image" src="../images/logo.svg" alt="Logo" />
-                            </a>
-                        </div>
-                        <ul class="footer-links list-reset">
-                            <li>
-                                <a href="/privacy">Confidentialité</a>
-                            </li>
-                            <li>
-                                <a target="_blank" rel="noopener noreferrer" href="https://github.com/miroslavpejic85/mirotalksfu"
-                                    >Basé sur MiroTalk SFU</a
-                                >
-                            </li>
-                        </ul>
-                        <div class="footer-copyright">TLLM*meet</div>
-                    </div>
-                </div>
-            </footer>
-        </div>
-
-        <script defer src="../js/Landing.js"></script>
+    <body class="tllm-page">
+        <main class="tllm-main">
+            <div class="tllm-card">
+                <a class="tllm-brand" href="/"><img src="../images/logo.svg" alt="" /><span>TLLM*meet</span></a>
+                <h1>Micro ou caméra bloqués</h1>
+                <p>Le navigateur n'a pas donné accès au micro ou à la caméra.</p>
+                <ul>
+                    <li>Cliquez sur l'icône à gauche de l'adresse du site et autorisez le micro et la caméra.</li>
+                    <li>Vérifiez qu'aucune autre application n'utilise déjà la caméra.</li>
+                    <li>Puis rechargez la page.</li>
+                </ul>
+                <button class="tllm-button" type="button" onclick="history.back()">Revenir à la visio</button>
+            </div>
+        </main>
+        <footer class="tllm-footer">
+            <a href="/privacy">Confidentialité</a>
+            <a href="https://github.com/miroslavpejic85/mirotalksfu" target="_blank" rel="noopener noreferrer"
+                >Basé sur MiroTalk SFU</a
+            >
+        </footer>
     </body>
 </html>

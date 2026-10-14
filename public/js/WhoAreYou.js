@@ -1,198 +1,76 @@
 'use strict';
 
-console.log(window.location);
+// TLLM*meet "meeting not started yet" page: polls the server and joins as soon as the admin opens it.
 
-const settings = JSON.parse(localStorage.getItem('SFU_SETTINGS')) || {};
-console.log('Settings:', settings);
-
-const pollInterval = 5000;
-
-const pathParts = window.location.pathname.split('/');
-const roomId = filterXSS(decodeURIComponent(pathParts[pathParts.length - 1]));
-
-const statusEl = document.getElementById('waitingStatus');
-const loginLink = document.getElementById('loginLink');
-const waitingRoomNameEl = document.getElementById('waitingRoomName');
-const waitingRoomNameText = document.getElementById('waitingRoomNameText');
-const waitingElapsedText = document.getElementById('waitingElapsedText');
-const spinnerDots = document.querySelectorAll('.waiting-spinner-dot');
-
-window.sessionStorage.roomID = roomId;
-
-let intervalId = null;
-let roomActive = false;
-const waitStartTime = Date.now();
-let elapsedTimerId = null;
-
-if (roomId && roomId !== 'whoAreYou') {
-    waitingRoomNameText.textContent = roomId;
-    waitingRoomNameEl.style.display = 'inline-block';
-}
-
-function updateElapsedTime() {
-    const seconds = Math.floor((Date.now() - waitStartTime) / 1000);
-    if (seconds < 60) {
-        waitingElapsedText.textContent = getWaitingRoomBrand('waitingRoomElapsedJust', 'Just started waiting');
-    } else {
-        const minutes = Math.floor(seconds / 60);
-        const template = getWaitingRoomBrand('waitingRoomElapsedMinutes', 'Waiting for {minutes}');
-        waitingElapsedText.textContent = template.replace(
-            '{minutes}',
-            minutes + (minutes === 1 ? ' minute' : ' minutes')
-        );
-    }
-}
-elapsedTimerId = setInterval(updateElapsedTime, 10000);
-
-function getWaitingRoomBrand(key, fallback) {
+(function () {
+    const POLL_MS = 5000;
+    const parts = window.location.pathname.split('/');
+    let roomId = '';
     try {
-        return (typeof BRAND !== 'undefined' && BRAND?.whoAreYou?.[key]) || fallback;
-    } catch (e) {
-        return fallback;
+        roomId = decodeURIComponent(parts[parts.length - 1] || '');
+    } catch {}
+
+    const nameEl = document.getElementById('waitingRoomName');
+    const stateEl = document.getElementById('waitingState');
+    const statusEl = document.getElementById('waitingStatus');
+    const elapsedEl = document.getElementById('waitingElapsed');
+    const loginLink = document.getElementById('waitingRoomLoginLink');
+
+    const text = (key, fallback) => (typeof BRAND !== 'undefined' && BRAND?.whoAreYou?.[key]) || fallback;
+
+    if (roomId) {
+        nameEl.textContent = roomId;
+        nameEl.hidden = false;
+        loginLink.href = '/login?room=' + encodeURIComponent(roomId);
     }
-}
 
-if (roomId && roomId !== 'whoAreYou') {
-    loginLink.href = '/login?room=' + encodeURIComponent(roomId);
-}
-
-function playSound(name) {
-    if (!settings.sounds) return;
-
-    const soundSrc = `../sounds/${name}.wav`;
-    const audio = new Audio(soundSrc);
-    audio.volume = 0.5;
-
-    audio.play().catch((err) => {
-        console.error(`Error playing sound: ${err}`);
-    });
-}
-
-function flashCheckingState() {
-    spinnerDots.forEach((dot) => dot.classList.add('checking'));
-    setTimeout(() => spinnerDots.forEach((dot) => dot.classList.remove('checking')), 600);
-}
-
-function checkRoom() {
-    flashCheckingState();
-    axios
-        .post('/isRoomActive', { roomId: roomId })
-        .then(function (response) {
-            const isActive = response.data.message;
-            console.log('Room active status:', isActive);
-
-            if (isActive && !roomActive) {
-                roomActive = true;
-                if (waitingAudio) {
-                    waitingAudio.pause();
-                    waitingAudio = null;
-                }
-                playSound('roomActive');
-                statusEl.textContent = getWaitingRoomBrand('waitingRoomReady', 'Room is ready! Joining...');
-                statusEl.classList.add('ready');
-                setTimeout(function () {
-                    // Keep the original join parameters (name, audio, video...)
-                    window.location.href = '/join/' + encodeURIComponent(roomId) + window.location.search;
-                }, 800);
-            } else if (!isActive) {
-                statusEl.textContent = getWaitingRoomBrand(
-                    'waitingRoomWaiting',
-                    'Waiting for host to start the meeting...'
-                );
-                scheduleNextCheck();
-            }
-        })
-        .catch(function () {
-            statusEl.textContent = getWaitingRoomBrand(
-                'waitingRoomWaiting',
-                'Waiting for host to start the meeting...'
-            );
-            scheduleNextCheck();
-        });
-}
-
-function scheduleNextCheck() {
-    if (intervalId) return;
-    intervalId = setTimeout(function () {
-        intervalId = null;
-        if (document.visibilityState === 'visible') {
-            checkRoom();
-        } else {
-            scheduleNextCheck();
-        }
-    }, pollInterval);
-}
-
-document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && !roomActive) {
-        checkRoom();
+    const started = Date.now();
+    function updateElapsed() {
+        const minutes = Math.floor((Date.now() - started) / 60000);
+        elapsedEl.textContent =
+            minutes < 1
+                ? text('waitingRoomElapsedJust', "Depuis moins d'une minute")
+                : text('waitingRoomElapsedMinutes', 'Attente : {minutes}').replace(
+                      '{minutes}',
+                      minutes + (minutes === 1 ? ' minute' : ' minutes')
+                  );
     }
-});
+    updateElapsed();
+    setInterval(updateElapsed, 30000);
 
-// Waiting room audio player
-const audioPlayerEl = document.getElementById('waitingAudioPlayer');
-const audioBtn = document.getElementById('waitingAudioBtn');
-const audioIcon = document.getElementById('waitingAudioIcon');
-const audioMuteBtn = document.getElementById('waitingAudioMute');
-const audioMuteIcon = document.getElementById('waitingAudioMuteIcon');
-const audioProgress = document.getElementById('waitingAudioProgress');
-
-let waitingAudio = null;
-let audioPlaying = false;
-
-function initWaitingAudio() {
-    const songUrl = getWaitingRoomBrand('waitingRoomSongUrl', '');
-    if (!songUrl || !audioPlayerEl) return;
-
-    waitingAudio = new Audio(songUrl);
-    waitingAudio.loop = true;
-    waitingAudio.volume = 0.3;
-    waitingAudio.preload = 'auto';
-
-    waitingAudio.addEventListener('error', function () {
-        console.warn('Waiting room audio failed to load:', songUrl);
-        audioPlayerEl.style.display = 'none';
-        waitingAudio = null;
-    });
-
-    waitingAudio.addEventListener(
-        'canplaythrough',
-        function () {
-            audioPlayerEl.style.display = 'flex';
-        },
-        { once: true }
-    );
-
-    waitingAudio.addEventListener('timeupdate', function () {
-        if (waitingAudio.duration) {
-            const pct = (waitingAudio.currentTime / waitingAudio.duration) * 100;
-            audioProgress.style.width = pct + '%';
-        }
-    });
-
-    audioBtn.onclick = function () {
-        if (audioPlaying) {
-            waitingAudio.pause();
-            audioIcon.className = 'fa-solid fa-play';
-            audioBtn.title = 'Play music';
-        } else {
-            waitingAudio.play().catch(function (err) {
-                console.warn('Audio play blocked:', err.message);
+    let timer = null;
+    async function check() {
+        timer = null;
+        try {
+            const res = await fetch('/isRoomActive', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roomId }),
             });
-            audioIcon.className = 'fa-solid fa-pause';
-            audioBtn.title = 'Pause music';
+            const data = await res.json();
+            if (data && data.message === true) {
+                statusEl.textContent = text('waitingRoomReady', 'La visio commence, connexion…');
+                stateEl.classList.add('is-ready');
+                // Keep the original join parameters (name, audio, video...)
+                window.location.href = '/join/' + encodeURIComponent(roomId) + window.location.search;
+                return;
+            }
+        } catch {}
+        statusEl.textContent = text('waitingRoomWaiting', "En attente de l'organisateur…");
+        schedule();
+    }
+
+    function schedule() {
+        if (!timer) timer = setTimeout(() => (document.visibilityState === 'visible' ? check() : schedule()), POLL_MS);
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            clearTimeout(timer);
+            check();
         }
-        audioPlaying = !audioPlaying;
-    };
+    });
 
-    audioMuteBtn.onclick = function () {
-        waitingAudio.muted = !waitingAudio.muted;
-        audioMuteIcon.className = waitingAudio.muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
-        audioMuteBtn.title = waitingAudio.muted ? 'Unmute' : 'Mute';
-    };
-}
-
-// Wait for Brand.js to load before initializing audio
-setTimeout(initWaitingAudio, 1000);
-
-checkRoom();
+    if (roomId) check();
+})();

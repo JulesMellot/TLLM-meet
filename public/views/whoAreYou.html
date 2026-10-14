@@ -1,175 +1,51 @@
 <!doctype html>
-<html lang="en" class="no-js">
+<html lang="fr">
     <head>
-        <!-- Title and Icon -->
-
-        <title id="title">TLLM*meet</title>
-        <link id="icon" rel="shortcut icon" href="../images/logo.svg" />
-        <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
-
-        <!-- Meta Information -->
-
         <meta charset="utf-8" />
-        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-        <meta
-            id="description"
-            name="description"
-            content="TLLM*meet, visioconférence privée."
-        />
-
-        <!-- https://ogp.me -->
-
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title id="title">TLLM*meet</title>
+        <link id="icon" rel="icon" href="../images/logo.svg" />
+        <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
+        <meta id="description" name="description" content="TLLM*meet, visioconférence privée." />
         <meta property="og:type" content="{{OG_TYPE}}" />
         <meta property="og:site_name" content="{{OG_SITE_NAME}}" />
         <meta property="og:title" content="{{OG_TITLE}}" />
         <meta property="og:description" content="{{OG_DESCRIPTION}}" />
         <meta property="og:image" content="{{OG_IMAGE}}" />
         <meta property="og:url" content="{{OG_URL}}" />
-
-        <!-- StyleSheet -->
-
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" />
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:400,600" />
-        <link rel="stylesheet" type="text/css" href="../css/landing.css" />
-        <link rel="stylesheet" type="text/css" href="../css/waitingRoom.css" />
-        <link rel="stylesheet" type="text/css" href="../css/Translate.css" />
-
-        <!-- Js scripts -->
-
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="{{OG_TITLE}}" />
+        <meta name="twitter:description" content="{{OG_DESCRIPTION}}" />
+        <meta name="twitter:image" content="{{OG_IMAGE}}" />
+        <link rel="stylesheet" href="../css/tllm-pages.css" />
         <script defer src="../js/Brand.js"></script>
-        <script async src="../js/Translate.js"></script>
-
-        <!-- xss -->
-
-        <script src="https://cdn.jsdelivr.net/npm/xss/dist/xss.min.js"></script>
-
-        <!-- axios -->
-
-        <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-
-        <script src="https://unpkg.com/animejs@3.0.1/lib/anime.min.js"></script>
-        <script src="https://unpkg.com/scrollreveal@4.0.0/dist/scrollreveal.min.js"></script>
+        <script defer src="../js/WhoAreYou.js"></script>
     </head>
-    <body class="is-boxed has-animations">
-        <div id="google_translate_element"></div>
-
-        <div class="body-wrap">
-            <header class="site-header reveal-from-top">
-                <div class="container">
-                    <div class="site-header-inner">
-                        <div class="brand header-brand">
-                            <h1 class="m-0">
-                                <a href="/">
-                                    <img
-                                        id="headerLogo"
-                                        src="../images/logo.svg"
-                                        alt="TLLM*meet"
-                                        width="32"
-                                        height="32"
-                                    />
-                                </a>
-                            </h1>
-                        </div>
-                    </div>
+    <body class="tllm-page">
+        <main class="tllm-main">
+            <div class="tllm-card">
+                <a class="tllm-brand" href="/"><img src="../images/logo.svg" alt="" /><span>TLLM*meet</span></a>
+                <h1 id="waitingRoomHeading">Cette visio n'a pas encore commencé</h1>
+                <p id="waitingRoomDescription">
+                    Gardez cette page ouverte : vous entrerez automatiquement dès que l'organisateur l'ouvrira.
+                </p>
+                <span id="waitingRoomName" class="tllm-chip" hidden></span>
+                <div id="waitingState" class="tllm-status" aria-live="polite">
+                    <span class="tllm-dot" aria-hidden="true"></span>
+                    <span id="waitingStatus">En attente de l'organisateur…</span>
                 </div>
-            </header>
-
-            <main class="site-content">
-                <section class="hero section center-card-section">
-                    <div class="container">
-                        <div class="hero-inner">
-                            <div
-                                class="waiting-card reveal-from-bottom"
-                                data-reveal-delay="150"
-                                role="status"
-                                aria-live="polite"
-                            >
-                                <div class="waiting-icon">
-                                    <i class="fa-solid fa-users"></i>
-                                </div>
-                                <h2 id="waitingRoomHeading" class="waiting-title">Waiting for host...</h2>
-                                <p id="waitingRoomDescription" class="waiting-description">
-                                    The meeting hasn't started yet.<br />
-                                    You'll join automatically when the host opens the room.
-                                </p>
-                                <div id="waitingRoomName" class="waiting-room-name" style="display: none">
-                                    <i class="fa-solid fa-door-open"></i>
-                                    <span id="waitingRoomNameText"></span>
-                                </div>
-                                <div class="waiting-spinner">
-                                    <div class="waiting-spinner-dot"></div>
-                                    <div class="waiting-spinner-dot"></div>
-                                    <div class="waiting-spinner-dot"></div>
-                                </div>
-                                <p class="waiting-status" id="waitingStatus" aria-live="assertive">
-                                    Checking room status...
-                                </p>
-                                <p class="waiting-elapsed" id="waitingElapsed">
-                                    <i class="fa-regular fa-clock"></i>
-                                    <span id="waitingElapsedText">Just started waiting</span>
-                                </p>
-                                <hr class="waiting-divider" />
-                                <div id="waitingAudioPlayer" class="waiting-audio-player" style="display: none">
-                                    <button id="waitingAudioBtn" class="waiting-audio-btn" title="Play music">
-                                        <i id="waitingAudioIcon" class="fa-solid fa-play"></i>
-                                    </button>
-                                    <div class="waiting-audio-bar">
-                                        <div id="waitingAudioProgress" class="waiting-audio-progress"></div>
-                                    </div>
-                                    <button id="waitingAudioMute" class="waiting-audio-btn" title="Mute">
-                                        <i id="waitingAudioMuteIcon" class="fa-solid fa-volume-high"></i>
-                                    </button>
-                                </div>
-                                <p class="host-login-link" id="hostLoginLink">
-                                    <span id="waitingRoomHostLink">Are you the host?</span>
-                                    <a id="loginLink" href="/login"
-                                        ><span id="waitingRoomLoginLink">Login here</span></a
-                                    >
-                                </p>
-                            </div>
-                            <div class="hero-figure anime-element">
-                                <svg class="placeholder" width="528" height="396" viewBox="0 0 528 396">
-                                    <rect width="528" height="396" style="fill: transparent" />
-                                </svg>
-                                <div class="hero-figure-box hero-figure-box-01" data-rotation="45deg"></div>
-                                <div class="hero-figure-box hero-figure-box-02" data-rotation="-45deg"></div>
-                                <div class="hero-figure-box hero-figure-box-03" data-rotation="0deg"></div>
-                                <div class="hero-figure-box hero-figure-box-04" data-rotation="-135deg"></div>
-                                <div class="hero-figure-box hero-figure-box-05"></div>
-                                <div class="hero-figure-box hero-figure-box-06"></div>
-                                <div class="hero-figure-box hero-figure-box-07"></div>
-                                <div class="hero-figure-box hero-figure-box-08" data-rotation="-22deg"></div>
-                                <div class="hero-figure-box hero-figure-box-09" data-rotation="-52deg"></div>
-                                <div class="hero-figure-box hero-figure-box-10" data-rotation="-50deg"></div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            </main>
-
-            <footer id="footer" class="site-footer">
-                <div class="container">
-                    <div class="site-footer-inner">
-                        <div class="brand footer-brand"></div>
-                        <ul class="footer-links list-reset">
-                            <li>
-                                <a href="/privacy">Confidentialité</a>
-                            </li>
-                            <li>
-                                <a target="_blank" rel="noopener noreferrer" href="https://github.com/miroslavpejic85/mirotalksfu"
-                                    >Basé sur MiroTalk SFU</a
-                                >
-                            </li>
-                        </ul>
-                        <div class="footer-copyright">TLLM*meet</div>
-                    </div>
-                </div>
-            </footer>
-        </div>
-        <script async src="../js/WhoAreYou.js"></script>
-        <script defer src="../js/Landing.js"></script>
+                <p id="waitingElapsed" class="tllm-muted"></p>
+                <p class="tllm-muted">
+                    <span id="waitingRoomHostLink">Vous organisez cette visio ?</span>
+                    <a id="waitingRoomLoginLink" href="/login">Se connecter</a>
+                </p>
+            </div>
+        </main>
+        <footer class="tllm-footer">
+            <a href="/privacy">Confidentialité</a>
+            <a href="https://github.com/miroslavpejic85/mirotalksfu" target="_blank" rel="noopener noreferrer"
+                >Basé sur MiroTalk SFU</a
+            >
+        </footer>
     </body>
 </html>

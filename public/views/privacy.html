@@ -1,193 +1,62 @@
 <!doctype html>
-<html lang="en" class="no-js">
+<html lang="fr">
     <head>
-        <!-- Title and Icon -->
-
-        <title id="title">TLLM*meet</title>
-        <link id="icon" rel="shortcut icon" href="../images/logo.svg" />
-        <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
-
-        <!-- Meta Information -->
-
         <meta charset="utf-8" />
-        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-        <meta
-            id="description"
-            name="description"
-            content="TLLM*meet, visioconférence privée."
-        />
-
-        <!-- StyleSheet -->
-
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:400,600" />
-        <link rel="stylesheet" type="text/css" href="../css/landing.css" />
-
-        <!-- Js scripts -->
-
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title id="title">TLLM*meet</title>
+        <link id="icon" rel="icon" href="../images/logo.svg" />
+        <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
+        <meta id="description" name="description" content="TLLM*meet, visioconférence privée." />
+        <link rel="stylesheet" href="../css/tllm-pages.css" />
         <script defer src="../js/Brand.js"></script>
-
-        <script src="https://unpkg.com/animejs@3.0.1/lib/anime.min.js"></script>
-        <script src="https://unpkg.com/scrollreveal@4.0.0/dist/scrollreveal.min.js"></script>
     </head>
-    <body class="is-boxed has-animations">
-        <div class="body-wrap">
-            <header class="site-header">
-                <div class="container">
-                    <div class="site-header-inner">
-                        <div class="brand header-brand">
-                            <h1 class="m-0">
-                                <a href="/">
-                                    <img
-                                        class="header-logo-image"
-                                        src="../images/logo.svg"
-                                        alt="TLLM*meet"
-                                    />
-                                    <!-- <img
-                                        class="header-logo-image reveal-from-left"
-                                        src="../images/logo.svg"
-                                        alt="TLLM*meet"
-                                        width="96"
-                                        height="auto"
-                                    /> -->
-                                </a>
-                            </h1>
-                        </div>
-                    </div>
-                </div>
-            </header>
+    <body class="tllm-page">
+        <main class="tllm-main">
+            <div class="tllm-card tllm-wide">
+                <a class="tllm-brand" href="/"><img src="../images/logo.svg" alt="" /><span>TLLM*meet</span></a>
+                <h1>Confidentialité</h1>
+                <p>TLLM*meet est un service de visioconférence privé, basé sur le logiciel libre MiroTalk SFU.</p>
 
-            <main>
-                <section class="hero">
-                    <div class="container">
-                        <div class="hero-inner">
-                            <div class="hero-copy">
-                                <h1 class="hero-title mt-0">Privacy Policy</h1>
-                                <p class="hero-paragraph" id="message"></p>
-                                <p class="hero-paragraph"><em>Last Updated: April 15, 2026</em></p>
+                <h2>Ce qui passe par le serveur</h2>
+                <ul>
+                    <li>Votre son, votre image et votre partage d'écran sont relayés aux autres participants pendant la visio. Rien n'est enregistré sur le serveur.</li>
+                    <li>Le nom que vous indiquez et les messages du chat sont transmis aux participants de la visio et ne sont pas conservés après la fin.</li>
+                    <li>Les fichiers partagés transitent par le serveur sans y être stockés.</li>
+                    <li>Le serveur tient un journal technique (heure de connexion, adresse IP, navigateur) pour son fonctionnement et sa sécurité.</li>
+                </ul>
 
-                                <p class="hero-paragraph">
-                                    Your privacy matters to us. This page explains in plain language what data
-                                    <strong>TLLM*meet</strong> ("we", "us", or "our") handles when you use our
-                                    service, and how we keep it safe. If anything is unclear, feel free to reach out —
-                                    our contact info is at the bottom.
-                                </p>
+                <h2>Enregistrement</h2>
+                <p>Un enregistrement ne peut être fait que par un participant, sur son propre appareil. Le serveur n'enregistre rien.</p>
 
-                                <h3>1. How It Works Under the Hood</h3>
-                                <p class="hero-paragraph">
-                                    <strong>TLLM*meet</strong> (based on MiroTalk SFU) is built on
-                                    <a href="https://mediasoup.org/" target="_blank">mediasoup</a>, a Selective
-                                    Forwarding Unit. In simple terms, the server acts as a smart relay: it receives your
-                                    audio and video and forwards it to the other people in the room. It does
-                                    <strong>not</strong> record, inspect, or process the content of your calls.
-                                    Everything is encrypted end-to-hop with <strong>SRTP</strong> and
-                                    <strong>DTLS</strong>, so your media stays private in transit.
-                                </p>
+                <h2>Transcription</h2>
+                <p>
+                    La transcription et les commandes vocales utilisent la reconnaissance vocale du navigateur. Dans Chrome
+                    et Edge, l'audio est alors traité par les serveurs de Google ou de Microsoft. Si l'organisateur a activé
+                    la transcription côté serveur (Whisper), l'audio est envoyé au service qu'il a configuré.
+                </p>
 
-                                <h3>2. What We Don't Collect</h3>
-                                <p class="hero-paragraph">
-                                    <strong>Everything is ephemeral.</strong> Display names, chat messages, and session
-                                    data only exist while the room is active — once it ends, they're gone. Nothing is
-                                    stored on our servers afterward.<br /><br />
-                                    <strong>Things we never touch:</strong> We don't record your calls, we don't ask for
-                                    payment info or government IDs, and we don't collect sensitive personal data. Your
-                                    conversations are yours.
-                                </p>
+                <h2>Cookies et stockage local</h2>
+                <ul>
+                    <li>Un seul cookie, réservé à l'organisateur connecté, pour maintenir sa session.</li>
+                    <li>Vos préférences (nom, micro, caméra) sont gardées dans votre navigateur.</li>
+                    <li>Aucune mesure d'audience, aucune publicité.</li>
+                </ul>
 
-                                <h3>3. Recordings Stay on Your Device</h3>
-                                <p class="hero-paragraph">
-                                    When you hit "Record", the file is created right inside
-                                    <strong>your browser</strong> (as a
-                                    <a href="https://developer.mozilla.org/en-US/docs/Web/API/Blob" target="_blank"
-                                        >Blob</a
-                                    >) and downloaded straight to your device. It is
-                                    <strong>never uploaded to our servers</strong>.<br /><br />
-                                    Server-side recording is <strong>disabled by default</strong>. If the host enables
-                                    it, the recordings are persistently stored on the server or cloud storage (if
-                                    configured). It is the host's responsibility to manage, secure, and delete those
-                                    recordings. Please remember: if you record other people, make sure you have their
-                                    consent — it's the right thing to do (and usually the law).
-                                </p>
+                <h2>Services tiers</h2>
+                <p>
+                    Certaines bibliothèques sont chargées depuis des CDN publics (jsDelivr, cdnjs, unpkg). Ces services voient
+                    votre adresse IP au moment du chargement de la page.
+                </p>
 
-                                <h3>4. Browser Storage</h3>
-                                <p class="hero-paragraph">
-                                    The app may store small bits of data in your browser (like your display name or room
-                                    preferences) to make things easier for you. This is purely functional — no tracking
-                                    involved.
-                                </p>
-
-                                <h3>5. How Long We Keep Data</h3>
-                                <p class="hero-paragraph">
-                                    Server logs are displayed in real-time on the console and are not stored on disk. By
-                                    default, only error-level logs are enabled. Chat messages and session data disappear
-                                    when the room ends — we don't hold onto them unless the host has explicitly set up
-                                    persistence.
-                                </p>
-
-                                <h3>6. How We Protect Your Data</h3>
-                                <p class="hero-paragraph">
-                                    We take security seriously: SRTP/DTLS encryption for all media, TLS/HTTPS for web
-                                    traffic, and hardened server infrastructure. That said, no system is bulletproof —
-                                    if you ever spot a vulnerability, please
-                                    <a href="mailto:miroslav.pejic.85@gmail.com">let us know</a> so we can fix it fast.
-                                </p>
-
-                                <h3>7. Third-Party Services</h3>
-                                <p class="hero-paragraph">
-                                    TLLM*meet may connect to external services like CDNs, or
-                                    other APIs. Each of those has its own privacy policy, and we encourage you to check
-                                    them out. We can't take responsibility for how third parties handle data on their
-                                    end.
-                                </p>
-
-                                <h3>8. Self-Hosted Instances</h3>
-                                <p class="hero-paragraph">
-                                    TLLM*meet is open-source — anyone can host their own instance. If you're using
-                                    someone else's self-hosted version, <strong>they</strong> are responsible for
-                                    privacy, not us. This policy only covers instances we operate directly.
-                                </p>
-
-                                <h3>9. Policy Updates</h3>
-                                <p class="hero-paragraph">
-                                    We may tweak this policy from time to time. When we do, we'll update the "Last
-                                    Updated" date at the top. If you keep using the service after a change, that counts
-                                    as acceptance. We recommend checking back occasionally.
-                                </p>
-
-                                <div>
-                                    <a class="button button-primary button-wide-mobile pulse" href="/newroom">AGREE</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            </main>
-
-            <footer id="footer" class="site-footer">
-                <div class="container">
-                    <div class="site-footer-inner">
-                        <div class="brand footer-brand">
-                            <a href="/">
-                                <img class="header-logo-image" src="../images/logo.svg" alt="Logo" />
-                            </a>
-                        </div>
-                        <ul class="footer-links list-reset">
-                            <li>
-                                <a href="/privacy">Confidentialité</a>
-                            </li>
-                            <li>
-                                <a target="_blank" rel="noopener noreferrer" href="https://github.com/miroslavpejic85/mirotalksfu"
-                                    >Basé sur MiroTalk SFU</a
-                                >
-                            </li>
-                        </ul>
-                        <div class="footer-copyright">TLLM*meet</div>
-                    </div>
-                </div>
-            </footer>
-        </div>
-
-        <script defer src="../js/Landing.js"></script>
+                <h2>Contact</h2>
+                <p>Pour toute question sur vos données, adressez-vous à l'organisateur de la visio.</p>
+            </div>
+        </main>
+        <footer class="tllm-footer">
+            <a href="/privacy">Confidentialité</a>
+            <a href="https://github.com/miroslavpejic85/mirotalksfu" target="_blank" rel="noopener noreferrer"
+                >Basé sur MiroTalk SFU</a
+            >
+        </footer>
     </body>
 </html>
