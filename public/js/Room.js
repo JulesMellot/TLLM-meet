@@ -4281,6 +4281,14 @@ function handleInputs() {
 // EMOJI PIKER
 // ####################################################
 
+// TLLM*meet: one pinned download of the emoji data shared by every picker (was 3 x @latest)
+function emojiMartData() {
+    window.tllmEmojiData ||= fetch('https://cdn.jsdelivr.net/npm/@emoji-mart/data@1.2.1/sets/15/native.json').then((res) =>
+        res.json()
+    );
+    return window.tllmEmojiData;
+}
+
 function toggleUsernameEmoji() {
     getId('usernameEmoji').classList.toggle('hidden');
 }
@@ -4289,6 +4297,7 @@ function handleUsernameEmojiPicker() {
     const pickerOptions = {
         theme: 'dark',
         onEmojiSelect: addEmojiToUsername,
+        data: emojiMartData,
     };
     const emojiUsernamePicker = new EmojiMart.Picker(pickerOptions);
     getId('usernameEmoji').appendChild(emojiUsernamePicker);
@@ -4312,6 +4321,7 @@ function handleChatEmojiPicker() {
     const pickerOptions = {
         theme: 'dark',
         onEmojiSelect: addEmojiToMsg,
+        data: emojiMartData,
     };
     const emojiPicker = new EmojiMart.Picker(pickerOptions);
     rc.getId('chatEmoji').appendChild(emojiPicker);
@@ -4427,6 +4437,7 @@ function handleRoomEmojiPicker() {
     const pickerRoomOptions = {
         theme: 'dark',
         onEmojiSelect: sendEmojiToRoom,
+        data: emojiMartData,
     };
     const emojiRoomPicker = new EmojiMart.Picker(pickerRoomOptions);
     emojiMartDiv.appendChild(emojiRoomPicker);
