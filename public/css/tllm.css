@@ -165,6 +165,12 @@ textarea,
     color: var(--tllm-accent-ink) !important;
 }
 
+/* Room.css paints these icons with the accent: on the accent background they disappeared */
+#bottomButtons #chatButton[aria-pressed='true'] i,
+#bottomButtons #participantsButton[aria-pressed='true'] i {
+    color: var(--tllm-accent-ink) !important;
+}
+
 #bottomButtons #exitButton {
     background: var(--tllm-danger) !important;
     width: 58px;
@@ -173,6 +179,10 @@ textarea,
 #bottomButtons #exitButton i,
 #bottomButtons #exitButton .red {
     color: #fff !important;
+}
+
+#bottomButtons > #exitDropdown > #exitButton:hover {
+    background: color-mix(in srgb, var(--tllm-danger) 85%, #000) !important;
 }
 
 /* Moved to the "Plus" menu or not part of the essentials */

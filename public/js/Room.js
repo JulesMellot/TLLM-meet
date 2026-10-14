@@ -4283,8 +4283,8 @@ function handleInputs() {
 
 // TLLM*meet: one pinned download of the emoji data shared by every picker (was 3 x @latest)
 function emojiMartData() {
-    window.tllmEmojiData ||= fetch('https://cdn.jsdelivr.net/npm/@emoji-mart/data@1.2.1/sets/15/native.json').then((res) =>
-        res.json()
+    window.tllmEmojiData ||= fetch('https://cdn.jsdelivr.net/npm/@emoji-mart/data@1.2.1/sets/15/native.json').then(
+        (res) => res.json()
     );
     return window.tllmEmojiData;
 }
@@ -9956,7 +9956,9 @@ function setupExitMenuHover() {
         setExitMenuOpen(false);
         exitButton.focus();
     });
-    if (!isDesktopDevice) return;
+    // TLLM*meet: the leave menu opens on click only (it used to pop up on mere hover)
+    return;
+    // eslint-disable-next-line no-unreachable
     let closeTimeout;
     const cancelClose = () => {
         if (!closeTimeout) return;
