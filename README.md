@@ -57,7 +57,7 @@ Coolify lit le fichier et affiche les variables dans son interface :
 | `JWT_SECRET`       | généré par Coolify (64 caractères), conservé entre deux déploiements                                                                   |
 | `SERVER_HOST_URL`  | **à remplir** : l'adresse publique, sans port, par exemple `https://meet.exemple.fr`                                                   |
 | `TRUST_PROXY`      | `2` par défaut (Cloudflare + proxy Coolify)                                                                                            |
-| `SFU_ANNOUNCED_IP` | vide par défaut : l'IP publique est détectée au démarrage                                                                              |
+| `SFU_ANNOUNCED_IP` | l'IP publique du VPS (recommandé). Vide : détectée au démarrage, et le serveur s'arrête si la détection échoue                         |
 | `UI_STYLE`         | `sobre` par défaut, ou `papier`                                                                                                        |
 | `SOURCE_URL`       | lien vers le code source de l'instance (AGPL-3.0, article 13)                                                                          |
 
@@ -86,6 +86,9 @@ npm install
 npm start      # https://localhost:3010
 npm test
 ```
+
+Sur un serveur Ubuntu sans Coolify, `sudo ./install.sh` construit l'image à partir du dépôt
+et demande le compte admin.
 
 En local, le serveur utilise le certificat de test de `app/ssl` ; le navigateur demande de l'accepter.
 
