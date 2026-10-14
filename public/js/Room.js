@@ -380,8 +380,6 @@ let breakoutRooms = [];
 let isVideoControlsOn = false;
 let isChatPasteTxt = false;
 let isChatMarkdownOn = false;
-let isChatGPTOn = false;
-let isDeepSeekOn = false;
 let isSpeechSynthesisSupported = 'speechSynthesis' in window;
 let joinRoomWithoutAudioVideo = true;
 let joinRoomWithScreen = false;
@@ -2470,12 +2468,7 @@ function updateChatCharCount() {
 }
 
 function updateChatEmptyNotice() {
-    const chatLists = [
-        getId('chatGPTMessages'),
-        getId('deepSeekMessages'),
-        getId('chatPublicMessages'),
-        getId('chatPrivateMessages'),
-    ].filter(Boolean);
+    const chatLists = [getId('chatPublicMessages'), getId('chatPrivateMessages')].filter(Boolean);
     const emptyNotice = getId('chatEmptyNotice');
     if (!emptyNotice) return;
     const hasMessages = chatLists.some((ul) => ul.children.length > 0);
@@ -2835,25 +2828,6 @@ function handleButtons() {
     };
     saveNotificationsBtn.onclick = () => {
         rc.saveNotifications();
-    };
-    tabVideoAIBtn.onclick = (e) => {
-        rc.openTab(e, 'tabVideoAI');
-        rc.loadVideoAIProviderData();
-    };
-    avatarVideoAIStart.onclick = async (e) => {
-        rc.stopSession();
-        await rc.handleVideoAI();
-        if (VideoAI.active && rc.getId('videoAIContainer')) {
-            rc.toggleMySettings();
-        }
-    };
-    avatarProvider.onchange = (e) => {
-        VideoAI.provider = e.target.value;
-        rc.loadVideoAIProviderData();
-    };
-    avatarQuality.selectedIndex = 1;
-    avatarQuality.onchange = (e) => {
-        VideoAI.quality = e.target.value;
     };
     speakerTestBtn.onclick = () => {
         playSpeaker(speakerSelect?.value, 'speaker');
@@ -4254,22 +4228,6 @@ function handleSelects() {
         rc.updateRoomModerator({ type: 'chat_cant_publicly', status: chatCantPublicly });
         rc.roomMessage('chat_cant_publicly', chatCantPublicly);
         localStorageSettings.moderator_chat_cant_publicly = chatCantPublicly;
-        lS.setSettings(localStorageSettings);
-        e.target.blur();
-    };
-    switchEveryoneCantChatChatGPT.onchange = (e) => {
-        const chatCantChatGPT = e.currentTarget.checked;
-        rc.updateRoomModerator({ type: 'chat_cant_chatgpt', status: chatCantChatGPT });
-        rc.roomMessage('chat_cant_chatgpt', chatCantChatGPT);
-        localStorageSettings.moderator_chat_cant_chatgpt = chatCantChatGPT;
-        lS.setSettings(localStorageSettings);
-        e.target.blur();
-    };
-    switchEveryoneCantChatDeepSeek.onchange = (e) => {
-        const chatCantDeepSeek = e.currentTarget.checked;
-        rc.updateRoomModerator({ type: 'chat_cant_deep_seek', status: chatCantDeepSeek });
-        rc.roomMessage('chat_cant_deep_seek', chatCantDeepSeek);
-        localStorageSettings.moderator_chat_cant_deep_seek = chatCantDeepSeek;
         lS.setSettings(localStorageSettings);
         e.target.blur();
     };
@@ -6122,32 +6080,6 @@ function setupQuickDeviceSwitchDropdowns() {
             }, 100);
         });
         videoMenu.appendChild(settingsBtn);
-
-        // Video AI button (mirror the Video AI settings tab: show only when that tab is visible)
-        const videoAITabBtn = getId('tabVideoAIBtn');
-        const videoAITabVisible =
-            VideoAI.enabled &&
-            videoAITabBtn &&
-            !videoAITabBtn.classList.contains('hidden') &&
-            videoAITabBtn.style.display !== 'none';
-        if (videoAITabVisible) {
-            appendMenuDivider(videoMenu);
-            const videoAIBtn = document.createElement('button');
-            videoAIBtn.type = 'button';
-            videoAIBtn.className = 'device-menu-action-btn';
-            const videoAIIcon = document.createElement('i');
-            videoAIIcon.className = 'fas fa-robot';
-            videoAIBtn.appendChild(videoAIIcon);
-            videoAIBtn.appendChild(document.createTextNode(' Open Video AI'));
-            videoAIBtn.addEventListener('click', () => {
-                rc.toggleMySettings();
-                // Simulate tab click to open video AI tab
-                setTimeout(() => {
-                    tabVideoAIBtn.click();
-                }, 100);
-            });
-            videoMenu.appendChild(videoAIBtn);
-        }
     }
 
     function buildAudioMenu() {
@@ -7987,44 +7919,6 @@ function getParticipantsList(peers) {
                 onClick,
                 avatarSrc,
             },
-        });
-    }
-
-    const chatGPT = BUTTONS.chat.chatGPT !== undefined ? BUTTONS.chat.chatGPT : true;
-
-    // CHAT-GPT
-    if (chatGPT) {
-        const chatgpt_active = rc.chatPeerName === 'ChatGPT' ? ' active' : '';
-
-        li = renderParticipantItem({
-            itemId: 'ChatGPT',
-            toId: 'ChatGPT',
-            toName: 'ChatGPT',
-            itemClass: `clearfix${chatgpt_active}`,
-            onClick: "rc.showPeerAboutAndMessages(this.id, 'ChatGPT', '', event)",
-            avatarSrc: image.chatgpt,
-            name: 'ChatGPT',
-            nameSuffix: ' <span class="chat-peer-badge assistant-green">Assistant</span>',
-            statusHtml: renderParticipantStatus('Private assistant replies'),
-        });
-    }
-
-    const deepSeek = BUTTONS.chat.deepSeek !== undefined ? BUTTONS.chat.deepSeek : true;
-
-    // DEEP-SEEK
-    if (deepSeek) {
-        const deepSeek_active = rc.chatPeerName === 'DeepSeek' ? ' active' : '';
-
-        li += renderParticipantItem({
-            itemId: 'DeepSeek',
-            toId: 'DeepSeek',
-            toName: 'DeepSeek',
-            itemClass: `clearfix${deepSeek_active}`,
-            onClick: "rc.showPeerAboutAndMessages(this.id, 'DeepSeek', '', event)",
-            avatarSrc: image.deepSeek,
-            name: 'DeepSeek',
-            nameSuffix: ' <span class="chat-peer-badge assistant">Assistant</span>',
-            statusHtml: renderParticipantStatus('Private assistant replies'),
         });
     }
 

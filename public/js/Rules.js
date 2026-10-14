@@ -58,7 +58,6 @@ let BUTTONS = {
         tabNotificationsBtn: true, // presenter
         tabNetworkBtn: true,
         tabModerator: true, // presenter
-        tabVideoAIBtn: true, // presenter
         tabRecording: true,
         host_only_recording: true, // presenter
         pushToTalk: true,
@@ -122,8 +121,6 @@ let BUTTONS = {
         chatEmojiButton: true,
         chatMarkdownButton: true,
         chatSpeechStartButton: true,
-        chatGPT: true,
-        deepSeek: true,
         chatTyping: true,
     },
     poll: {
@@ -197,13 +194,9 @@ function handleRules(isPresenter, roomSetup = true) {
         hide(transcriptionAllLi);
         hide(breakoutRoomButton);
 
-        // VideoAI is presenter-only
-        VideoAI.enabled = false;
-        elemDisplay('tabVideoAIBtn', false);
-
         // If a presenter-only settings tab was open, reset to the default Room tab so its
         // content isn't left visible after the tab button is hidden.
-        const openPresenterTab = ['tabModerator', 'tabRTMPStreaming', 'tabNotifications', 'tabVideoAI'].some((id) => {
+        const openPresenterTab = ['tabModerator', 'tabRTMPStreaming', 'tabNotifications'].some((id) => {
             const el = rc.getId(id);
             return el && el.style.display === 'block';
         });
@@ -259,16 +252,6 @@ function handleRules(isPresenter, roomSetup = true) {
             switchHostOnlyRecording.checked = hostOnlyRecording;
             loadModeratorDataFromRoom();
         }
-        // VideoAI is presenter-only and shown only when enabled and at least one provider is available
-        const videoAIProviders = rc.videoAIProviders?.available || {};
-        const hasVideoAIProvider = !!(videoAIProviders.liveavatar || videoAIProviders.anam);
-        if (rc.videoAIEnabled && hasVideoAIProvider && BUTTONS.settings.tabVideoAIBtn) {
-            VideoAI.enabled = true;
-            elemDisplay('tabVideoAIBtn', true, 'flex');
-        } else {
-            VideoAI.enabled = false;
-            elemDisplay('tabVideoAIBtn', false);
-        }
     }
     // main. settings...
     BUTTONS.main.shareButton ? show(shareButton) : hide(shareButton);
@@ -322,8 +305,6 @@ function loadModeratorData() {
     switchEveryoneCantDrawScreenAnnotations.checked = localStorageSettings.moderator_screen_annotations_cant_draw;
     switchEveryoneCantChatPrivately.checked = localStorageSettings.moderator_chat_cant_privately;
     switchEveryoneCantChatPublicly.checked = localStorageSettings.moderator_chat_cant_publicly;
-    switchEveryoneCantChatChatGPT.checked = localStorageSettings.moderator_chat_cant_chatgpt;
-    switchEveryoneCantChatDeepSeek.checked = localStorageSettings.moderator_chat_cant_deep_seek;
     switchEveryoneCantMediaSharing.checked = localStorageSettings.moderator_media_cant_sharing;
     switchEveryoneCantPolls.checked = localStorageSettings.moderator_polls_cant_create;
     switchDisconnectAllOnLeave.checked = localStorageSettings.moderator_disconnect_all_on_leave;
@@ -346,8 +327,6 @@ function loadModeratorDataFromRoom() {
     switchEveryoneCantDrawScreenAnnotations.checked = !!moderator.screen_annotations_cant_draw;
     switchEveryoneCantChatPrivately.checked = !!moderator.chat_cant_privately;
     switchEveryoneCantChatPublicly.checked = !!moderator.chat_cant_publicly;
-    switchEveryoneCantChatChatGPT.checked = !!moderator.chat_cant_chatgpt;
-    switchEveryoneCantChatDeepSeek.checked = !!moderator.chat_cant_deep_seek;
     switchEveryoneCantMediaSharing.checked = !!moderator.media_cant_sharing;
     switchEveryoneCantPolls.checked = !!moderator.polls_cant_create;
 }
@@ -366,8 +345,6 @@ function updateModeratorSwitchUI(type, status) {
         screen_annotations_cant_draw: switchEveryoneCantDrawScreenAnnotations,
         chat_cant_privately: switchEveryoneCantChatPrivately,
         chat_cant_publicly: switchEveryoneCantChatPublicly,
-        chat_cant_chatgpt: switchEveryoneCantChatChatGPT,
-        chat_cant_deep_seek: switchEveryoneCantChatDeepSeek,
         media_cant_sharing: switchEveryoneCantMediaSharing,
         polls_cant_create: switchEveryoneCantPolls,
     };
@@ -386,8 +363,6 @@ function getModeratorData() {
         screen_annotations_cant_draw: switchEveryoneCantDrawScreenAnnotations.checked,
         chat_cant_privately: switchEveryoneCantChatPrivately.checked,
         chat_cant_publicly: switchEveryoneCantChatPublicly.checked,
-        chat_cant_chatgpt: switchEveryoneCantChatChatGPT.checked,
-        chat_cant_deep_seek: switchEveryoneCantChatDeepSeek.checked,
         media_cant_sharing: switchEveryoneCantMediaSharing.checked,
         polls_cant_create: switchEveryoneCantPolls.checked,
     };

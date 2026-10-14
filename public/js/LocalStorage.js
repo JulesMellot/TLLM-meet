@@ -30,8 +30,6 @@ class LocalStorage {
             moderator_screen_annotations_cant_draw: false, // Only presenter can draw screen annotations
             moderator_chat_cant_privately: false, // Everyone can't chat privately, only Public chat allowed
             moderator_chat_cant_publicly: false, // Everyone can't chat publicly, only Private chat allowed
-            moderator_chat_cant_chatgpt: false, // Everyone can't chat with ChatGPT
-            moderator_chat_cant_deep_seek: false, // Everyone can't chat with DeepSeek
             moderator_media_cant_sharing: false, // Everyone can't share media
             moderator_polls_cant_create: false, // Only presenter can create/edit/delete polls
             moderator_disconnect_all_on_leave: false, // Disconnect all participants on leave room
