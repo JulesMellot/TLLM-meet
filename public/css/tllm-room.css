@@ -1506,3 +1506,8 @@ body.tllm-cannot-share #editorRoom .ql-toolbar,
 body.tllm-cannot-share #editorHeader button:not(#editorCloseBtn) {
     display: none !important;
 }
+
+/* The interface is in French only: no language picker (it listed flag emojis) */
+body.tllm-room #tabLanguagesBtn {
+    display: none !important;
+}

@@ -862,13 +862,13 @@ async function addChild(device, els) {
         option.value = device.deviceId;
         switch (kind) {
             case 'videoinput':
-                option.innerText = `📹 ` + device.label || `📹 camera ${el.length + 1}`;
+                option.innerText = device.label || `Caméra ${el.length + 1}`;
                 break;
             case 'audioinput':
-                option.innerText = `🎤 ` + device.label || `🎤 microphone ${el.length + 1}`;
+                option.innerText = device.label || `Micro ${el.length + 1}`;
                 break;
             case 'audiooutput':
-                option.innerText = `🔈 ` + device.label || `🔈 speaker ${el.length + 1}`;
+                option.innerText = device.label || `Haut-parleur ${el.length + 1}`;
                 break;
             default:
                 break;

@@ -848,7 +848,6 @@
         foot.innerHTML = `
             <div class="tllm-to-row"><label for="tllmTo">À</label><select id="tllmTo">${options}</select></div>
             <div class="tllm-compose">
-                <button type="button" class="tllm-icon-btn" id="tllmEmojiBtn" aria-label="Insérer un emoji">${icon('far fa-face-smile')}</button>
                 ${canShare() && isShown('fileShareExtraButton') ? `<button type="button" class="tllm-icon-btn" id="tllmAttachBtn" aria-label="Envoyer un fichier">${icon('fas fa-paperclip')}</button>` : ''}
                 <textarea id="tllmChatInput" rows="1" placeholder="Écrire un message…" aria-label="Message" maxlength="4000"></textarea>
                 <button type="button" class="tllm-send" id="tllmSendBtn" aria-label="Envoyer">${icon('fas fa-paper-plane')}</button>
@@ -867,19 +866,6 @@
         input.oninput = () => {
             input.style.height = 'auto';
             input.style.height = Math.min(input.scrollHeight, 120) + 'px';
-        };
-        $('tllmEmojiBtn').onclick = (e) => {
-            const html = `<div class="tllm-reactions">${['👍', '🙂', '😂', '🙏', '👏', '❤️', '🎉', '✅']
-                .map((em) => `<button type="button" data-insert="${em}" aria-label="${em}">${em}</button>`)
-                .join('')}</div>`;
-            const pop = showPop(e.currentTarget, html, { align: 'left', key: 'chat-emoji' });
-            pop?.querySelectorAll('[data-insert]').forEach((b) => {
-                b.onclick = () => {
-                    input.value += b.dataset.insert;
-                    closePop();
-                    input.focus();
-                };
-            });
         };
         if ($('tllmAttachBtn')) $('tllmAttachBtn').onclick = () => clickId('fileShareExtraButton');
     }
