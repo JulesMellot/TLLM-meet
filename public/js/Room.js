@@ -8651,6 +8651,7 @@ function showImageSelector() {
     function createImage(id, src, tooltip, index, clickHandler, target = imageGrid) {
         const img = document.createElement('img');
         img.id = id;
+        img.loading = 'lazy'; // TLLM*meet: only download thumbnails when the grid is shown
         img.src = src;
         img.dataset.index = index;
         img.addEventListener('click', clickHandler);
