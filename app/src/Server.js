@@ -2230,6 +2230,9 @@ function startServer() {
                 is_presenter: grant,
                 from_peer_name: data.from_peer_name,
             });
+
+            // The new role changes what the target sees in polls (who voted what)
+            if (room.thereIsPolls()) sendPolls(room, data.peer_id);
         });
 
         socket.on('updatePeerInfo', (dataObject) => {
@@ -3177,142 +3180,58 @@ function startServer() {
             }
         });
 
+        // TLLM*meet polls: presenters (the admin, and anyone the admin promoted) create, edit and
+        // delete polls; everyone votes. Identity comes from the server, never from the payload.
         socket.on('createPoll', (dataObject) => {
             if (!roomExists(socket)) return;
-
-            const data = checkXSS(dataObject);
-
-            if (!Validator.isValidData(data)) return;
-
-            const { question, options } = data;
-
             const room = getRoom(socket);
+            if (!isSocketPresenter(socket, room)) return log.debug('[Poll] createPoll denied: not a presenter');
 
-            // Enforce the moderator "only presenter can create/edit/delete polls" rule server-side.
-            if (room._moderator && room._moderator.polls_cant_create) {
-                const peer = room.getPeer(socket.id);
-                const isPresenter = isPeerPresenter(
-                    socket.room_id,
-                    socket.id,
-                    peer?.peer_info?.peer_name,
-                    peer?.peer_info?.peer_uuid
-                );
-                if (!isPresenter) {
-                    log.debug('createPoll blocked by moderator rule (polls_cant_create)', {
-                        peer_name: peer?.peer_info?.peer_name,
-                    });
-                    return;
-                }
-            }
+            const input = parsePollInput(checkXSS(dataObject));
+            if (!input) return log.debug('[Poll] createPoll invalid data');
 
-            const newPoll = {
-                question: question,
-                options: options,
-                voters: new Map(),
-            };
-
-            const roomPolls = room.getPolls();
-
-            roomPolls.push(newPoll);
-            room.sendToAll('updatePolls', room.convertPolls(roomPolls));
-            log.debug('[Poll] createPoll', roomPolls);
+            room.createPoll(input.question, input.options);
+            sendPolls(room);
         });
 
         socket.on('vote', (dataObject) => {
             if (!roomExists(socket)) return;
-
             const data = checkXSS(dataObject);
-
-            if (!Validator.isValidData(data)) return;
+            if (!Validator.isValidData(data) || typeof data.option !== 'string') return;
 
             const { room, peer } = getRoomAndPeer(socket);
+            if (!peer) return;
 
-            const { peer_name } = peer || socket.id;
-
-            const roomPolls = room.getPolls();
-
-            const poll = roomPolls[data.pollIndex];
-            if (poll) {
-                poll.voters.set(peer_name, data.option);
-                room.sendToAll('updatePolls', room.convertPolls(roomPolls));
-                log.debug('[Poll] vote', roomPolls);
-            }
+            const ref = typeof data.pollId === 'string' ? data.pollId : data.pollIndex;
+            const name = peer.peer_info?.peer_name || peer.peer_name;
+            if (room.votePoll(ref, socket.id, name, data.option)) sendPolls(room);
         });
 
         socket.on('updatePoll', () => {
             if (!roomExists(socket)) return;
-
             const room = getRoom(socket);
-
-            const roomPolls = room.getPolls();
-
-            if (roomPolls.length > 0) {
-                room.sendToAll('updatePolls', room.convertPolls(roomPolls));
-                log.debug('[Poll] updatePoll', roomPolls);
-            }
+            if (room.thereIsPolls()) sendPolls(room, socket.id);
         });
 
         socket.on('editPoll', (dataObject) => {
             if (!roomExists(socket)) return;
+            const room = getRoom(socket);
+            if (!isSocketPresenter(socket, room)) return log.debug('[Poll] editPoll denied: not a presenter');
 
             const data = checkXSS(dataObject);
-
-            if (!Validator.isValidData(data)) return;
-
-            const { index, question, options } = data;
-
-            const room = getRoom(socket);
-
-            // Enforce the moderator "only presenter can create/edit/delete polls" rule server-side.
-            if (room._moderator && room._moderator.polls_cant_create) {
-                const peer = room.getPeer(socket.id);
-                const isPresenter = isPeerPresenter(
-                    socket.room_id,
-                    socket.id,
-                    peer?.peer_info?.peer_name,
-                    peer?.peer_info?.peer_uuid
-                );
-                if (!isPresenter) {
-                    log.debug('editPoll blocked by moderator rule (polls_cant_create)', {
-                        peer_name: peer?.peer_info?.peer_name,
-                    });
-                    return;
-                }
-            }
-
-            const roomPolls = room.getPolls();
-
-            if (roomPolls[index]) {
-                roomPolls[index].question = question;
-                roomPolls[index].options = options;
-                room.sendToAll('updatePolls', roomPolls);
-                log.debug('[Poll] editPoll', roomPolls);
-            }
+            const input = parsePollInput(data);
+            const ref = typeof data?.pollId === 'string' ? data.pollId : data?.index;
+            if (input && room.editPoll(ref, input.question, input.options)) sendPolls(room);
         });
 
-        socket.on('deletePoll', async (data) => {
+        socket.on('deletePoll', (dataObject) => {
             if (!roomExists(socket)) return;
-
-            const { index, peer_name, peer_uuid } = checkXSS(data);
-
             const room = getRoom(socket);
+            if (!isSocketPresenter(socket, room)) return log.debug('[Poll] deletePoll denied: not a presenter');
 
-            // Enforce the moderator "only presenter can create/edit/delete polls" rule server-side.
-            if (room._moderator && room._moderator.polls_cant_create) {
-                const isPresenter = isPeerPresenter(socket.room_id, socket.id, peer_name, peer_uuid);
-                if (!isPresenter) {
-                    log.debug('deletePoll blocked by moderator rule (polls_cant_create)', { peer_name });
-                    return;
-                }
-            }
-
-            const roomPolls = room.getPolls();
-
-            if (roomPolls[index]) {
-                roomPolls.splice(index, 1);
-                room.sendToAll('updatePolls', roomPolls);
-                log.debug('[Poll] deletePoll', roomPolls);
-            }
+            const data = checkXSS(dataObject);
+            const ref = typeof data?.pollId === 'string' ? data.pollId : data?.index;
+            if (room.deletePoll(ref)) sendPolls(room);
         });
 
         // Room collaborative editor
@@ -3541,6 +3460,44 @@ function startServer() {
         if (Number.isNaN(value)) return NaN;
         if (typeof structuredClone === 'function') return structuredClone(value);
         return JSON.parse(JSON.stringify(value));
+    }
+
+    // TLLM*meet: presenter check from the server-side peer, never from client-supplied names
+    function isSocketPresenter(socket, room) {
+        const peer = room?.getPeer(socket.id);
+        if (!peer) return false;
+        return isPeerPresenter(
+            socket.room_id,
+            socket.id,
+            peer.peer_info?.peer_name ?? peer.peer_name,
+            peer.peer_info?.peer_uuid ?? peer.peer_uuid
+        );
+    }
+
+    // Each participant gets its own view: totals for all, who voted what for presenters only
+    function sendPolls(room, onlyPeerId = null) {
+        for (const [peerId, peer] of room.peers) {
+            if (onlyPeerId && peerId !== onlyPeerId) continue;
+            const withVoters = isPeerPresenter(
+                room.id,
+                peerId,
+                peer.peer_info?.peer_name ?? peer.peer_name,
+                peer.peer_info?.peer_uuid ?? peer.peer_uuid
+            );
+            room.sendTo(peerId, 'updatePolls', room.pollsView(peerId, withVoters));
+        }
+    }
+
+    // Question: 1-300 characters. Options: 2-10 distinct, non-empty, up to 200 characters each.
+    function parsePollInput(data) {
+        if (!data || typeof data !== 'object') return null;
+        const question = typeof data.question === 'string' ? data.question.trim() : '';
+        if (!question || question.length > 300 || !Array.isArray(data.options)) return null;
+        const options = data.options.map((option) => (typeof option === 'string' ? option.trim() : ''));
+        if (options.length < 2 || options.length > 10) return null;
+        if (options.some((option) => !option || option.length > 200)) return null;
+        if (new Set(options).size !== options.length) return null;
+        return { question, options };
     }
 
     function isPeerPresenter(room_id, peer_id, peer_name, peer_uuid) {

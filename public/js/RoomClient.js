@@ -835,6 +835,9 @@ class RoomClient {
                 this.whisperEnabled ? show('transcriptWhisperLi') : hide('transcriptWhisperLi');
             }
             // There is polls
+            // TLLM*meet: polls already running at join are the initial state (the panel stays closed)
+            this.knownPollIds = new Set();
+            this.pollsInitialSync = !!room.thereIsPolls;
             if (room.thereIsPolls) {
                 this.socket.emit('updatePoll');
             }
@@ -7745,6 +7748,7 @@ class RoomClient {
     // ##############################################
 
     togglePoll() {
+        this.updatePollFormVisibility();
         pollRoom.classList.toggle('show');
         if (!this.isPollOpen) {
             this.isPollMaximized = false;
@@ -8093,10 +8097,26 @@ class RoomClient {
     }
 
     pollsUpdate(polls) {
-        if (!this.isPollOpen) this.togglePoll();
+        // TLLM*meet: open the panel only when a new poll appears (not on every vote, not on join)
+        this.knownPollIds = this.knownPollIds || new Set();
+        const hasNewPoll = polls.some((poll) => !this.knownPollIds.has(poll.id));
+        polls.forEach((poll) => this.knownPollIds.add(poll.id));
+        if (this.pollsInitialSync) {
+            this.pollsInitialSync = false;
+        } else if (hasNewPoll && !this.isPollOpen) {
+            this.togglePoll();
+        }
+        this.updatePollFormVisibility();
 
         pollsContainer.innerHTML = '';
+        if (polls.length === 0 && !isPresenter) {
+            const empty = document.createElement('p');
+            empty.className = 'poll-empty';
+            empty.textContent = "Aucun sondage pour l'instant.";
+            pollsContainer.appendChild(empty);
+        }
         polls.forEach((poll, index) => {
+            this.pollSelectedOptions[index] = poll.myVote || undefined;
             const pollDiv = document.createElement('div');
             pollDiv.className = 'poll';
 
@@ -8122,22 +8142,36 @@ class RoomClient {
 
                 input.addEventListener('change', () => {
                     this.pollSelectedOptions[index] = option;
-                    this.socket.emit('vote', { pollIndex: index, option });
+                    this.socket.emit('vote', { pollId: poll.id, pollIndex: index, option });
                 });
 
                 const label = document.createElement('label');
                 label.textContent = option;
                 label.htmlFor = input.id;
 
+                // TLLM*meet: live results (count and share of votes) for everyone
+                const count = poll.counts?.[optionIndex] || 0;
+                const percent = poll.total ? Math.round((count / poll.total) * 100) : 0;
+                optionDiv.style.setProperty('--tllm-poll-pct', `${percent}%`);
+                const result = document.createElement('span');
+                result.className = 'poll-result';
+                result.textContent = `${count} · ${percent} %`;
+
                 optionDiv.appendChild(input);
                 optionDiv.appendChild(label);
+                optionDiv.appendChild(result);
                 options.appendChild(optionDiv);
             });
             pollDiv.appendChild(options);
 
-            // Only the presenters
-            // if (isPresenter) {
+            const total = document.createElement('p');
+            total.className = 'poll-total';
+            total.textContent = poll.total === 1 ? '1 vote' : `${poll.total || 0} votes`;
+            pollDiv.appendChild(total);
+
+            // Only presenters can see who voted what, edit and delete (also enforced by the server)
             const pollButtonsDiv = document.createElement('div');
+            pollButtonsDiv.hidden = !isPresenter;
             pollButtonsDiv.className = 'poll-card-actions';
 
             // Toggle voters button
@@ -8181,11 +8215,10 @@ class RoomClient {
                         const newQuestion = document.getElementById('swal-input-question').value;
                         const newOptions = this.getPollOptions(poll.options.length);
                         this.socket.emit('editPoll', {
+                            pollId: poll.id,
                             index,
                             question: newQuestion,
                             options: newOptions,
-                            peer_name: this.peer_name,
-                            peer_uuid: this.peer_uuid,
                         });
                     },
                     showClass: { popup: 'animate__animated animate__fadeInDown' },
@@ -8217,7 +8250,7 @@ class RoomClient {
                     hideClass: { popup: 'animate__animated animate__fadeOutUp' },
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        this.socket.emit('deletePoll', { index, peer_name: this.peer_name, peer_uuid: this.peer_uuid });
+                        this.socket.emit('deletePoll', { pollId: poll.id, index });
                     }
                 });
             });
@@ -8225,6 +8258,7 @@ class RoomClient {
 
             const pollFooter = document.createElement('div');
             pollFooter.className = 'poll-card-footer';
+            pollFooter.hidden = !isPresenter;
 
             // Add thematic break
             const hr = document.createElement('hr');
@@ -8259,13 +8293,8 @@ class RoomClient {
     pollCreateNewForm(e) {
         e.preventDefault();
 
-        if (this._moderator.polls_cant_create && !isPresenter) {
-            return userLog(
-                'warning',
-                'The moderator does not allow non-presenters to create or edit polls',
-                'top-end',
-                6000
-            );
+        if (!isPresenter) {
+            return userLog('warning', 'Seul le présentateur peut créer un sondage', 'top-end', 6000);
         }
 
         const question = e.target.question.value;
@@ -8278,6 +8307,12 @@ class RoomClient {
         optionsContainer.innerHTML = '';
         optionsContainer.appendChild(this.createPollOptionInput(1));
         optionsContainer.appendChild(this.createPollOptionInput(2));
+    }
+
+    // TLLM*meet: only presenters see the poll creation form
+    updatePollFormVisibility() {
+        const pollForm = document.getElementById('pollForm');
+        if (pollForm) pollForm.hidden = !isPresenter;
     }
 
     pollAddOptions() {
@@ -11465,6 +11500,7 @@ class RoomClient {
         // My own role changed
         if (peer_id === this.peer_id) {
             isPresenter = is_presenter;
+            this.updatePollFormVisibility();
             this.peer_info.peer_presenter = is_presenter;
             const presenterEl = this.getId('isUserPresenter');
             if (presenterEl) presenterEl.innerText = is_presenter;

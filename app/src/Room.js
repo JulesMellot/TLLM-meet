@@ -135,10 +135,71 @@ module.exports = class Room {
         return this.polls;
     }
 
-    convertPolls(polls) {
-        return polls.map((poll) => {
-            const voters = poll.voters ? Object.fromEntries(poll.voters.entries()) : {};
-            return { ...poll, voters };
+    // TLLM*meet: polls have a stable id and votes are keyed by participant (socket id), not by
+    // display name, so two participants with the same name cannot overwrite each other.
+    createPoll(question, options) {
+        const poll = { id: uuidv4(), question, options, voters: new Map(), closed: false };
+        this.polls.push(poll);
+        return poll;
+    }
+
+    findPoll(ref) {
+        if (typeof ref === 'string') return this.polls.find((poll) => poll.id === ref) || null;
+        return Number.isInteger(ref) ? this.polls[ref] || null : null;
+    }
+
+    votePoll(ref, peerId, peerName, option) {
+        const poll = this.findPoll(ref);
+        if (!poll || poll.closed || !poll.options.includes(option)) return false;
+        poll.voters.set(peerId, { name: peerName, option });
+        return true;
+    }
+
+    editPoll(ref, question, options) {
+        const poll = this.findPoll(ref);
+        if (!poll) return false;
+        poll.question = question;
+        poll.options = options;
+        // Votes for an option that no longer exists are dropped
+        for (const [peerId, vote] of poll.voters) {
+            if (!options.includes(vote.option)) poll.voters.delete(peerId);
+        }
+        return true;
+    }
+
+    deletePoll(ref) {
+        const poll = this.findPoll(ref);
+        if (!poll) return false;
+        this.polls.splice(this.polls.indexOf(poll), 1);
+        return true;
+    }
+
+    // What one participant sees: totals for everyone, who voted what only for presenters
+    pollsView(peerId, withVoters = false) {
+        return this.polls.map((poll) => {
+            const counts = poll.options.map(() => 0);
+            const voters = {};
+            let myVote = null;
+            for (const [voterId, { name, option }] of poll.voters) {
+                const index = poll.options.indexOf(option);
+                if (index >= 0) counts[index]++;
+                if (voterId === peerId) myVote = option;
+                if (withVoters) {
+                    let label = name || '?';
+                    for (let n = 2; Object.prototype.hasOwnProperty.call(voters, label); n++) label = `${name} (${n})`;
+                    voters[label] = option;
+                }
+            }
+            return {
+                id: poll.id,
+                question: poll.question,
+                options: [...poll.options],
+                counts,
+                total: counts.reduce((sum, count) => sum + count, 0),
+                myVote,
+                closed: poll.closed,
+                voters,
+            };
         });
     }
 

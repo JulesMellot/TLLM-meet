@@ -453,3 +453,45 @@ textarea,
     font-weight: 900 !important;
     margin-right: 0.5em;
 }
+
+/* ---- Polls: live results (bar behind each option), presenter-only controls ---- */
+#pollsContainer .poll-option-row {
+    overflow: hidden;
+}
+#pollsContainer .poll-option-row::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--tllm-poll-pct, 0%);
+    background: var(--tllm-accent-soft);
+    transition: width 0.3s ease;
+    pointer-events: none;
+}
+#pollsContainer .poll-option-row label,
+#pollsContainer .poll-option-row input {
+    z-index: 1;
+}
+#pollsContainer .poll-option-row label {
+    position: relative;
+}
+#pollsContainer .poll-result {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    padding-right: 12px;
+    color: var(--tllm-text-2);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    pointer-events: none;
+}
+#pollsContainer .poll-total,
+#pollsContainer .poll-empty {
+    margin: 8px 2px 0;
+    color: var(--tllm-text-2);
+    font-size: 0.75rem;
+}
+/* Polls are always presenter-only in TLLM*meet: the moderator switch has no purpose */
+#everyoneCantPollsBtn {
+    display: none !important;
+}

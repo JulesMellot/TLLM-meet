@@ -357,6 +357,108 @@ describe('Only the admin can create a meeting (integration)', function () {
         });
     });
 
+    describe('Polls', () => {
+        const ROOM = 'sondage-' + crypto.randomBytes(3).toString('hex');
+        let admin;
+        let bob;
+        let bob2;
+        const latest = new Map(); // socket -> last updatePolls payload
+
+        const track = (socket) => socket.on('updatePolls', (polls) => latest.set(socket, polls));
+        const pollsOf = (socket) => latest.get(socket);
+
+        before(async () => {
+            const cookie = await login(ADMIN);
+            admin = await connect(cookie);
+            sockets.push(admin);
+            track(admin);
+            await joinRoom(admin, ROOM, peerInfo('Jules'), (await createToken(ROOM, cookie)).json.token);
+            bob = await connect();
+            bob2 = await connect();
+            sockets.push(bob, bob2);
+            track(bob);
+            track(bob2);
+            await joinRoom(bob, ROOM, peerInfo('Bob'));
+            await joinRoom(bob2, ROOM, peerInfo('Carol'));
+        });
+
+        it('ignores a poll created by a guest', async () => {
+            bob.emit('createPoll', { question: 'Guest poll?', options: ['a', 'b'] });
+            await wait(300);
+            assert.equal(pollsOf(admin), undefined);
+            assert.equal(pollsOf(bob), undefined);
+        });
+
+        it('rejects invalid polls from the admin (empty, single or duplicate options)', async () => {
+            admin.emit('createPoll', { question: '   ', options: ['a', 'b'] });
+            admin.emit('createPoll', { question: 'Q?', options: ['only one'] });
+            admin.emit('createPoll', { question: 'Q?', options: ['same', 'same'] });
+            admin.emit('createPoll', { question: 'Q?', options: 'not an array' });
+            await wait(300);
+            assert.equal(pollsOf(admin), undefined);
+        });
+
+        it('lets the admin create a poll that everyone receives, with totals', async () => {
+            admin.emit('createPoll', { question: 'On mange où ?', options: ['Pizza', 'Sushi'] });
+            await wait(300);
+            for (const socket of [admin, bob, bob2]) {
+                const [poll] = pollsOf(socket);
+                assert.equal(poll.question, 'On mange où ?');
+                assert.deepEqual(poll.options, ['Pizza', 'Sushi']);
+                assert.deepEqual(poll.counts, [0, 0]);
+                assert.equal(typeof poll.id, 'string');
+            }
+        });
+
+        it('counts each participant once and keeps voters private from guests', async () => {
+            const { id } = pollsOf(bob)[0];
+            bob.emit('vote', { pollId: id, option: 'Sushi' });
+            bob2.emit('vote', { pollId: id, option: 'Pizza' });
+            bob.emit('vote', { pollId: id, option: 'Pizza' }); // changes his vote
+            bob.emit('vote', { pollId: id, option: 'Not an option' }); // ignored
+            await wait(300);
+            const seenByBob = pollsOf(bob)[0];
+            assert.deepEqual(seenByBob.counts, [2, 0]);
+            assert.equal(seenByBob.total, 2);
+            assert.equal(seenByBob.myVote, 'Pizza');
+            assert.deepEqual(seenByBob.voters, {}, 'guests do not see who voted what');
+            const seenByAdmin = pollsOf(admin)[0];
+            assert.deepEqual(seenByAdmin.voters, { Bob: 'Pizza', Carol: 'Pizza' });
+            assert.equal(seenByAdmin.myVote, null);
+        });
+
+        it('ignores edit and delete attempts by guests, even with forged names', async () => {
+            const { id } = pollsOf(bob)[0];
+            bob.emit('editPoll', { pollId: id, question: 'Hacked', options: ['x', 'y'], peer_name: 'Jules' });
+            bob.emit('deletePoll', { pollId: id, index: 0, peer_name: 'Jules' });
+            await wait(300);
+            assert.equal(pollsOf(admin)[0].question, 'On mange où ?');
+            assert.equal(pollsOf(admin).length, 1);
+        });
+
+        it('keeps the votes when the admin edits a poll (they used to vanish)', async () => {
+            const { id } = pollsOf(admin)[0];
+            admin.emit('editPoll', { pollId: id, question: 'On mange où ce midi ?', options: ['Pizza', 'Crêpes'] });
+            await wait(300);
+            const poll = pollsOf(bob)[0];
+            assert.equal(poll.question, 'On mange où ce midi ?');
+            assert.deepEqual(poll.counts, [2, 0]);
+            assert.equal(poll.myVote, 'Pizza');
+        });
+
+        it('lets the admin delete a poll by id', async () => {
+            admin.emit('createPoll', { question: 'Second ?', options: ['Oui', 'Non'] });
+            await wait(300);
+            const first = pollsOf(admin)[0].id;
+            admin.emit('deletePoll', { pollId: first });
+            await wait(300);
+            assert.deepEqual(
+                pollsOf(bob).map((p) => p.question),
+                ['Second ?']
+            );
+        });
+    });
+
     it('revokes the session on logout (replaying the old cookie fails)', async () => {
         const cookie = await login(ADMIN2);
         assert.equal((await createToken('logout-room', cookie)).status, 200);

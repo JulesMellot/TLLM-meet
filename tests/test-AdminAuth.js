@@ -207,3 +207,44 @@ describe('HtmlInjector asset versioning', () => {
         assert.ok(out.includes('src="../js/../../package.json"'));
     });
 });
+
+describe('Room polls (model)', () => {
+    const Room = require('../app/src/Room');
+    const fakeRoom = () => {
+        const room = Object.create(Room.prototype);
+        room.polls = [];
+        return room;
+    };
+
+    it('keys votes by participant, so two people with the same name both count', () => {
+        const room = fakeRoom();
+        const { id } = room.createPoll('Q?', ['A', 'B']);
+        assert.ok(room.votePoll(id, 'sock-1', 'Jean', 'A'));
+        assert.ok(room.votePoll(id, 'sock-2', 'Jean', 'B'));
+        const [view] = room.pollsView('sock-1', true);
+        assert.deepEqual(view.counts, [1, 1]);
+        assert.deepEqual(view.voters, { Jean: 'A', 'Jean (2)': 'B' });
+        assert.equal(view.myVote, 'A');
+    });
+
+    it('hides voters from non-presenters and refuses unknown options or closed polls', () => {
+        const room = fakeRoom();
+        const poll = room.createPoll('Q?', ['A', 'B']);
+        assert.equal(room.votePoll(poll.id, 's', 'X', 'C'), false);
+        room.votePoll(poll.id, 's', 'X', 'A');
+        assert.deepEqual(room.pollsView('other', false)[0].voters, {});
+        poll.closed = true;
+        assert.equal(room.votePoll(poll.id, 's2', 'Y', 'B'), false);
+    });
+
+    it('drops only the votes of removed options when a poll is edited', () => {
+        const room = fakeRoom();
+        const { id } = room.createPoll('Q?', ['A', 'B']);
+        room.votePoll(id, 's1', 'X', 'A');
+        room.votePoll(id, 's2', 'Y', 'B');
+        room.editPoll(id, 'Q2?', ['A', 'C']);
+        const [view] = room.pollsView('s1');
+        assert.deepEqual(view.counts, [1, 0]);
+        assert.equal(view.total, 1);
+    });
+});
