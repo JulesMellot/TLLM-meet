@@ -1,11 +1,6 @@
-# MiroTalk SFU - Self Hosting
+# TLLM\*meet - Auto-hébergement
 
-### How can I self-host MiroTalk SFU on my own server?
+L'installation et le déploiement (Coolify, Docker, Node.js) sont décrits dans le [README](../README.md#déploiement-coolify-derrière-cloudflare).
 
-[https://docs.mirotalk.com/mirotalk-sfu/self-hosting/](https://docs.mirotalk.com/mirotalk-sfu/self-hosting/)
-
-### Automation scripts
-
-[https://docs.mirotalk.com/scripts/about/](https://docs.mirotalk.com/scripts/about/)
-
----
+La documentation de MiroTalk SFU ([docs.mirotalk.com](https://docs.mirotalk.com/mirotalk-sfu/self-hosting/)) reste utile
+pour mediasoup et le réseau, mais pas pour l'authentification : TLLM\*meet utilise uniquement les comptes `HOST_USERS`.

@@ -9,7 +9,6 @@ body:
 
         **Before posting, please make sure to check if the same or similar bugs have already been reported.**
 
-        ⚠️ General questions regarding usage, installation, etc. should be posted in our [community forum](https://discord.gg/rgGYfeYW3N).
   - type: textarea
     attributes:
       label: Describe the bug

@@ -4,7 +4,8 @@
 
 Security is very important to us.
 
-If you have discovered a security issue, please report it privately through [GitHub Security Advisories](https://github.com/miroslavpejic85/mirotalksfu/security/advisories/new).
+If you have discovered a security issue in TLLM\*meet, please report it privately through [GitHub Security Advisories](https://github.com/JulesMellot/TLLM-meet/security/advisories/new).
+If the issue also affects MiroTalk SFU, please report it upstream as well: [MiroTalk SFU advisories](https://github.com/miroslavpejic85/mirotalksfu/security/advisories/new).
 Please refrain from creating a public GitHub issue or disclosing the vulnerability publicly.
 We prefer a Coordinated Vulnerability Disclosure (CVD) to properly understand and fix the root cause problem.
 
@@ -19,7 +20,7 @@ Thanks in advance for your support to make our products safer!
 
 ## 🙏 Acknowledgements
 
-We would like to extend our gratitude to the following individuals for their responsible disclosure of security vulnerabilities:
+MiroTalk SFU thanks the following individuals for their responsible disclosure of security vulnerabilities:
 
 | Name                                                 | Contact                                                                                             |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
