@@ -8,7 +8,7 @@ const config = require('../config');
 const Logger = require('../Logger');
 const log = new Logger('NodeMailer');
 
-const APP_NAME = config.ui.brand.app.name || 'MiroTalk SFU';
+const APP_NAME = config.ui.brand.app.name || 'TLLM*meet';
 
 // ####################################################
 // EMAIL CONFIG

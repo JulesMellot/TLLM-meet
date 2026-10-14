@@ -5255,7 +5255,7 @@ function leaveFeedback(allowCancel, disconnectAll = false) {
         imageUrl: image.feedback,
         position: 'center',
         title: 'Leave the meeting?',
-        text: 'You can optionally rate your MiroTalk experience before you go.',
+        text: 'You can optionally rate your TLLM*meet experience before you go.',
         confirmButtonText: 'Leave without rating',
         denyButtonText: 'Leave & rate',
         cancelButtonText: 'Stay in meeting',
@@ -9492,7 +9492,7 @@ function showAbout() {
         position: 'center',
         imageUrl: BRAND.about?.imageUrl && BRAND.about.imageUrl.trim() !== '' ? BRAND.about.imageUrl : image.about,
         customClass: { image: 'img-about' },
-        title: BRAND.about?.title && BRAND.about.title.trim() !== '' ? BRAND.about.title : 'WebRTC SFU v2.6.25',
+        title: BRAND.about?.title && BRAND.about.title.trim() !== '' ? BRAND.about.title : 'TLLM*meet',
         html: renderRoomTemplate('popupAboutTemplate', {
             html: {
                 aboutContent: BRAND.about.html,

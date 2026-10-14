@@ -21,15 +21,13 @@ class HtmlInjector {
     // Function to get dynamic data for injection (e.g., OG data, title, etc.)
     getInjectData() {
         return {
-            APP_NAME: this.config?.app?.name || 'MiroTalk SFU',
+            APP_NAME: this.config?.app?.name || 'TLLM*meet',
             OG_TYPE: this.config?.og?.type || 'app-webrtc',
-            OG_SITE_NAME: this.config?.og?.siteName || 'MiroTalk SFU',
-            OG_TITLE: this.config?.og?.title || 'MiroTalk SFU - Open Source WebRTC Video Conferencing',
-            OG_DESCRIPTION:
-                this.config?.og?.description ||
-                'Build your own Zoom alternative with MiroTalk SFU, an open-source self-hosted WebRTC video conferencing platform powered by Mediasoup. Host scalable meetings, webinars, classrooms, screen sharing and real-time collaboration.',
-            OG_IMAGE: this.config?.og?.image || 'https://sfu.mirotalk.com/images/mirotalksfu.png',
-            OG_URL: this.config?.og?.url || 'https://sfu.mirotalk.com',
+            OG_SITE_NAME: this.config?.og?.siteName || 'TLLM*meet',
+            OG_TITLE: this.config?.og?.title || 'TLLM*meet',
+            OG_DESCRIPTION: this.config?.og?.description || 'Rejoindre la visio.',
+            OG_IMAGE: this.config?.og?.image || '/images/tllm-og.png',
+            OG_URL: this.config?.og?.url || '/',
             // Add more data here as needed with fallbacks
         };
     }
@@ -77,7 +75,7 @@ class HtmlInjector {
 
         // Check if HTML injection is enabled in the config
         if (!this.config?.htmlInjection) {
-            return res.send(html?.replace(/{{APP_NAME}}/g, 'MiroTalk SFU'));
+            return res.send(html?.replace(/{{APP_NAME}}/g, 'TLLM*meet'));
         }
 
         if (!html) {

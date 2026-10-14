@@ -124,8 +124,8 @@ const icons = {
 };
 
 const image = {
-    about: '../images/mirotalk-logo.gif',
-    avatar: '../images/mirotalksfu-logo.png',
+    about: '../images/logo.svg',
+    avatar: '../images/logo.svg',
     audio: '../images/audio.gif',
     rec: '../images/rec.png',
     recording: '../images/recording.png',

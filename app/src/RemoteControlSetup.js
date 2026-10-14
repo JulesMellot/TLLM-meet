@@ -74,7 +74,7 @@ function buildImportString({ idServer, relayServer, apiServer, key }) {
  * - {{NAME}} placeholders are HTML-escaped values
  * - <!--IF:NAME-->a<!--ELSE-->b<!--ENDIF--> picks a when NAME is non-empty, else b
  */
-function renderSetupPage(setup, { appName = 'MiroTalk SFU' } = {}) {
+function renderSetupPage(setup, { appName = 'TLLM*meet' } = {}) {
     const values = {
         APP_NAME: appName,
         ID_SERVER: setup.idServer,

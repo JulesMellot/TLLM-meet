@@ -45,17 +45,17 @@ const loginButton = document.getElementById('loginButton');
 let BRAND = {
     app: {
         language: 'en',
-        name: 'MiroTalk SFU',
-        title: 'MiroTalk SFU<br />Free browser based Real-time video calls.<br />Simple, Secure, Fast.',
+        name: 'TLLM*meet',
+        title: '<h1>TLLM*meet</h1>',
         description:
-            'Start your next video call with a single click. No download, plug-in, or login is required. Just get straight to talking, messaging, and sharing your screen.',
+            'Visioconférence privée. Les invités rejoignent par lien, sans compte.',
         joinDescription: 'Pick a room name.<br />How about this one?',
         joinButtonLabel: 'JOIN ROOM',
         customizeButtonLabel: 'CUSTOMIZE ROOM',
         joinLastLabel: 'Your recent room:',
     },
     site: {
-        title: 'MiroTalk SFU - Open Source WebRTC Video Conferencing',
+        title: 'TLLM*meet',
         icon: '../images/logo.svg',
         appleTouchIcon: '../images/logo.svg',
         newRoomTitle: 'Pick name. <br />Share URL. <br />Start conference.',
@@ -64,9 +64,8 @@ let BRAND = {
     },
     meta: {
         description:
-            'Build your own Zoom alternative with MiroTalk SFU, an open-source, self-hosted WebRTC platform powered by Mediasoup for scalable video meetings.',
-        keywords:
-            'webrtc, miro, mediasoup, mediasoup-client, self hosted, voip, sip, real-time communications, chat, messaging, meet, webrtc stun, webrtc turn, webrtc p2p, webrtc sfu, video meeting, video chat, video conference, multi video chat, multi video conference, peer to peer, p2p, sfu, rtc, alternative to, zoom, microsoft teams, google meet, jitsi, meeting',
+            'TLLM*meet, visioconférence privée.',
+        keywords: 'visioconférence, réunion',
     },
     html: {
         topSponsors: true,
@@ -81,7 +80,7 @@ let BRAND = {
         footer: true,
     },
     whoAreYou: {
-        title: 'MiroTalk SFU - Waiting for host to start the meeting',
+        title: 'TLLM*meet',
         waitingRoomHeading: 'Waiting for host...',
         waitingRoomDescription:
             "The meeting hasn't started yet.<br />You'll join automatically when the host opens the room.",
@@ -100,50 +99,27 @@ let BRAND = {
         buttonLabel: 'Login',
     },
     about: {
-        imageUrl: '../images/mirotalk-logo.gif',
-        title: '<strong>WebRTC SFU v2.6.25</strong>',
+        imageUrl: '../images/logo.svg',
+        title: '<strong>TLLM*meet</strong>',
         html: `
             <div class="about-content">
-                <p class="about-description">
-                    Self-hosted group video meetings with scalable WebRTC conferencing.
-                </p>
-                <a
-                    class="about-primary-action"
-                    data-umami-event="About button"
-                    href="https://docs.mirotalk.com/sites/sfu"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >
-                    <i class="fas fa-info-circle" aria-hidden="true"></i>
-                    <span>About</span>
-                </a>
+                <p class="about-description">Visioconférence privée.</p>
                 <dl class="about-details">
                     <div>
-                        <dt>Author</dt>
+                        <dt>Basé sur</dt>
                         <dd>
-                            <a
-                                id="linkedin-button"
-                                data-umami-event="Linkedin button"
-                                href="https://www.linkedin.com/in/miroslav-pejic-976a07101/"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >Miroslav Pejic</a>
+                            <a href="https://github.com/miroslavpejic85/mirotalksfu" target="_blank" rel="noopener noreferrer"
+                                >MiroTalk SFU</a
+                            >
+                            de Miroslav Pejic
                         </dd>
                     </div>
                     <div>
-                        <dt>Email</dt>
-                        <dd>
-                            <a
-                                id="email-button"
-                                data-umami-event="Email button"
-                                href="mailto:miroslav.pejic.85@gmail.com?subject=MiroTalk SFU info"
-                            >miroslav.pejic.85@gmail.com</a>
-                        </dd>
+                        <dt>Licence</dt>
+                        <dd>AGPL-3.0</dd>
                     </div>
                 </dl>
-                <footer class="about-footer">
-                    &copy; ${new Date().getFullYear()} MiroTalk SFU. All rights reserved.
-                </footer>
+                <footer class="about-footer">MiroTalk SFU &copy; 2021-${new Date().getFullYear()} Miroslav Pejic</footer>
             </div>
         `,
     },
@@ -173,7 +149,7 @@ let BRAND = {
                 connectText: 'connect in < 5 seconds',
                 onlineText: 'We are online',
                 offlineText: 'We are offline',
-                poweredBy: 'Powered by MiroTalk SFU',
+                poweredBy: 'TLLM*meet',
             },
             alert: {
                 enabled: false,
