@@ -30,6 +30,10 @@ COPY --chown=node:node public ./public
 # Copy config template → config
 COPY --chown=node:node app/src/config.template.js app/src/config.js
 
+# TLLM*meet: date polls are written to /src/data (mount a volume there to keep them)
+RUN mkdir -p /src/data && chown node:node /src/data
+ENV DATA_DIR=/src/data
+
 # Run as the non-root "node" user (uid/gid 1000) shipped with the base image
 USER node
 

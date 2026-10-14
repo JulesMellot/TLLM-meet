@@ -12,8 +12,14 @@ de Miroslav Pejic, sous licence [AGPL-3.0](LICENSE).
 ## Fonctionnalités
 
 - Audio, vidéo et partage d'écran, via [mediasoup](https://mediasoup.org).
-- Chat, sondages, partage de vidéos et de fichiers pendant la visio.
-- Tableau blanc, éditeur de texte partagé, sous-salles.
+- Discussion avec messages privés, réactions, main levée.
+- Sondages : une ou plusieurs réponses, vote anonyme ou nominatif, résultats cachés jusqu'à la clôture,
+  clôture automatique, export en tableur.
+- Notes partagées : plusieurs personnes écrivent en même temps, avec les curseurs de chacun ; export PDF ou texte.
+- Tableau blanc : dessin à plusieurs, formes, texte, post-it, images et PDF, zoom au doigt ; export PNG ou PDF.
+- Notes et tableau sont gardés par le serveur : les retardataires les retrouvent.
+- Caler une réunion : sondage de dates façon Doodle, sans compte, avec abonnement d'agenda.
+- Partage de vidéos et de fichiers pendant la visio.
 - Salle d'attente, verrouillage de la visio, mot de passe optionnel.
 - Enregistrement dans le navigateur, sous-titres (reconnaissance vocale du navigateur).
 - Fond flou ou virtuel, réduction de bruit.
@@ -34,6 +40,24 @@ La session admin est un cookie signé, vérifié côté serveur (`HttpOnly`, `Se
 Elle ne contient pas le mot de passe et expire après `HOST_SESSION_HOURS` heures.
 La déconnexion la révoque, et changer le mot de passe invalide les sessions ouvertes.
 
+## Caler une réunion
+
+1. Depuis l'accueil, l'admin choisit **Proposer des dates** : un titre, une durée, des jours et des horaires
+   (heure de Paris par défaut, voir `MEETING_TIMEZONE`).
+2. Il envoie le lien `/rdv/…` par le moyen de son choix. TLLM\*meet n'envoie pas d'e-mail.
+3. Chacun répond Oui, Si besoin ou Non, sans compte. La réponse se modifie depuis le même navigateur.
+4. Quand le nombre de personnes attendues a répondu, le créneau qui a le plus de « Oui » est retenu
+   (puis le plus de « Si besoin », puis le plus tôt). À la date limite, la date se fixe avec les réponses reçues.
+   L'admin peut aussi choisir ou changer la date lui-même.
+5. Une visio est réservée. La page du sondage affiche la date et le lien.
+
+Après avoir répondu, chacun peut s'abonner au sondage depuis son agenda (Google, Apple, Outlook).
+Le flux `/rdv/…/agenda.ics` reste vide tant que la date n'est pas fixée, puis contient le rendez-vous
+avec le lien de la visio. Les agendas relisent un abonnement à leur rythme : quelques minutes sur iPhone,
+jusqu'à plusieurs heures sur Google Agenda.
+
+Les sondages sont enregistrés dans `DATA_DIR/rendez-vous.json`.
+
 ## Déploiement (Coolify derrière Cloudflare)
 
 Le dépôt contient [`docker-compose.coolify.yml`](docker-compose.coolify.yml), prévu pour Coolify :
@@ -49,6 +73,9 @@ Le dépôt contient [`docker-compose.coolify.yml`](docker-compose.coolify.yml), 
 5. Pour `HOST_USERS` et `SERVICE_PASSWORD_64_JWT`, décocher l'option de variable de build
    (_Build Variable_ / _Available at Buildtime_) : ce sont des secrets utiles seulement à l'exécution,
    et une variable de build reste lisible dans l'historique de l'image.
+6. Le fichier déclare un volume `tllm-data`, monté sur `/src/data`. Coolify le crée tout seul
+   (onglet _Persistent Storage_) : les sondages de dates y sont gardés entre deux déploiements.
+   Ne pas le supprimer.
 
 Coolify lit le fichier et affiche les variables dans son interface :
 
@@ -61,6 +88,7 @@ Coolify lit le fichier et affiche les variables dans son interface :
 | `SFU_ANNOUNCED_IP` | l'IP publique du VPS (recommandé). Vide : détectée au démarrage, et le serveur s'arrête si la détection échoue                         |
 | `UI_STYLE`         | `sobre` par défaut, ou `papier`                                                                                                        |
 | `SOURCE_URL`       | lien vers le code source de l'instance (AGPL-3.0, article 13)                                                                          |
+| `MEETING_TIMEZONE` | fuseau des sondages de dates, `Europe/Paris` par défaut                                                                                |
 
 Les autres réglages de [`.env.template`](.env.template) peuvent être ajoutés dans Coolify.
 
@@ -101,14 +129,21 @@ En local, le serveur utilise le certificat de test de `app/ssl` ; le navigateur 
 
 Le code propre au fork est rangé dans des fichiers séparés, pour limiter les conflits avec l'upstream :
 
-| Fichier                     | Rôle                                                     |
-| --------------------------- | -------------------------------------------------------- |
-| `public/css/tllm.css`       | apparence de la visio                                    |
-| `public/css/tllm-pages.css` | accueil, connexion, attente, erreurs                     |
-| `public/js/tllm.js`         | menu « Plus », chargement à la demande des bibliothèques |
-| `public/js/TllmHome.js`     | page d'accueil                                           |
-| `app/src/AdminAuth.js`      | session admin, noms de visio                             |
-| `app/src/ClientIp.js`       | IP du client derrière les proxys                         |
+| Fichier                                                                    | Rôle                                                             |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `public/css/tllm.css`                                                      | apparence de la visio                                            |
+| `public/css/tllm-pages.css`                                                | accueil, connexion, attente, erreurs                             |
+| `public/js/tllm.js`                                                        | menu « Plus », chargement à la demande des bibliothèques         |
+| `public/js/TllmHome.js`                                                    | page d'accueil                                                   |
+| `app/src/AdminAuth.js`                                                     | session admin, noms de visio                                     |
+| `app/src/ClientIp.js`                                                      | IP du client derrière les proxys                                 |
+| `public/js/TllmRoom.js`, `public/css/tllm-room.css`                        | écran de la visio (barre, panneau, discussion, sondages)         |
+| `public/js/TllmJoin.js`                                                    | écran avant d'entrer, autorisations caméra et micro              |
+| `app/src/Collab.js`, `public/js/TllmCollab.js`                             | contenu partagé gardé par le serveur (Yjs)                       |
+| `public/js/TllmEditor.js`                                                  | notes partagées                                                  |
+| `public/js/TllmBoard.js`                                                   | tableau blanc                                                    |
+| `app/src/DatePolls.js`, `public/js/TllmRdv*.js`, `public/css/tllm-rdv.css` | caler une réunion                                                |
+| `app/client/collab-entry.mjs`                                              | source de `public/sfu/TllmCollabLib.js` (`npm run build:collab`) |
 
 ## Mise à jour depuis MiroTalk SFU
 

@@ -34,3 +34,11 @@ services:
             - SFU_MAX_PORT=40100
             - UI_STYLE=${UI_STYLE:-sobre}
             - SOURCE_URL=${SOURCE_URL:-https://github.com/JulesMellot/TLLM-meet}
+            # Fuseau des sondages de dates (« Caler une réunion »)
+            - MEETING_TIMEZONE=${MEETING_TIMEZONE:-Europe/Paris}
+        volumes:
+            # Sondages de dates : gardés entre deux déploiements
+            - tllm-data:/src/data
+
+volumes:
+    tllm-data:

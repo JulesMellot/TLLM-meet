@@ -19,6 +19,11 @@ services:
         volumes:
             - ./app/src/config.js:/src/app/src/config.js:ro
             - ./.env:/src/.env:ro
+            # TLLM*meet date polls ("Caler une réunion"), kept across restarts
+            - tllm-data:/src/data
             # Optional volumes for real-time updates:
             # - ./app/:/src/app/:ro
             # - ./public/:/src/public/:ro
+
+volumes:
+    tllm-data:
