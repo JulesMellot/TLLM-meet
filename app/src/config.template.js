@@ -1026,23 +1026,6 @@ module.exports = {
          * ==============================================
          * - https://codecanyon.net/item/mirotalk-sfu-webrtc-realtime-video-conferences/40769970
          */
-        rooms: {
-            /**
-             * Room Display Settings
-             * ---------------------
-             * - showActive: Show active rooms in the UI (default: false)
-             *   https://sfu.mirotalk.com/activeRooms
-             * - activeRoomsRateLimit: Throttle the public /api/v1/activeRooms
-             *   endpoint per IP to prevent enumeration/scraping abuse without
-             *   breaking the public "event zone" UX.
-             */
-            showActive: process.env.SHOW_ACTIVE_ROOMS === 'true',
-            activeRoomsRateLimit: {
-                windowMs:
-                    Math.max(parseInt(process.env.ACTIVE_ROOMS_RATE_LIMIT_WINDOW_MINUTES, 10) || 1, 1) * 60 * 1000,
-                max: Math.max(parseInt(process.env.ACTIVE_ROOMS_RATE_LIMIT_MAX, 10) || 60, 1),
-            },
-        },
         brand: {
             /**
              * Application Branding
@@ -1341,7 +1324,6 @@ module.exports = {
             },
             // Settings panel buttons and options
             settings: {
-                activeRooms: process.env.SHOW_ROOMS !== 'false',
                 fileSharing: process.env.ENABLE_FILE_SHARING !== 'false',
                 lockRoomButton: process.env.SHOW_LOCK_ROOM !== 'false',
                 unlockRoomButton: process.env.SHOW_UNLOCK_ROOM !== 'false',
@@ -1528,7 +1510,7 @@ module.exports = {
          * Socket.IO createRoom and HTTP /createRoomToken rate limit (per IP)
          * -------------------------------------------------------------------
          * Prevents unauthenticated sockets from spamming arbitrary entries
-         * into the in-memory roomList (which feeds /api/v1/activeRooms),
+         * into the in-memory roomList,
          * and throttles room creation token requests.
          */
         createRoomRateLimit: {

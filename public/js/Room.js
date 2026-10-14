@@ -2174,7 +2174,6 @@ function roomIsReady() {
         elemDisplay('tabVirtualBackgroundBtn', false);
         elemDisplay('tabVirtualBackground', false);
     }
-    BUTTONS.settings.activeRooms && show(activeRoomsButton);
     BUTTONS.settings.fileSharing && show(fileShareButton);
     BUTTONS.settings.lockRoomButton && show(lockRoomButton);
     BUTTONS.settings.broadcastingButton && show(broadcastingButton);
@@ -3192,9 +3191,6 @@ function handleButtons() {
     rtmpStopAllButton.onclick = () => {
         if (rtmpLiveMode === 'file') rc.stopRTMP();
         else if (rtmpLiveMode === 'url') rc.stopRTMPfromURL();
-    };
-    activeRoomsButton.onclick = () => {
-        rc.showActiveRooms();
     };
     fileShareButton.onclick = () => {
         rc.selectFileToShare(socket.id, true);

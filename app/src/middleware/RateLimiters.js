@@ -85,18 +85,9 @@ function createRateLimiters({ getRequesterKey }) {
         keyGenerator: (req) => req.body?.username || ipKeyGenerator(req),
     });
 
-    // Active rooms endpoint (per IP) — public endpoint, so prevent
-    // enumeration / scraping abuse without breaking the public "event zone" UX.
-    const activeRoomsCfg = config.ui?.rooms?.activeRoomsRateLimit || {};
-    const activeRoomsLimiter = createIpLimiter({
-        windowMs: activeRoomsCfg.windowMs || MINUTE_MS,
-        max: activeRoomsCfg.max || 60,
-        text: 'Too many requests.',
-    });
-
     // createRoom (per IP), shared by Socket.IO `createRoom` and HTTP /createRoomToken.
     // Prevents unauthenticated sockets from spamming arbitrary room entries
-    // into the in-memory roomList (which feeds /api/v1/activeRooms).
+    // into the in-memory roomList.
     const createRoomCfg = config.features?.createRoomRateLimit || {};
     const createRoomWindowMs = createRoomCfg.windowMs || MINUTE_MS;
     const createRoomMax = createRoomCfg.max || 10;
@@ -114,7 +105,6 @@ function createRateLimiters({ getRequesterKey }) {
 
     return {
         loginLimiter,
-        activeRoomsLimiter,
         createRoomTokenLimiter,
         checkCreateRoomLimit,
         createRoomLimiterMinutes,

@@ -79,7 +79,6 @@ describe('Socket.IO join authorization', () => {
                 }
                 updatePeerInfo() {}
             },
-            getActiveRooms: () => [],
             getRTMPActiveStreams: () => [],
             widget: { alert: { enabled: false }, enabled: false },
             nodemailer: { sendEmailAlert() {} },

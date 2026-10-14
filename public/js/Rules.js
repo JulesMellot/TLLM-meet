@@ -44,7 +44,6 @@ let BUTTONS = {
         extraButton: true,
     },
     settings: {
-        activeRooms: true,
         fileSharing: true,
         lockRoomButton: true, // presenter
         unlockRoomButton: true, // presenter

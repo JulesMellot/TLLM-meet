@@ -128,8 +128,9 @@ const getRequesterKey = (req) => {
     return ipKeyGenerator(req);
 };
 
-const { loginLimiter, activeRoomsLimiter, createRoomTokenLimiter, checkCreateRoomLimit, createRoomLimiterMinutes } =
-    createRateLimiters({ getRequesterKey });
+const { loginLimiter, createRoomTokenLimiter, checkCreateRoomLimit, createRoomLimiterMinutes } = createRateLimiters({
+    getRequesterKey,
+});
 
 // Branding configuration
 const brandHtmlInjection = config?.ui?.brand?.htmlInjection ?? true;
@@ -423,7 +424,6 @@ const views = {
     html: path.join(__dirname, '../../public/views'),
     landing: path.join(__dirname, '../../', 'public/views/landing.html'),
     login: path.join(__dirname, '../../', 'public/views/login.html'),
-    activeRooms: path.join(__dirname, '../../', 'public/views/activeRooms.html'),
     customizeRoom: path.join(__dirname, '../../', 'public/views/customizeRoom.html'),
     newRoom: path.join(__dirname, '../../', 'public/views/newroom.html'),
     notFound: path.join(__dirname, '../../', 'public/views/404.html'),
@@ -434,15 +434,7 @@ const views = {
     whoAreYou: path.join(__dirname, '../../', 'public/views/whoAreYou.html'),
 };
 
-const filesPath = [
-    views.landing,
-    views.newRoom,
-    views.room,
-    views.login,
-    views.whoAreYou,
-    views.activeRooms,
-    views.customizeRoom,
-];
+const filesPath = [views.landing, views.newRoom, views.room, views.login, views.whoAreYou, views.customizeRoom];
 
 const htmlInjector = new HtmlInjector(filesPath, config.ui.brand);
 
@@ -832,11 +824,6 @@ function startServer() {
         } else {
             htmlInjector.injectHtml(views.newRoom, res);
         }
-    });
-
-    // Get Active rooms
-    app.get('/activeRooms', OIDCAuth, (req, res) => {
-        htmlInjector.injectHtml(views.activeRooms, res);
     });
 
     // Get Customize room
@@ -1616,36 +1603,6 @@ function startServer() {
         return res.end('`Wrong signature` - Verification failed!');
     });
 
-    // ####################################################
-    // AUTHORIZED API IF ALLOWED
-    // ####################################################
-
-    // request active rooms endpoint
-    app.get(restApi.basePath + '/activeRooms', activeRoomsLimiter, (req, res) => {
-        // Check if endpoint allowed
-        if (!config.ui?.rooms?.showActive) {
-            return res.status(403).json({
-                error: 'This endpoint has been disabled. Please contact the administrator for further information.',
-            });
-        }
-        // Public endpoint gated only by config.ui.rooms.showActive: when enabled it
-        // intentionally returns the active rooms list without authorization so the
-        // event-zone dashboard (/activeRooms) can display it.
-        const { host } = req.headers;
-        const api = new ServerApi(host);
-
-        // Get active rooms
-        const activeRooms = api.getActiveRooms(roomList);
-        res.json({ activeRooms: activeRooms });
-
-        // log.debug the output if all done
-        log.debug('MiroTalk get active rooms - Authorized', {
-            header: req.headers,
-            body: req.body,
-            activeRooms: activeRooms,
-        });
-    });
-
     // not match any of page before, so 404 not found
     app.use((req, res) => {
         res.sendFile(views.notFound);
@@ -2170,10 +2127,6 @@ function startServer() {
             }
 
             room.addPeer(new Peer(socket.id, data));
-
-            const activeRooms = getActiveRooms();
-
-            log.debug('[Join] - current active rooms', activeRooms);
 
             const activeStreams = getRTMPActiveStreams();
 
@@ -4922,10 +4875,6 @@ function startServer() {
 
                 log.debug('[Disconnect] - Last peer - current presenters grouped by roomId', presenters);
 
-                const activeRooms = getActiveRooms();
-
-                log.debug('[Disconnect] - Last peer - current active rooms', activeRooms);
-
                 const activeStreams = getRTMPActiveStreams();
 
                 log.debug('[Disconnect] - Last peer - current active RTMP streams', activeStreams);
@@ -5000,10 +4949,6 @@ function startServer() {
                 delete presenters[socket.room_id];
 
                 log.debug('[REMOVE ME] - Last peer - current presenters grouped by roomId', presenters);
-
-                const activeRooms = getActiveRooms();
-
-                log.debug('[REMOVE ME] - Last peer - current active rooms', activeRooms);
 
                 const activeStreams = getRTMPActiveStreams();
 
@@ -5314,21 +5259,6 @@ function startServer() {
         const jwtToken = jwt.sign({ data: encryptedPayload }, jwtKeys.auth, { expiresIn: expireValue });
 
         return jwtToken;
-    }
-
-    function getActiveRooms() {
-        const roomIds = Array.from(roomList.keys());
-        const roomPeersArray = roomIds.map((roomId) => {
-            const room = roomList.get(roomId);
-            const peerCount = (room && room.getPeersCount()) || 0;
-            const broadcasting = (room && room.isBroadcasting()) || false;
-            return {
-                room: roomId,
-                broadcasting: broadcasting,
-                peers: peerCount,
-            };
-        });
-        return roomPeersArray;
     }
 
     function isAllowedRoomAccess(logMessage, req, hostCfg, roomList, roomId) {
