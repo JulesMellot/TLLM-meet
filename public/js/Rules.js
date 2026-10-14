@@ -53,7 +53,6 @@ let BUTTONS = {
         joinLockButton: true, // presenter
         sendEmailInvitation: true, // presenter
         micOptionsButton: true,
-        tabRTMPStreamingBtn: true, // presenter
         tabSipPhoneBtn: true,
         tabNotificationsBtn: true, // presenter
         tabNetworkBtn: true,
@@ -175,7 +174,6 @@ function handleRules(isPresenter, roomSetup = true) {
         BUTTONS.settings.lobbyButton = false;
         BUTTONS.settings.joinLockButton = false;
         BUTTONS.settings.sendEmailInvitation = false;
-        BUTTONS.settings.tabRTMPStreamingBtn = false;
         BUTTONS.settings.tabModerator = false;
         BUTTONS.settings.tabNotificationsBtn = false;
         BUTTONS.videoOff.muteAudioButton = false;
@@ -203,7 +201,7 @@ function handleRules(isPresenter, roomSetup = true) {
 
         // If a presenter-only settings tab was open, reset to the default Room tab so its
         // content isn't left visible after the tab button is hidden.
-        const openPresenterTab = ['tabModerator', 'tabRTMPStreaming', 'tabNotifications', 'tabVideoAI'].some((id) => {
+        const openPresenterTab = ['tabModerator', 'tabNotifications', 'tabVideoAI'].some((id) => {
             const el = rc.getId(id);
             return el && el.style.display === 'block';
         });
@@ -218,7 +216,6 @@ function handleRules(isPresenter, roomSetup = true) {
         // PRESENTER
         // ##################################
         BUTTONS.main.shareButton = true;
-        BUTTONS.settings.tabRTMPStreamingBtn = true;
         BUTTONS.settings.lockRoomButton = BUTTONS.settings.lockRoomButton && !isRoomLocked;
         BUTTONS.settings.unlockRoomButton = BUTTONS.settings.lockRoomButton && isRoomLocked;
         BUTTONS.settings.sendEmailInvitation = true;
@@ -272,14 +269,6 @@ function handleRules(isPresenter, roomSetup = true) {
     }
     // main. settings...
     BUTTONS.main.shareButton ? show(shareButton) : hide(shareButton);
-    if (BUTTONS.settings.tabRTMPStreamingBtn) {
-        show(tabRTMPStreamingBtn);
-        show(startRtmpButton);
-        show(startRtmpURLButton);
-        show(streamerRtmpButton);
-    } else {
-        hide(tabRTMPStreamingBtn);
-    }
     BUTTONS.settings.lockRoomButton ? show(lockRoomButton) : hide(lockRoomButton);
     BUTTONS.settings.unlockRoomButton ? show(unlockRoomButton) : hide(unlockRoomButton);
     BUTTONS.settings.broadcastingButton ? show(broadcastingButton) : hide(broadcastingButton);
@@ -415,7 +404,6 @@ function handleRulesBroadcasting() {
     BUTTONS.settings.unlockRoomButton = false;
     BUTTONS.settings.lobbyButton = false;
     BUTTONS.settings.joinLockButton = false;
-    BUTTONS.settings.tabRTMPStreamingBtn = false;
     BUTTONS.settings.tabNotificationsBtn = false;
     BUTTONS.videoOff.muteAudioButton = false;
     BUTTONS.videoOff.geolocationButton = false;
@@ -455,7 +443,6 @@ function handleRulesBroadcasting() {
     elemDisplay('joinLockButton', false);
     elemDisplay('joinUnlockButton', false);
     elemDisplay('settingsButton', false);
-    elemDisplay('tabRTMPStreamingBtn', false);
     elemDisplay('tabNotificationsBtn', false);
 
     elemDisplay('startVideoDeviceDropdown', false);

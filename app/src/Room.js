@@ -2,7 +2,6 @@
 
 const { v4: uuidv4 } = require('uuid');
 const config = require('./config');
-const RtmpStreaming = require('./RtmpStreaming');
 const Logger = require('./Logger');
 const log = new Logger('Room');
 
@@ -95,9 +94,6 @@ module.exports = class Room {
         this.routerSettings = config.mediasoup.router;
         this.routerReady = this.createTheRouter();
 
-        // RTMP configuration
-        this.rtmpStreaming = new RtmpStreaming(this);
-
         // Polls
         this.polls = [];
 
@@ -126,17 +122,6 @@ module.exports = class Room {
                 isJoinLocked: this._isJoinLocked,
                 hostOnlyRecording: this._hostOnlyRecording,
                 whiteboardParticipantNames: this._wbShowParticipantNames,
-            },
-            rtmp: {
-                enabled: this.rtmpStreaming.rtmp && this.rtmpStreaming.rtmp.enabled,
-                fromFile: this.rtmpStreaming.rtmp && this.rtmpStreaming.rtmp.fromFile,
-                fromUrl: this.rtmpStreaming.rtmp && this.rtmpStreaming.rtmp.fromUrl,
-                fromStream: this.rtmpStreaming.rtmp && this.rtmpStreaming.rtmp.fromStream,
-                allowCustomUrl: this.rtmpStreaming.rtmp && this.rtmpStreaming.rtmp.allowCustomUrl,
-                allowQualitySelection:
-                    this.rtmpStreaming.rtmp && this.rtmpStreaming.rtmp.allowQualitySelection !== false,
-                videoQuality: this.rtmpStreaming.rtmp && this.rtmpStreaming.rtmp.videoQuality,
-                maxVideoQuality: this.rtmpStreaming.rtmp && this.rtmpStreaming.rtmp.maxVideoQuality,
             },
             hostProtected: this.isHostProtected,
             moderator: this._moderator,
@@ -191,46 +176,6 @@ module.exports = class Room {
             const voters = poll.voters ? Object.fromEntries(poll.voters.entries()) : {};
             return { ...poll, voters };
         });
-    }
-
-    // ##############################################
-    // RTMP (delegated to RtmpStreaming)
-    // ##############################################
-
-    isRtmpFileStreamerActive() {
-        return this.rtmpStreaming.isRtmpFileStreamerActive();
-    }
-
-    async getRTMP(dir) {
-        return this.rtmpStreaming.getRTMP(dir);
-    }
-
-    async startRTMP(socket_id, room, host, port, file, customRtmpUrl) {
-        return this.rtmpStreaming.startRTMP(socket_id, room, host, port, file, customRtmpUrl);
-    }
-
-    stopRTMP() {
-        return this.rtmpStreaming.stopRTMP();
-    }
-
-    isRtmpUrlStreamerActive() {
-        return this.rtmpStreaming.isRtmpUrlStreamerActive();
-    }
-
-    async startRTMPfromURL(socket_id, room, host, port, inputVideoURL, customRtmpUrl) {
-        return this.rtmpStreaming.startRTMPfromURL(socket_id, room, host, port, inputVideoURL, customRtmpUrl);
-    }
-
-    stopRTMPfromURL() {
-        return this.rtmpStreaming.stopRTMPfromURL();
-    }
-
-    getRTMPUrl(host, port) {
-        return this.rtmpStreaming.getRTMPUrl(host, port);
-    }
-
-    generateRTMPUrl(baseURL, streamPath, secretKey, expirationHours) {
-        return this.rtmpStreaming.generateRTMPUrl(baseURL, streamPath, secretKey, expirationHours);
     }
 
     // ####################################################
@@ -291,7 +236,6 @@ module.exports = class Room {
     async close() {
         this.closeAudioLevelObserver();
         this.closeActiveSpeakerObserver();
-        this.rtmpStreaming.closeAll();
         this.closeRouter();
         log.debug('Room closed', { room_id: this.id });
     }

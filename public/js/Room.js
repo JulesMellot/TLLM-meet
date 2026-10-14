@@ -590,7 +590,6 @@ async function initClient() {
             'Only the host (presenter) has the capability to record the meeting',
             'right'
         );
-        setTippy('refreshVideoFiles', 'Refresh', 'left');
         setTippy('switchServerRecording', 'The recording will be stored on the server rather than locally', 'right');
         setTippy('whiteboardGhostButton', 'Toggle transparent background', 'bottom');
         setTippy('whiteboardGridBtn', 'Toggle whiteboard grid', 'bottom');
@@ -2153,11 +2152,6 @@ function roomIsReady() {
             show(audioFocusControlsDiv);
             show(pushToTalkDiv);
         }
-        BUTTONS.settings.tabRTMPStreamingBtn &&
-            show(tabRTMPStreamingBtn) &&
-            show(startRtmpButton) &&
-            show(startRtmpURLButton) &&
-            show(streamerRtmpButton);
     }
     if (BUTTONS.main.fullScreenButton && !parserResult.browser.name.toLowerCase().includes('safari')) {
         document.onfullscreenchange = () => {
@@ -2482,95 +2476,6 @@ function updateChatEmptyNotice() {
     hasMessages ? emptyNotice.classList.add('hidden') : emptyNotice.classList.remove('hidden');
 }
 
-// ####################################################
-// RTMP LIVE STREAM SETTINGS (source tabs + live status)
-// ####################################################
-
-const RTMP_MODE_STORAGE_KEY = 'rtmpMode';
-const rtmpLiveLabels = { file: 'Server video file', url: 'Online media URL' };
-let rtmpLiveMode = null;
-
-function getRtmpModeTabs() {
-    return Array.from(document.querySelectorAll('.rtmp-mode-tab'));
-}
-
-function selectRtmpMode(mode) {
-    getRtmpModeTabs().forEach((tab) => {
-        const selected = tab.dataset.mode === mode;
-        tab.setAttribute('aria-selected', selected ? 'true' : 'false');
-        tab.tabIndex = selected ? 0 : -1;
-        getId(tab.dataset.target).classList.toggle('rtmp-source-inactive', !selected);
-    });
-    try {
-        localStorage.setItem(RTMP_MODE_STORAGE_KEY, mode);
-    } catch (err) {
-        console.warn('Unable to store the RTMP mode', err);
-    }
-}
-
-function initRtmpModeTabs({ fromFile, fromUrl, fromStream }) {
-    const enabledModes = { file: fromFile, url: fromUrl, stream: fromStream };
-    const tabs = getRtmpModeTabs();
-    const available = tabs.filter((tab) => enabledModes[tab.dataset.mode]);
-
-    tabs.forEach((tab) => {
-        elemDisplay(tab, enabledModes[tab.dataset.mode], 'inline-flex');
-        if (tab.dataset.bound) return;
-        tab.dataset.bound = 'true';
-        tab.onclick = () => {
-            if (rtmpLiveMode && tab.dataset.mode !== rtmpLiveMode) {
-                return userLog('info', 'Stop the current stream before switching source', 'top-end');
-            }
-            selectRtmpMode(tab.dataset.mode);
-        };
-        tab.onkeydown = (e) => {
-            if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-            const usable = getRtmpModeTabs().filter(
-                (t) => enabledModes[t.dataset.mode] && t.getAttribute('aria-disabled') !== 'true'
-            );
-            const index = usable.indexOf(tab);
-            if (index === -1) return;
-            e.preventDefault();
-            const next = usable[(index + (e.key === 'ArrowRight' ? 1 : -1) + usable.length) % usable.length];
-            next.focus();
-            next.click();
-        };
-    });
-
-    // A single source needs no tab bar
-    elemDisplay(document.querySelector('.rtmp-mode-tabs'), available.length > 1, 'flex');
-
-    if (!available.length) return;
-    let stored = null;
-    try {
-        stored = localStorage.getItem(RTMP_MODE_STORAGE_KEY);
-    } catch (err) {
-        console.warn('Unable to read the RTMP mode', err);
-    }
-    const initial = available.find((tab) => tab.dataset.mode === stored) || available[0];
-    selectRtmpMode(initial.dataset.mode);
-}
-
-function setRtmpLive(mode) {
-    rtmpLiveMode = mode;
-    const live = Boolean(mode);
-
-    if (live) {
-        const destination = getId('rtmpDestinationName').textContent;
-        getId('rtmpLiveStatusSource').textContent = `${rtmpLiveLabels[mode]} → ${destination}`;
-        selectRtmpMode(mode);
-        show('rtmpLiveStatus');
-    } else {
-        hide('rtmpLiveStatus');
-    }
-
-    getRtmpModeTabs().forEach((tab) => {
-        const locked = live && tab.dataset.mode !== mode;
-        tab.setAttribute('aria-disabled', locked ? 'true' : 'false');
-        tab.title = locked ? 'Stop the current stream first' : '';
-    });
-}
-
 function elemDisplay(elem, display, mode = 'block') {
     elem = typeof elem === 'string' ? getId(elem) : elem;
     if (!elem) {
@@ -2796,14 +2701,6 @@ function handleButtons() {
     tabVideoShareBtn.onclick = (e) => {
         rc.openTab(e, 'tabVideoShare');
         rc.prefillShareMediaUrlFromClipboard();
-    };
-    tabRTMPStreamingBtn.onclick = (e) => {
-        rc.getRTMP();
-        rc.openTab(e, 'tabRTMPStreaming');
-    };
-    refreshVideoFiles.onclick = () => {
-        rc.getRTMP();
-        userLog('info', 'Refreshed video files', 'top-end');
     };
     tabAspectBtn.onclick = (e) => {
         rc.openTab(e, 'tabAspect');
@@ -3187,32 +3084,6 @@ function handleButtons() {
     };
     stopScreenButton.onclick = () => {
         rc.closeProducer(RoomClient.mediaType.screen);
-    };
-    copyRtmpUrlButton.onclick = () => {
-        rc.copyRTMPUrl(rtmpLiveUrl.value);
-    };
-    startRtmpButton.onclick = () => {
-        if (rc.selectedRtmpFilename == '') {
-            userLog('warning', 'Please select the Video file to stream', 'top-end', 6000);
-            return;
-        }
-        rc.startRTMP();
-    };
-    stopRtmpButton.onclick = () => {
-        rc.stopRTMP();
-    };
-    streamerRtmpButton.onclick = () => {
-        rc.openRTMPStreamer();
-    };
-    startRtmpURLButton.onclick = () => {
-        rc.startRTMPfromURL(rtmpStreamURL.value);
-    };
-    stopRtmpURLButton.onclick = () => {
-        rc.stopRTMPfromURL();
-    };
-    rtmpStopAllButton.onclick = () => {
-        if (rtmpLiveMode === 'file') rc.stopRTMP();
-        else if (rtmpLiveMode === 'url') rc.stopRTMPfromURL();
     };
     activeRoomsButton.onclick = () => {
         rc.showActiveRooms();
@@ -5136,42 +5007,6 @@ function handleRoomClientEvents() {
             hide(recordingMessage);
             hostOnlyRecording = false;
         }
-    });
-    rc.on(RoomClient.EVENTS.startRTMP, () => {
-        console.log('Room event: RTMP started');
-        hide(startRtmpButton);
-        show(stopRtmpButton);
-        setRtmpLive('file');
-    });
-    rc.on(RoomClient.EVENTS.stopRTMP, () => {
-        console.log('Room event: RTMP stopped');
-        hide(stopRtmpButton);
-        show(startRtmpButton);
-        setRtmpLive(null);
-    });
-    rc.on(RoomClient.EVENTS.endRTMP, () => {
-        console.log('Room event: RTMP ended');
-        hide(stopRtmpButton);
-        show(startRtmpButton);
-        setRtmpLive(null);
-    });
-    rc.on(RoomClient.EVENTS.startRTMPfromURL, () => {
-        console.log('Room event: RTMP from URL started');
-        hide(startRtmpURLButton);
-        show(stopRtmpURLButton);
-        setRtmpLive('url');
-    });
-    rc.on(RoomClient.EVENTS.stopRTMPfromURL, () => {
-        console.log('Room event: RTMP from URL stopped');
-        hide(stopRtmpURLButton);
-        show(startRtmpURLButton);
-        setRtmpLive(null);
-    });
-    rc.on(RoomClient.EVENTS.endRTMPfromURL, () => {
-        console.log('Room event: RTMP from URL ended');
-        hide(stopRtmpURLButton);
-        show(startRtmpURLButton);
-        setRtmpLive(null);
     });
     rc.on(RoomClient.EVENTS.exitRoom, () => {
         if (isExiting) return;

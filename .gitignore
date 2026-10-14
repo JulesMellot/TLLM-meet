@@ -22,7 +22,6 @@ docker-compose.yml
 docker-push.sh
 data
 rec
-rtmp
 rnnoiseBuild
 security
 
