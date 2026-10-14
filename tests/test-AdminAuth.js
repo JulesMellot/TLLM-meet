@@ -184,3 +184,26 @@ describe('parseHostUsers (HOST_USERS)', () => {
         assert.deepEqual(parseHostUsers('""'), []);
     });
 });
+
+describe('HtmlInjector asset versioning', () => {
+    const path = require('path');
+    const HtmlInjector = require('../app/src/HtmlInjector');
+    const view = path.join(__dirname, '../public/views/Room.html');
+    const versionAssets = HtmlInjector.prototype.versionAssets;
+
+    it('adds a content hash to local JS/CSS and leaves CDN, missing and outside files alone', () => {
+        const html = [
+            '<script src="../js/Room.js"></script>',
+            '<link href="/css/tllm.css" rel="stylesheet" />',
+            '<script src="https://cdn.jsdelivr.net/npm/xss@1.0.15/dist/xss.min.js"></script>',
+            '<script src="../js/DoesNotExist.js"></script>',
+            '<script src="../js/../../package.json"></script>',
+        ].join('\n');
+        const out = versionAssets(html, view);
+        assert.match(out, /src="\.\.\/js\/Room\.js\?v=[0-9a-f]{10}"/);
+        assert.match(out, /href="\/css\/tllm\.css\?v=[0-9a-f]{10}"/);
+        assert.ok(out.includes('xss.min.js"'));
+        assert.ok(out.includes('src="../js/DoesNotExist.js"'));
+        assert.ok(out.includes('src="../js/../../package.json"'));
+    });
+});

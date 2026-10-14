@@ -1,4 +1,6 @@
 const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
 const chokidar = require('chokidar');
 
@@ -32,10 +34,27 @@ class HtmlInjector {
         };
     }
 
+    // TLLM*meet: add ?v=<content hash> to local JS/CSS so a new deployment is never hidden by a browser
+    // or Cloudflare cache (the URL changes whenever the file changes)
+    versionAssets(html, filePath) {
+        const viewsDir = path.dirname(filePath);
+        const publicDir = path.resolve(viewsDir, '..');
+        return html.replace(/(src|href)="((?:\.\.)?\/(?:js|css|sfu)\/[^"?#]+)"/g, (match, attr, url) => {
+            const file = url.startsWith('/') ? path.join(publicDir, url) : path.resolve(viewsDir, url);
+            if (!file.startsWith(publicDir + path.sep)) return match;
+            try {
+                const hash = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 10);
+                return `${attr}="${url}?v=${hash}"`;
+            } catch {
+                return match; // missing file: leave the reference untouched
+            }
+        });
+    }
+
     // Function to load a file into the cache
     loadFileToCache(filePath) {
         try {
-            const content = fs.readFileSync(filePath, 'utf-8');
+            const content = this.versionAssets(fs.readFileSync(filePath, 'utf-8'), filePath);
             this.cache[filePath] = content; // Store the content in cache
         } catch (err) {
             log.error(`Error reading file: ${filePath}`, err);
@@ -72,6 +91,9 @@ class HtmlInjector {
     // Function to inject dynamic data (e.g., OG, TITLE, etc.) into a given file
     injectHtml(filePath, res) {
         const html = this.cache[filePath];
+
+        // Always revalidate pages, so they point to the current versioned assets
+        if (!res.headersSent) res.set('Cache-Control', 'no-cache');
 
         // Check if HTML injection is enabled in the config
         if (!this.config?.htmlInjection) {

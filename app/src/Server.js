@@ -330,6 +330,10 @@ function startServer() {
                 if (filePath.endsWith('.js')) {
                     res.setHeader('Content-Type', 'application/javascript');
                 } //...
+                // TLLM*meet: versioned URLs (?v=<hash>, added by HtmlInjector) never change content
+                if (res.req?.query?.v) {
+                    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+                }
             },
         })
     );
