@@ -83,6 +83,7 @@ const Logger = require('./Logger');
 const Validator = require('./Validator');
 const RoomPassword = require('./RoomPassword');
 const HtmlInjector = require('./HtmlInjector');
+const { CollabStore } = require('./Collab');
 const log = new Logger('Server');
 const yaml = require('js-yaml');
 const swaggerUi = require('swagger-ui-express');
@@ -241,6 +242,11 @@ const filesPath = [views.landing, views.room, views.login, views.whoAreYou, view
 const htmlInjector = new HtmlInjector(filesPath, config.ui.brand);
 
 const roomList = new Map(); // All Rooms
+
+// TLLM*meet: editor and whiteboard content, kept per room by the server (see Collab.js)
+const collab = new CollabStore({}, (roomId, exceptSocketId, event, payload) => {
+    roomList.get(roomId)?.broadCast(exceptSocketId, event, payload);
+});
 
 const presenters = {}; // Collect presenters grp by roomId
 
@@ -3274,7 +3280,30 @@ function startServer() {
             if (room.deletePoll(ref)) sendPolls(room);
         });
 
-        // Room collaborative editor
+        // TLLM*meet: shared editor and whiteboard. Everyone in the room reads, only the people
+        // allowed to share write (see Collab.js).
+        socket.on('collabSync', (data) => {
+            if (!roomExists(socket)) return;
+            const room = getRoom(socket);
+            if (!room.getPeer(socket.id)) return;
+            const shared = collab.get(socket.room_id);
+            const result = shared.handleSync(socket.id, data, canShareSocket(socket));
+            for (const reply of result.replies) socket.emit('collabSync', reply);
+            if (result.replies.length) {
+                const cursors = shared.awarenessSnapshot();
+                if (cursors) socket.emit('collabAwareness', cursors);
+            }
+            if (result.rejected) log.debug('collabSync rejected', { error: result.error?.message });
+        });
+
+        socket.on('collabAwareness', (data) => {
+            if (!roomExists(socket)) return;
+            const peer = getRoom(socket).getPeer(socket.id);
+            if (!peer) return;
+            collab.get(socket.room_id).handleAwareness(socket.id, data, peer.peer_info?.peer_name ?? peer.peer_name);
+        });
+
+        // Room collaborative editor (upstream events, no longer used by the TLLM*meet client)
 
         socket.on('editorChange', (dataObject) => {
             if (!roomExists(socket)) return;
@@ -3329,6 +3358,7 @@ function startServer() {
             log.debug('[Disconnect] - peer name', { peer_name, reason });
 
             room.removePeer(socket.id);
+            collab.leave(socket.room_id, socket.id);
 
             // Sockets that never joined (e.g. rejected by a lock) are not announced to the room
             if (peer) room.broadCast(socket.id, 'removeMe', removeMeData(room, peer_name, isPresenter));
@@ -3348,6 +3378,7 @@ function startServer() {
 
             if (room.getPeersCount() === 0) {
                 roomList.delete(socket.room_id);
+                collab.release(socket.room_id);
 
                 delete presenters[socket.room_id];
 
@@ -3376,6 +3407,7 @@ function startServer() {
             log.debug('Exit room', peer_name);
 
             room.removePeer(socket.id);
+            collab.leave(socket.room_id, socket.id);
 
             room.broadCast(socket.id, 'removeMe', removeMeData(room, peer_name, isPresenter));
 
@@ -3389,6 +3421,7 @@ function startServer() {
 
             if (room.getPeersCount() === 0) {
                 roomList.delete(socket.room_id);
+                collab.release(socket.room_id);
 
                 delete presenters[socket.room_id];
 
@@ -3641,6 +3674,7 @@ async function gracefulShutdown(signal) {
                 }
 
                 roomList.delete(roomId);
+                collab.drop(roomId);
             } catch (err) {
                 log.error(`Error closing room ${roomId}:`, err.message);
             }

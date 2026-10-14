@@ -1497,17 +1497,107 @@ body.tllm-room #videoPinMediaContainer {
 }
 
 /* Without the permission to share: whiteboard and editor are read-only */
-body.tllm-cannot-share #whiteboard canvas,
-body.tllm-cannot-share #editorRoom .ql-editor {
+body.tllm-cannot-share #whiteboard canvas {
     pointer-events: none !important;
 }
 body.tllm-cannot-share #whiteboardOptions > *:not(:has(#whiteboardCloseBtn)),
 body.tllm-cannot-share #editorRoom .ql-toolbar,
-body.tllm-cannot-share #editorHeader button:not(#editorCloseBtn) {
+body.tllm-cannot-share #editorRoom .editor-history-tools,
+body.tllm-cannot-share #editorCleanBtn {
     display: none !important;
 }
 
 /* The interface is in French only: no language picker (it listed flag emojis) */
 body.tllm-room #tabLanguagesBtn {
     display: none !important;
+}
+
+/* ---------- Shared notes (TllmEditor.js) ---------- */
+body.tllm-room #editorRoom .editor-session-tools {
+    display: none !important;
+}
+/* Header and toolbar stay in place, only the text scrolls */
+body.tllm-room #editorRoom.show {
+    display: flex !important;
+    flex-direction: column;
+    overflow: hidden !important;
+}
+body.tllm-room #editorRoom > #editorHeader,
+body.tllm-room #editorRoom > .ql-toolbar {
+    flex: none;
+}
+body.tllm-room #editorRoom > #editor {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto !important;
+    max-height: none !important;
+}
+body.tllm-room #editorRoom .editor-header-title {
+    gap: 10px;
+    min-width: 0;
+}
+.tllm-editor-people {
+    display: inline-flex;
+    gap: 4px;
+}
+.tllm-editor-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: inline-grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+}
+.tllm-editor-status {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--tllm-surface-3);
+    color: var(--tllm-text-2);
+    white-space: nowrap;
+}
+.tllm-editor-status[hidden] {
+    display: none;
+}
+body.tllm-room #editorRoom .ql-editor {
+    font-size: 15px;
+    line-height: 1.6;
+}
+body.tllm-room #editorRoom .ql-editor.ql-blank::before {
+    color: var(--tllm-text-2);
+    font-style: normal;
+}
+body.tllm-room #editorRoom .ql-editor img {
+    max-width: 100%;
+}
+body.tllm-room #editorRoom .ql-cursor-name {
+    font-family: inherit;
+}
+body.tllm-room #editorRoom .ql-snow .ql-stroke {
+    stroke: var(--tllm-text-2);
+}
+body.tllm-room #editorRoom .ql-snow .ql-fill {
+    fill: var(--tllm-text-2);
+}
+body.tllm-room #editorRoom .ql-snow .ql-picker {
+    color: var(--tllm-text-2);
+}
+body.tllm-room #editorRoom .ql-snow button:hover .ql-stroke,
+body.tllm-room #editorRoom .ql-snow button.ql-active .ql-stroke,
+body.tllm-room #editorRoom .ql-snow .ql-picker-label:hover .ql-stroke {
+    stroke: var(--tllm-accent);
+}
+body.tllm-room #editorRoom .ql-snow button:hover .ql-fill,
+body.tllm-room #editorRoom .ql-snow button.ql-active .ql-fill {
+    fill: var(--tllm-accent);
+}
+body.tllm-room #editorRoom .ql-snow .ql-picker-label:hover,
+body.tllm-room #editorRoom .ql-snow .ql-picker-label.ql-active {
+    color: var(--tllm-accent);
+}
+body.tllm-room #editorRoom .ql-snow .ql-picker-options {
+    background: var(--tllm-surface-2);
+    border-color: var(--tllm-border);
 }

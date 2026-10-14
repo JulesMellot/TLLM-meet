@@ -71,6 +71,7 @@
 
     // Screen, whiteboard, editor, files and videos: presenters, and the people they allowed (checked by the server too)
     const canShare = () => amPresenter() || T.sharers.has(rc?.peer_id);
+    T.canShare = canShare;
 
     // ####################################################
     // PATCHES: route MiroTalk's panels and windows to the new layout
@@ -318,6 +319,7 @@
         const share = $('tllmShare');
         share.hidden = !canShare() || (!isShown('startScreenButton') && !isShown('stopScreenButton'));
         document.body.classList.toggle('tllm-cannot-share', !canShare());
+        window.tllmCollab?.setWritable(canShare());
         share.setAttribute('aria-pressed', String(sharing));
         share.querySelector('.tllm-lb').textContent = sharing ? 'Arrêter le partage' : "Partager l'écran";
 
@@ -573,7 +575,7 @@
 
         let share = '';
         if (isShown('whiteboardButton')) share += item('click:whiteboardButton', 'fas fa-chalkboard', 'Tableau blanc');
-        if (isShown('editorButton')) share += item('click:editorButton', 'fas fa-file-pen', 'Éditeur de texte');
+        if (isShown('editorButton')) share += item('click:editorButton', 'fas fa-file-pen', 'Notes partagées');
         if (isShown('fileShareExtraButton'))
             share += item('click:fileShareExtraButton', 'fas fa-paperclip', 'Envoyer un fichier');
         if ($('tabVideoShareBtn') && cfg().settings?.tabVideoShareBtn !== false)
@@ -582,6 +584,9 @@
         if (share && canShare()) html += heading('Partager') + share;
 
         let meeting = '';
+        // Without the right to share, the notes can still be read
+        if (!canShare() && isShown('editorButton'))
+            meeting += item('click:editorButton', 'fas fa-file-lines', 'Lire les notes partagées');
         if (isShown('transcriptionButton'))
             meeting += item('click:transcriptionButton', 'fas fa-closed-captioning', 'Sous-titres');
         if (amPresenter() && isShown('startRecButton'))

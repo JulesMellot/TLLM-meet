@@ -531,6 +531,92 @@ describe('Only the admin can create a meeting (integration)', function () {
         });
     });
 
+    describe('Shared editor and whiteboard (collabSync)', () => {
+        const Y = require('yjs');
+        const syncProtocol = require('y-protocols/sync');
+        const awarenessProtocol = require('y-protocols/awareness');
+        const encoding = require('lib0/encoding');
+        const decoding = require('lib0/decoding');
+        const ROOM = 'notes-' + crypto.randomBytes(3).toString('hex');
+        let admin;
+        let bob;
+        let carol;
+        const toCarol = [];
+
+        const updateMessage = (text) => {
+            const doc = new Y.Doc();
+            doc.getText('editor').insert(0, text);
+            const encoder = encoding.createEncoder();
+            syncProtocol.writeUpdate(encoder, Y.encodeStateAsUpdate(doc));
+            return encoding.toUint8Array(encoder);
+        };
+        // Apply what the server sent to a fresh document and read the editor text
+        const textFrom = (messages) => {
+            const doc = new Y.Doc();
+            for (const m of messages) {
+                const decoder = decoding.createDecoder(new Uint8Array(m));
+                syncProtocol.readSyncMessage(decoder, encoding.createEncoder(), doc, null);
+            }
+            return doc.getText('editor').toString();
+        };
+        const step1 = () => {
+            const encoder = encoding.createEncoder();
+            syncProtocol.writeSyncStep1(encoder, new Y.Doc());
+            return encoding.toUint8Array(encoder);
+        };
+
+        before(async () => {
+            const cookie = await login(ADMIN);
+            admin = await connect(cookie);
+            bob = await connect();
+            carol = await connect();
+            sockets.push(admin, bob, carol);
+            await joinRoom(admin, ROOM, peerInfo('Jules'), (await createToken(ROOM, cookie)).json.token);
+            await joinRoom(bob, ROOM, peerInfo('Bob'));
+            await joinRoom(carol, ROOM, peerInfo('Carol'));
+            carol.on('collabSync', (data) => toCarol.push(data));
+        });
+
+        it('drops writes from a guest who may not share', async () => {
+            bob.emit('collabSync', updateMessage('from bob'));
+            await wait(300);
+            assert.equal(toCarol.length, 0);
+        });
+
+        it('relays the admin writes to everyone and keeps them for late joiners', async () => {
+            admin.emit('collabSync', updateMessage('Ordre du jour'));
+            await wait(300);
+            assert.equal(textFrom(toCarol), 'Ordre du jour');
+
+            const dave = await connect();
+            sockets.push(dave);
+            await joinRoom(dave, ROOM, peerInfo('Dave'));
+            const replies = [];
+            dave.on('collabSync', (data) => replies.push(data));
+            dave.emit('collabSync', step1());
+            await wait(300);
+            assert.equal(replies.length, 2, 'what dave misses, then what the server misses');
+            assert.equal(textFrom(replies), 'Ordre du jour');
+        });
+
+        it('shows the name the server knows next to a cursor', async () => {
+            const doc = new Y.Doc();
+            const awareness = new awarenessProtocol.Awareness(doc);
+            awareness.setLocalState({ user: { name: 'Jules', color: 'red;background:url(x)' }, cursor: null });
+            const seen = [];
+            carol.on('collabAwareness', (data) => seen.push(data));
+            bob.emit('collabAwareness', awarenessProtocol.encodeAwarenessUpdate(awareness, [doc.clientID]));
+            await wait(300);
+            awareness.destroy();
+            assert.equal(seen.length, 1);
+            const other = new awarenessProtocol.Awareness(new Y.Doc());
+            awarenessProtocol.applyAwarenessUpdate(other, new Uint8Array(seen[0]), null);
+            const state = other.getStates().get(doc.clientID);
+            other.destroy();
+            assert.deepEqual(state.user, { name: 'Bob', color: '#8a94a6' });
+        });
+    });
+
     it('revokes the session on logout (replaying the old cookie fails)', async () => {
         const cookie = await login(ADMIN2);
         assert.equal((await createToken('logout-room', cookie)).status, 200);
