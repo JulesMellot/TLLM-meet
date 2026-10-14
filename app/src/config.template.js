@@ -1271,18 +1271,18 @@ module.exports = {
              * UI Section Visibility
              * ---------------------
              * Toggle display of various page sections.
-             * Set to 'false' via environment variables to hide.
+             * TLLM*meet: upstream landing sections are hidden unless set to 'true'.
              */
             html: {
-                topSponsors: process.env.SHOW_TOP_SPONSORS !== 'false',
-                features: process.env.SHOW_FEATURES !== 'false',
-                teams: process.env.SHOW_TEAMS !== 'false',
-                tryEasier: process.env.SHOW_TRY_EASIER !== 'false',
-                poweredBy: process.env.SHOW_POWERED_BY !== 'false',
-                sponsors: process.env.SHOW_SPONSORS !== 'false',
-                pastSponsors: process.env.SHOW_PAST_SPONSORS !== 'false',
-                advertisers: process.env.SHOW_ADVERTISERS !== 'false',
-                supportUs: process.env.SHOW_SUPPORT_US !== 'false',
+                topSponsors: process.env.SHOW_TOP_SPONSORS === 'true',
+                features: process.env.SHOW_FEATURES === 'true',
+                teams: process.env.SHOW_TEAMS === 'true',
+                tryEasier: process.env.SHOW_TRY_EASIER === 'true',
+                poweredBy: process.env.SHOW_POWERED_BY === 'true',
+                sponsors: process.env.SHOW_SPONSORS === 'true',
+                pastSponsors: process.env.SHOW_PAST_SPONSORS === 'true',
+                advertisers: process.env.SHOW_ADVERTISERS === 'true',
+                supportUs: process.env.SHOW_SUPPORT_US === 'true',
                 footer: process.env.SHOW_FOOTER !== 'false',
             },
 
