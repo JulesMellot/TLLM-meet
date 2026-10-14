@@ -15,15 +15,13 @@
         "build:mediasoup-client": "npx esbuild node_modules/mediasoup-client/lib/index.js --bundle --minify --format=iife --global-name=mediasoupClient --outfile=public/sfu/MediasoupClient.js --platform=browser",
         "postinstall": "npm run build:mediasoup-client",
         "lint": "npx prettier --write .",
-        "docker:build": "docker build --tag mirotalk/sfu:latest .",
+        "docker:build": "docker build --tag tllm-meet:latest .",
         "docker:rmi": "docker image prune -f",
-        "docker:push": "docker push mirotalk/sfu:latest",
-        "docker:pull": "docker pull mirotalk/sfu:latest",
-        "docker:rmc": "docker container rm mirotalksfu --force",
-        "docker:run": "docker run -d -p 40000-40100:40000-40100 -p 3010:3010 -v ./.env:/src/.env -v ./app/src/config.js:/src/app/src/config.js:ro --name mirotalksfu mirotalk/sfu:latest",
-        "docker:run-vm": "docker run -d -p 40000-40100:40000-40100 -p 3010:3010 -v ./.env:/src/.env -v ./app/:/src/app/:ro -v ./public/:/src/public/:ro --name mirotalksfu mirotalk/sfu:latest",
-        "docker:start": "docker start mirotalksfu",
-        "docker:stop": "docker stop mirotalksfu"
+        "docker:rmc": "docker container rm tllm-meet --force",
+        "docker:run": "docker run -d -p 40000-40100:40000-40100 -p 3010:3010 -v ./.env:/src/.env -v ./app/src/config.js:/src/app/src/config.js:ro --name tllm-meet tllm-meet:latest",
+        "docker:run-vm": "docker run -d -p 40000-40100:40000-40100 -p 3010:3010 -v ./.env:/src/.env -v ./app/:/src/app/:ro -v ./public/:/src/public/:ro --name tllm-meet tllm-meet:latest",
+        "docker:start": "docker start tllm-meet",
+        "docker:stop": "docker stop tllm-meet"
     },
     "repository": {
         "type": "git",

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-# MiroTalk SFU installer for Ubuntu 22.04 and 24.04.
+# TLLM*meet installer for Ubuntu 22.04 and 24.04 (adapted from the MiroTalk SFU installer).
 # Run from the repository root with: sudo ./install.sh
 
 set -Eeuo pipefail
 
 readonly NODE_MAJOR=24
-readonly DOCKER_IMAGE='mirotalk/sfu:latest'
+readonly DOCKER_IMAGE='tllm-meet:latest'
 readonly CONFIG_FILE='app/src/config.js'
 readonly CONFIG_TEMPLATE='app/src/config.template.js'
 readonly ENV_FILE='.env'
@@ -117,6 +117,41 @@ ensure_jwt_secret() {
     fi
 }
 
+ensure_host_users() {
+    local current login password display
+
+    current="$(grep -E '^HOST_USERS=' "$ENV_FILE" | tail -n 1 | sed -E 's/^HOST_USERS=//; s/^"//; s/"[[:space:]]*(#.*)?$//' || true)"
+    if [[ -n "$current" ]]; then
+        log info "Keeping existing HOST_USERS in ${ENV_FILE}"
+        return
+    fi
+
+    log info 'Admin account (only the admin can create meetings)'
+    while true; do
+        read -r -p 'Admin login: ' login
+        read -r -s -p 'Admin password: ' password
+        printf '\n'
+        read -r -p 'Display name: ' display
+        if [[ -z "$login" || -z "$password" || -z "$display" ]]; then
+            printf 'All three fields are required.\n'
+        elif [[ "$login$password$display" == *[:\|\"]* ]]; then
+            printf "The characters ':', '|' and '\"' are not allowed.\n"
+        elif (( ${#password} > 36 )); then
+            printf 'The password must be 36 characters or fewer.\n'
+        else
+            break
+        fi
+    done
+
+    # Replace the line without passing the password through sed
+    local tmp
+    tmp="$(mktemp)"
+    grep -vE '^HOST_USERS=' "$ENV_FILE" > "$tmp" || true
+    printf 'HOST_USERS="%s:%s:%s"\n' "$login" "$password" "$display" >> "$tmp"
+    cat "$tmp" > "$ENV_FILE"
+    rm -f "$tmp"
+}
+
 run_as_project_user() {
     if [[ -n "${SUDO_USER:-}" ]] && [[ "$SUDO_USER" != 'root' ]]; then
         sudo -u "$SUDO_USER" -- "$@"
@@ -188,9 +223,9 @@ install_docker() {
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 [[ -f package.json && -f "$CONFIG_TEMPLATE" && -f "$ENV_TEMPLATE" ]] || \
-    die 'Run this script from a complete MiroTalk SFU checkout.'
+    die 'Run this script from a complete TLLM*meet checkout.'
 
-log info "MiroTalk SFU installer on Ubuntu ${VERSION_ID:-unknown}"
+log info "TLLM*meet installer on Ubuntu ${VERSION_ID:-unknown}"
 
 if confirm 'Use Docker?' y; then
     if confirm 'Install or update Docker dependencies?' y; then
@@ -204,17 +239,14 @@ if confirm 'Use Docker?' y; then
     copy_if_missing "$CONFIG_TEMPLATE" "$CONFIG_FILE"
     copy_if_missing "$ENV_TEMPLATE" "$ENV_FILE"
     ensure_jwt_secret
+    ensure_host_users
     copy_if_missing "$COMPOSE_TEMPLATE" "$COMPOSE_FILE"
 
-    if confirm 'Use the official Docker image?' y; then
-        log info 'Pulling the latest official image'
-        docker pull "$DOCKER_IMAGE"
-    else
-        log info 'Building the image from this checkout'
-        docker build --tag "$DOCKER_IMAGE" .
-    fi
+    # Always build from this checkout: the official mirotalk/sfu image does not contain TLLM*meet.
+    log info 'Building the image from this checkout'
+    docker build --tag "$DOCKER_IMAGE" .
 
-    log info 'Starting MiroTalk SFU in the background'
+    log info 'Starting TLLM*meet in the background'
     docker compose up -d
     docker compose ps
 else
@@ -231,10 +263,11 @@ else
     copy_if_missing "$CONFIG_TEMPLATE" "$CONFIG_FILE"
     copy_if_missing "$ENV_TEMPLATE" "$ENV_FILE"
     ensure_jwt_secret
+    ensure_host_users
 
     log info 'Installing npm dependencies from the lockfile'
     run_as_project_user npm ci
 
-    log info 'Starting MiroTalk SFU (press Ctrl+C to stop)'
+    log info 'Starting TLLM*meet (press Ctrl+C to stop)'
     run_as_project_user npm start
 fi
