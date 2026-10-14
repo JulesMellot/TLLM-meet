@@ -648,96 +648,6 @@ module.exports = {
 
     integrations: {
         /**
-         * ChatGPT Integration Configuration
-         * ================================
-         * OpenAI API integration for AI-powered chat functionality
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Go to https://platform.openai.com/
-         * 2. Create your OpenAI account
-         * 3. Generate your API key at https://platform.openai.com/account/api-keys
-         *
-         * Core Settings:
-         * -------------
-         * - enabled    : Enable/disable ChatGPT integration [true/false] (default: false)
-         * - basePath   : OpenAI API endpoint (default: 'https://api.openai.com/v1/')
-         * - apiKey     : OpenAI ProjectAPI secret key (ALWAYS store in .env)
-         * - model      : GPT model version (default: 'gpt-3.5-turbo')
-         *
-         * Advanced Settings:
-         * -----------------
-         * - max_tokens: Maximum response length (default: 1024 tokens)
-         * - temperature: Creativity control (0=strict, 1=creative) (default: 0)
-         *
-         * Usage Example:
-         * -------------
-         * 1. Supported Models:
-         *    - gpt-3.5-turbo (recommended)
-         *    - gpt-4
-         *    - gpt-4-turbo
-         *    - ...
-         *
-         * 2. Temperature Guide:
-         *    - 0.0: Factual responses
-         *    - 0.7: Balanced
-         *    - 1.0: Maximum creativity
-         */
-        chatGPT: {
-            enabled: process.env.CHATGPT_ENABLED === 'true',
-            basePath: process.env.CHATGPT_BASE_PATH || 'https://api.openai.com/v1/',
-            apiKey: process.env.CHATGPT_API_KEY || '',
-            model: process.env.CHATGPT_MODEL || 'gpt-3.5-turbo',
-            max_tokens: parseInt(process.env.CHATGPT_MAX_TOKENS) || 1024,
-            temperature: parseInt(process.env.CHATGPT_TEMPERATURE) || 0.7,
-        },
-
-        /**
-         * DeepSeek Integration Configuration
-         * ================================
-         * DeepSeek API integration for AI-powered chat functionality
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Go to https://deepseek.com/
-         * 2. Create your DeepSeek account
-         * 3. Generate your API key at https://deepseek.com/account/api-keys
-         *
-         * Core Settings:
-         * -------------
-         * - enabled    : Enable/disable DeepSeek integration [true/false] (default: false)
-         * - basePath   : DeepSeek API endpoint (default: 'https://api.deepseek.com/v1/')
-         * - apiKey     : DeepSeek API secret key (ALWAYS store in .env)
-         * - model      : DeepSeek model version (default: 'deepseek-v4-flash')
-         *
-         * Advanced Settings:
-         * -----------------
-         * - max_tokens: Maximum response length (default: 1024 tokens)
-         * - temperature: Creativity control (0=strict, 1=creative) (default: 0)
-         *
-         * Usage Example:
-         * -------------
-         * 1. Supported Models:
-         *  - deepseek-v4-flash (recommended)
-         *  - deepseek-v4-pro
-         *  - ...
-         *
-         * 2. Temperature Guide:
-         *  - 0.0: Factual responses
-         *  - 0.7: Balanced
-         *  - 1.0: Maximum creativity
-         *
-         */
-        deepSeek: {
-            enabled: process.env.DEEP_SEEK_ENABLED === 'true',
-            basePath: process.env.DEEP_SEEK_BASE_PATH || 'https://api.deepseek.com/v1/',
-            apiKey: process.env.DEEP_SEEK_API_KEY || '',
-            model: process.env.DEEP_SEEK_MODEL || 'deepseek-v4-flash',
-            max_tokens: parseInt(process.env.DEEP_SEEK_MAX_TOKENS) || 1024,
-            temperature: parseInt(process.env.DEEP_SEEK_TEMPERATURE) || 0.7,
-        },
-
-        /**
          * Whisper Speech-to-Text Configuration
          * ====================================
          * Server-side audio transcription using an OpenAI-compatible
@@ -774,64 +684,6 @@ module.exports = {
             language: process.env.WHISPER_LANGUAGE || '',
             segmentSeconds: parseInt(process.env.WHISPER_SEGMENT_SECONDS) || 5,
             maxAudioBytes: parseInt(process.env.WHISPER_MAX_AUDIO_BYTES) || 25 * 1024 * 1024,
-        },
-
-        /**
-         * LiveAvatar Video AI Configuration
-         * =================================
-         * AI-powered avatar streaming integrations.
-         * Supported providers: liveavatar, anam
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Go to https://app.liveavatar.com
-         * 2. Create your LiveAvatar account
-         * 3. Generate your API key from settings
-         * 4. (Optional) Configure Anam provider:
-         *    - https://lab.anam.ai
-         *    - create API key and copy LLM id
-         *
-         * Core Settings:
-         * -------------
-         * - enabled    : Enable/disable Video AI [true/false] (default: false)
-         * - defaultProvider: Default provider shown in UI (liveavatar|anam)
-         * - liveavatar     : LiveAvatar provider config
-         * - anam           : Anam provider config
-         *
-         * AI Behavior:
-         * -----------
-         * - systemLimit: Personality/behavior instructions for the AI avatar
-         *                (default: Streaming avatar instructions for MiroTalk SFU)
-         */
-        videoAI: {
-            enabled: process.env.VIDEOAI_ENABLED === 'true',
-            defaultProvider: process.env.VIDEOAI_DEFAULT_PROVIDER || process.env.VIDEOAI_PROVIDER || 'liveavatar',
-            systemLimit: process.env.VIDEOAI_SYSTEM_LIMIT || 'You are a streaming avatar from MiroTalk SFU...',
-            sessionTimeLimit: process.env.VIDEOAI_SESSION_TIME_LIMIT
-                ? parseInt(process.env.VIDEOAI_SESSION_TIME_LIMIT, 10)
-                : 0, // Session time limit in seconds (0 = unlimited)
-            liveavatar: {
-                enabled: process.env.VIDEOAI_LIVEAVATAR_ENABLED
-                    ? process.env.VIDEOAI_LIVEAVATAR_ENABLED === 'true'
-                    : true,
-                basePath:
-                    process.env.VIDEOAI_LIVEAVATAR_BASE_PATH ||
-                    process.env.VIDEOAI_BASE_PATH ||
-                    'https://api.liveavatar.com',
-                apiKey: process.env.VIDEOAI_LIVEAVATAR_API_KEY || process.env.VIDEOAI_API_KEY || '',
-                mode: process.env.VIDEOAI_LIVEAVATAR_MODE || process.env.VIDEOAI_MODE || 'FULL',
-                contextId: process.env.VIDEOAI_LIVEAVATAR_CONTEXT_ID || process.env.VIDEOAI_CONTEXT_ID || '',
-            },
-            anam: {
-                enabled: process.env.VIDEOAI_ANAM_ENABLED
-                    ? process.env.VIDEOAI_ANAM_ENABLED === 'true'
-                    : !!(process.env.VIDEOAI_ANAM_API_KEY || ''),
-                basePath: process.env.VIDEOAI_ANAM_BASE_PATH || 'https://api.anam.ai',
-                apiKey: process.env.VIDEOAI_ANAM_API_KEY || '',
-                llmId: process.env.VIDEOAI_ANAM_LLM_ID || '',
-                avatarModel: process.env.VIDEOAI_ANAM_AVATAR_MODEL || 'cara-4',
-                systemLimit: process.env.VIDEOAI_ANAM_SYSTEM_LIMIT || '',
-            },
         },
 
         /**
@@ -1501,7 +1353,6 @@ module.exports = {
                 tabNotificationsBtn: process.env.SHOW_NOTIFICATIONS_TAB !== 'false',
                 tabNetworkBtn: process.env.SHOW_NETWORK_TAB !== 'false',
                 tabModerator: process.env.SHOW_MODERATOR_TAB !== 'false',
-                tabVideoAIBtn: process.env.SHOW_VIDEOAI_TAB !== 'false',
                 tabRecording: process.env.SHOW_RECORDING_TAB !== 'false',
                 host_only_recording: process.env.HOST_ONLY_RECORDING !== 'false',
                 pushToTalk: process.env.ENABLE_PUSH_TO_TALK !== 'false',
@@ -1575,8 +1426,6 @@ module.exports = {
                 chatEmojiButton: process.env.SHOW_CHAT_EMOJI !== 'false',
                 chatMarkdownButton: process.env.SHOW_CHAT_MARKDOWN !== 'false',
                 chatSpeechStartButton: process.env.SHOW_CHAT_SPEECH !== 'false',
-                chatGPT: process.env.ENABLE_CHAT_GPT !== 'false',
-                deepSeek: process.env.ENABLE_DEEP_SEEK !== 'false',
                 chatTyping: process.env.ENABLE_CHAT_TYPING !== 'false',
             },
 

@@ -74,7 +74,6 @@ const html = {
     close: 'fas fa-times',
     stop: 'fas fa-circle-stop',
     share: 'fas fa-share-alt',
-    robot: 'fas fa-robot',
     volume: 'fas fa-volume-mute',
 };
 
@@ -120,7 +119,6 @@ const icons = {
     youtube: '<i class="fab fa-youtube"></i>',
     times: '<i class="fas fa-times"></i>',
     statusCircle: (status) => `<i class="fa fa-circle ${status}"></i>`,
-    robot: '<i class="fas fa-robot"></i>',
 };
 
 const image = {
@@ -147,8 +145,6 @@ const image = {
     feedback: '../images/feedback.png',
     lobby: '../images/lobby.png',
     email: '../images/email.png',
-    chatgpt: '../images/chatgpt.png',
-    deepSeek: '../images/deepSeek.png',
     all: '../images/all.png',
     forbidden: '../images/forbidden.png',
     broadcasting: '../images/broadcasting.png',
@@ -235,37 +231,6 @@ const enums = {
     //...
 };
 
-// LiveAvatar config
-const VideoAI = {
-    enabled: true,
-    active: false,
-    provider: 'liveavatar',
-    providers: {
-        available: {
-            liveavatar: true,
-            anam: false,
-        },
-        defaultProvider: 'liveavatar',
-    },
-    info: {},
-    avatarId: null,
-    avatarName: '',
-    avatarModel: null,
-    avatarVoice: null,
-    quality: 'medium',
-    sessionToken: null,
-    livekitRoom: null,
-    anamClient: null,
-    anamSessionId: null,
-    sessionTimeLimit: 0,
-    sessionCountdown: null,
-    avatarProducers: [],
-    shareToRoom: false,
-    useChatGPT: true,
-    mediaParticipantIdentity: null,
-    muteAvatarAudio: false,
-};
-
 // Recording
 let recordedBlobs = [];
 
@@ -341,8 +306,6 @@ class RoomClient {
             screen_annotations_cant_draw: false,
             chat_cant_privately: false,
             chat_cant_publicly: false,
-            chat_cant_chatgpt: false,
-            chat_cant_deep_seek: false,
             media_cant_sharing: false,
             polls_cant_create: false,
         };
@@ -370,9 +333,6 @@ class RoomClient {
         this.chatTypingLastEmit = 0;
         this.chatTypingStopTimer = null;
         this.chatTypingPeers = new Map();
-        this.videoAIContainer = null;
-        this.videoAIElement = null;
-        this.videoAIRecognitionPersistent = false;
 
         this.dominantSpeaker = false;
         this.isAudioAllowed = isAudioAllowed;
@@ -449,9 +409,6 @@ class RoomClient {
         this.videoQualitySelectedIndex = 0;
 
         this.pollSelectedOptions = {};
-        this.chatGPTContext = [];
-        this.deepSeekContext = [];
-        this.chatGPTEnabled = false;
         this.chatMessages = [];
         this.leftMsgAvatar = null;
         this.rightMsgAvatar = null;
@@ -853,12 +810,6 @@ class RoomClient {
                 console.warn('7.1-WARNING ----> GLOBAL Room Lobby detected');
             }
 
-            // Room-level VideoAI availability, kept so handleRules can gate the tab correctly
-            // both at join and when a peer is promoted/demoted mid-session.
-            this.videoAIEnabled = room.videoAIEnabled || false;
-            this.videoAIProviders = room.videoAIProviders || null;
-            VideoAI.providers = room.videoAIProviders || VideoAI.providers;
-
             handleRules(isPresenter);
 
             // ###################################################################################################
@@ -924,8 +875,6 @@ class RoomClient {
             if (room.followMe && room.followMe.enabled && !isPresenter) {
                 this._pendingFollowMe = room.followMe;
             }
-            // Store ChatGPT enabled state for VideoAI fallback
-            this.chatGPTEnabled = room.chatGPTEnabled || false;
             this.remoteControlEnabled = room.remoteControlEnabled || false;
             this.remoteControlDownloadUrl = room.remoteControlDownloadUrl;
             // Whisper server-side transcription
@@ -934,23 +883,6 @@ class RoomClient {
                 transcription.whisper.isEnabled = this.whisperEnabled;
                 transcription.whisper.segmentMs = (room.whisperSegmentSeconds || 5) * 1000;
                 this.whisperEnabled ? show('transcriptWhisperLi') : hide('transcriptWhisperLi');
-            }
-            const preferredProvider = VideoAI.providers?.defaultProvider || 'liveavatar';
-            const available = VideoAI.providers?.available || {};
-            if (preferredProvider === 'anam' && available.anam) {
-                VideoAI.provider = 'anam';
-            } else if (available.liveavatar) {
-                VideoAI.provider = 'liveavatar';
-            } else if (available.anam) {
-                VideoAI.provider = 'anam';
-            }
-            // Check if VideoAI is enabled and hide to guests by default
-            if (!isPresenter || !this.videoAIEnabled) {
-                VideoAI.enabled = false;
-                elemDisplay('tabVideoAIBtn', false);
-            }
-            if (room.videoAISessionTimeLimit > 0) {
-                VideoAI.sessionTimeLimit = room.videoAISessionTimeLimit;
             }
             // Check che RTMP config
             if (room.rtmp) {
@@ -1615,16 +1547,13 @@ class RoomClient {
         // Drop messages that violate the current moderator restrictions (defense-in-depth
         // in case a peer bypasses the client-side send guards).
         const isPublicMessage = data.to_peer_id === 'all';
-        const isAIMessage = ['ChatGPT', 'DeepSeek'].includes(data.to_peer_id);
-        if (!isAIMessage) {
-            if (isPublicMessage && this._moderator.chat_cant_publicly) {
-                console.warn('Dropping public message: disabled by moderator', data);
-                return;
-            }
-            if (!isPublicMessage && this._moderator.chat_cant_privately) {
-                console.warn('Dropping private message: disabled by moderator', data);
-                return;
-            }
+        if (isPublicMessage && this._moderator.chat_cant_publicly) {
+            console.warn('Dropping public message: disabled by moderator', data);
+            return;
+        }
+        if (!isPublicMessage && this._moderator.chat_cant_privately) {
+            console.warn('Dropping private message: disabled by moderator', data);
+            return;
         }
         this.showMessage(data);
     };
@@ -4146,16 +4075,13 @@ class RoomClient {
                         console.log('DataChannel chat message received', msg);
                         // Drop messages that violate current moderator restrictions
                         const isPublicMessage = msg.to_peer_id === 'all';
-                        const isAIMessage = ['ChatGPT', 'DeepSeek'].includes(msg.to_peer_id);
-                        if (!isAIMessage) {
-                            if (isPublicMessage && this._moderator.chat_cant_publicly) {
-                                console.warn('Dropping DataChannel public message: disabled by moderator', msg);
-                                return;
-                            }
-                            if (!isPublicMessage && this._moderator.chat_cant_privately) {
-                                console.warn('Dropping DataChannel private message: disabled by moderator', msg);
-                                return;
-                            }
+                        if (isPublicMessage && this._moderator.chat_cant_publicly) {
+                            console.warn('Dropping DataChannel public message: disabled by moderator', msg);
+                            return;
+                        }
+                        if (!isPublicMessage && this._moderator.chat_cant_privately) {
+                            console.warn('Dropping DataChannel private message: disabled by moderator', msg);
+                            return;
                         }
                         this.showMessage(msg);
                     }
@@ -4888,7 +4814,6 @@ class RoomClient {
         this.saveRecording('Client exiting the room');
         this.microphoneRequest++;
         this.disableRNNoiseSuppression();
-        if (VideoAI.active) this.stopSession();
         if (this.rtmpFilestreamer) this.stopRTMP();
         if (this.rtmpUrlstreamer) this.stopRTMPfromURL();
 
@@ -5056,8 +4981,6 @@ class RoomClient {
         const remoteAudioElements = Array.from(this.remoteAudioEl?.querySelectorAll('audio') || []);
 
         audioElement ? outputElements.push(audioElement) : outputElements.push(...remoteAudioElements);
-
-        if (this.videoAIElement) outputElements.push(this.videoAIElement);
 
         const els = [...new Set(outputElements.filter(Boolean))];
         if (!els.length) return;
@@ -5999,7 +5922,7 @@ class RoomClient {
         }
     }
 
-    handlePN(elemId, pnId, camId, isScreen = false, isAvatar = false) {
+    handlePN(elemId, pnId, camId, isScreen = false) {
         let videoPlayer = this.getId(elemId);
         let btnPn = this.getId(pnId);
         let cam = this.getId(camId);
@@ -6050,7 +5973,6 @@ class RoomClient {
                 }
             });
 
-            if (isAvatar && !this.isMobileDevice && this.videoMediaContainer.childElementCount > 1) btnPn.click();
             this.scheduleParticipantViewRestore();
         }
     }
@@ -6996,7 +6918,7 @@ class RoomClient {
     }
 
     sendMessage() {
-        if (!this.thereAreParticipants() && !isChatGPTOn && !isDeepSeekOn && !(VideoAI.enabled && VideoAI.active)) {
+        if (!this.thereAreParticipants()) {
             this.cleanMessage();
             isChatPasteTxt = false;
             return this.userLog('info', 'No participants in the room', 'top-end');
@@ -7055,18 +6977,64 @@ class RoomClient {
             msg_id: msg_id,
         };
 
-        if (isChatGPTOn) {
-            if (this._moderator.chat_cant_chatgpt) {
-                this.cleanMessage();
-                return this.userLog(
-                    'warning',
-                    'The moderator does not allow you to chat with ChatGPT',
-                    'top-end',
-                    6000
-                );
-            }
-            // If VideoAI is active and ChatGPT interaction is off (toggled or disabled), speak via avatar instead
-            if (VideoAI.enabled && VideoAI.active && !VideoAI.useChatGPT) {
+        const participantsList = this.getId('participantsList');
+        const participantsListItems = participantsList.getElementsByTagName('li');
+        for (let i = 0; i < participantsListItems.length; i++) {
+            const li = participantsListItems[i];
+            if (li.classList.contains('active')) {
+                data.to_peer_id = li.getAttribute('data-to-id');
+                data.to_peer_name = li.getAttribute('data-to-name');
+
+                const isPublicMessage = data.to_peer_id === 'all';
+
+                if (isPublicMessage && this._moderator.chat_cant_publicly) {
+                    this.cleanMessage();
+                    return this.userLog(
+                        'warning',
+                        'The moderator does not allow you to chat publicly',
+                        'top-end',
+                        6000
+                    );
+                }
+
+                if (!isPublicMessage && this._moderator.chat_cant_privately) {
+                    this.cleanMessage();
+                    return this.userLog(
+                        'warning',
+                        'The moderator does not allow you to chat privately',
+                        'top-end',
+                        6000
+                    );
+                }
+
+                console.log('Send message:', data);
+
+                // Try DataChannel for public messages, fallback to signaling
+                if (isPublicMessage && this.useDataChannel && this.isChatDataChannelOpen()) {
+                    const dcMsg = {
+                        type: 'chat',
+                        room_id: data.room_id,
+                        peer_name: data.peer_name,
+                        peer_avatar: data.peer_avatar,
+                        peer_id: data.peer_id,
+                        to_peer_id: data.to_peer_id,
+                        to_peer_name: data.to_peer_name,
+                        peer_msg: data.peer_msg,
+                        msg_id: data.msg_id,
+                        timestamp: Date.now(),
+                    };
+                    const sent = this.sendChatDataChannelMessage(dcMsg);
+                    if (!sent) {
+                        console.warn('DataChannel send failed, falling back to signaling');
+                        this.socket.emit('message', data);
+                    } else {
+                        console.log('Message sent via DataChannel');
+                    }
+                } else {
+                    // Private messages or DataChannel unavailable: use signaling
+                    this.socket.emit('message', data);
+                }
+
                 this.setMsgAvatar('left', this.peer_name, this.peer_avatar);
                 this.appendMessage(
                     'left',
@@ -7074,213 +7042,11 @@ class RoomClient {
                     this.peer_name,
                     this.peer_id,
                     peer_msg,
-                    'ChatGPT',
-                    'ChatGPT'
+                    data.to_peer_id,
+                    data.to_peer_name,
+                    data.msg_id
                 );
                 this.cleanMessage();
-                this.streamingTask(peer_msg);
-                return;
-            }
-
-            data.to_peer_id = 'ChatGPT';
-            data.to_peer_name = 'ChatGPT';
-            console.log('Send message:', data);
-            this.socket.emit('message', data);
-            this.setMsgAvatar('left', this.peer_name, this.peer_avatar);
-            this.appendMessage(
-                'left',
-                this.leftMsgAvatar,
-                this.peer_name,
-                this.peer_id,
-                peer_msg,
-                data.to_peer_id,
-                data.to_peer_name
-            );
-            this.cleanMessage();
-
-            this.showAITypingIndicator('ChatGPT');
-
-            this.socket
-                .request('getChatGPT', {
-                    time: getDataTimeString(),
-                    room: this.room_id,
-                    name: this.peer_name,
-                    prompt: peer_msg,
-                    context: this.chatGPTContext,
-                })
-                .then((completion) => {
-                    this.hideAITypingIndicator('ChatGPT');
-                    if (!completion) return;
-                    const { message, context } = completion;
-                    this.chatGPTContext = context ? context : [];
-                    console.log('Receive message:', message);
-                    this.setMsgAvatar('right', 'ChatGPT');
-                    this.appendMessage('right', image.chatgpt, 'ChatGPT', this.peer_id, message, 'ChatGPT', 'ChatGPT');
-                    this.cleanMessage();
-                    this.streamingTask(message); // Video AI avatar speak
-                    this.speechInMessages && !VideoAI.active
-                        ? this.speechMessage(true, 'ChatGPT', message)
-                        : this.sound('message');
-                })
-                .catch((err) => {
-                    this.hideAITypingIndicator('ChatGPT');
-                    console.log('ChatGPT error:', err);
-                });
-        }
-
-        if (isDeepSeekOn) {
-            if (this._moderator.chat_cant_deep_seek) {
-                this.cleanMessage();
-                return this.userLog(
-                    'warning',
-                    'The moderator does not allow you to chat with DeepSeek',
-                    'top-end',
-                    6000
-                );
-            }
-            data.to_peer_id = 'DeepSeek';
-            data.to_peer_name = 'DeepSeek';
-            console.log('Send message:', data);
-            this.socket.emit('message', data);
-            this.setMsgAvatar('left', this.peer_name, this.peer_avatar);
-            this.appendMessage(
-                'left',
-                this.leftMsgAvatar,
-                this.peer_name,
-                this.peer_id,
-                peer_msg,
-                data.to_peer_id,
-                data.to_peer_name
-            );
-            this.cleanMessage();
-
-            this.showAITypingIndicator('DeepSeek');
-
-            this.socket
-                .request('getDeepSeek', {
-                    time: getDataTimeString(),
-                    room: this.room_id,
-                    name: this.peer_name,
-                    prompt: peer_msg,
-                    context: this.deepSeekContext,
-                })
-                .then((completion) => {
-                    this.hideAITypingIndicator('DeepSeek');
-                    if (!completion) return;
-                    const { message, context } = completion;
-                    this.deepSeekContext = context ? context : [];
-                    console.log('Receive message:', message);
-                    this.setMsgAvatar('right', 'DeepSeek');
-                    this.appendMessage(
-                        'right',
-                        image.deepSeek,
-                        'DeepSeek',
-                        this.peer_id,
-                        message,
-                        'DeepSeek',
-                        'DeepSeek'
-                    );
-                    this.cleanMessage();
-                    this.streamingTask(message);
-                    this.speechInMessages && !VideoAI.active
-                        ? this.speechMessage(true, 'DeepSeek', message)
-                        : this.sound('message');
-                })
-                .catch((err) => {
-                    this.hideAITypingIndicator('DeepSeek');
-                    console.log('DeepSeek error:', err);
-                });
-        }
-
-        if (!isChatGPTOn && !isDeepSeekOn && VideoAI.enabled && VideoAI.active && this.chatPeerId === 'ChatGPT') {
-            // ChatGPT is off but LiveAvatar is active — speak the message directly via the avatar
-            this.setMsgAvatar('left', this.peer_name, this.peer_avatar);
-            this.appendMessage(
-                'left',
-                this.leftMsgAvatar,
-                this.peer_name,
-                this.peer_id,
-                peer_msg,
-                'ChatGPT',
-                'ChatGPT'
-            );
-            this.cleanMessage();
-            this.streamingTask(peer_msg);
-            return;
-        }
-
-        if (!isChatGPTOn && !isDeepSeekOn) {
-            const participantsList = this.getId('participantsList');
-            const participantsListItems = participantsList.getElementsByTagName('li');
-            for (let i = 0; i < participantsListItems.length; i++) {
-                const li = participantsListItems[i];
-                if (li.classList.contains('active')) {
-                    data.to_peer_id = li.getAttribute('data-to-id');
-                    data.to_peer_name = li.getAttribute('data-to-name');
-
-                    const isPublicMessage = data.to_peer_id === 'all';
-
-                    if (isPublicMessage && this._moderator.chat_cant_publicly) {
-                        this.cleanMessage();
-                        return this.userLog(
-                            'warning',
-                            'The moderator does not allow you to chat publicly',
-                            'top-end',
-                            6000
-                        );
-                    }
-
-                    if (!isPublicMessage && this._moderator.chat_cant_privately) {
-                        this.cleanMessage();
-                        return this.userLog(
-                            'warning',
-                            'The moderator does not allow you to chat privately',
-                            'top-end',
-                            6000
-                        );
-                    }
-
-                    console.log('Send message:', data);
-
-                    // Try DataChannel for public messages, fallback to signaling
-                    if (isPublicMessage && this.useDataChannel && this.isChatDataChannelOpen()) {
-                        const dcMsg = {
-                            type: 'chat',
-                            room_id: data.room_id,
-                            peer_name: data.peer_name,
-                            peer_avatar: data.peer_avatar,
-                            peer_id: data.peer_id,
-                            to_peer_id: data.to_peer_id,
-                            to_peer_name: data.to_peer_name,
-                            peer_msg: data.peer_msg,
-                            msg_id: data.msg_id,
-                            timestamp: Date.now(),
-                        };
-                        const sent = this.sendChatDataChannelMessage(dcMsg);
-                        if (!sent) {
-                            console.warn('DataChannel send failed, falling back to signaling');
-                            this.socket.emit('message', data);
-                        } else {
-                            console.log('Message sent via DataChannel');
-                        }
-                    } else {
-                        // Private messages or DataChannel unavailable: use signaling
-                        this.socket.emit('message', data);
-                    }
-
-                    this.setMsgAvatar('left', this.peer_name, this.peer_avatar);
-                    this.appendMessage(
-                        'left',
-                        this.leftMsgAvatar,
-                        this.peer_name,
-                        this.peer_id,
-                        peer_msg,
-                        data.to_peer_id,
-                        data.to_peer_name,
-                        data.msg_id
-                    );
-                    this.cleanMessage();
-                }
             }
         }
     }
@@ -7335,9 +7101,7 @@ class RoomClient {
         }
 
         if (this.speechInMessages) {
-            VideoAI.active
-                ? this.streamingTask(`New message from: ${data.peer_name}, the message is: ${data.peer_msg}`)
-                : this.speechMessage(true, data.peer_name, data.peer_msg);
+            this.speechMessage(true, data.peer_name, data.peer_msg);
         } else {
             this.sound('message');
         }
@@ -7360,9 +7124,6 @@ class RoomClient {
             // INCOMING PRIVATE MESSAGE
             if (li.id === data.peer_id && !isPublicMessage && !isMessageVisible) {
                 li.classList.add('pulsate');
-                if (!['all', 'ChatGPT', 'DeepSeek'].includes(data.to_peer_id)) {
-                    // unread-count badge handled by updateUnreadCountBadge
-                }
             }
         }
     }
@@ -7430,7 +7191,7 @@ class RoomClient {
         const getMsgId = filterXSS(msgId || '');
         const time = this.getTimeNow();
 
-        // Caller side convention is: left = local user, right = remote/assistant.
+        // Caller side convention is: left = local user, right = remote.
         // UI convention is: local user on the right, remote on the left.
         const myMessage = getSide === 'left';
         const messageClass = myMessage ? 'my-message float-right' : 'other-message';
@@ -7514,12 +7275,6 @@ class RoomClient {
         console.log('Append message to:', { to_id: getToId, to_name: getToName });
 
         switch (getToId) {
-            case 'ChatGPT':
-                chatGPTMessages.insertAdjacentHTML('beforeend', newMessageHTML);
-                break;
-            case 'DeepSeek':
-                deepSeekMessages.insertAdjacentHTML('beforeend', newMessageHTML);
-                break;
             case 'all':
                 chatPublicMessages.insertAdjacentHTML('beforeend', newMessageHTML);
                 break;
@@ -7536,14 +7291,8 @@ class RoomClient {
 
         const message = getId(`message-${chatMessagesId}`);
         if (message) {
-            if (['ChatGPT', 'DeepSeek'].includes(getFromName)) {
-                // Stream the message for ChatGPT or DeepSeek
-                this.streamMessage(message, getMsg, 100);
-            } else {
-                // Process the message for other senders
-                message.innerHTML = this.processMessage(getMsg);
-                hljs.highlightAll();
-            }
+            message.innerHTML = this.processMessage(getMsg);
+            hljs.highlightAll();
         }
 
         chatHistory.scrollTop += 500;
@@ -7650,40 +7399,12 @@ class RoomClient {
         this.applyReactionToElement(msgEl, emoji, peer_name, action);
     };
 
-    showAITypingIndicator(aiName) {
-        const containerId = aiName === 'ChatGPT' ? 'chatGPTMessages' : 'deepSeekMessages';
-        const container = this.getId(containerId);
-        if (!container) return;
-        const existing = this.getId(`ai-typing-${aiName}`);
-        if (existing) return;
-        const typingHTML = `
-            <li id="ai-typing-${aiName}" class="clearfix">
-                <div class="ai-typing-indicator">
-                    <div class="typing-dots">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                    </div>
-                </div>
-            </li>
-        `;
-        container.insertAdjacentHTML('beforeend', typingHTML);
-        const chatHistory = this.getId('chatHistory');
-        if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;
-    }
-
-    hideAITypingIndicator(aiName) {
-        const indicator = this.getId(`ai-typing-${aiName}`);
-        if (indicator) indicator.remove();
-    }
-
     // ####################################################
     // CHAT TYPING INDICATOR
     // ####################################################
 
     emitChatTyping() {
         if (!this.chatTypingIndicator || !this.socket) return;
-        if (isChatGPTOn || isDeepSeekOn || ['ChatGPT', 'DeepSeek'].includes(this.chatPeerId)) return;
 
         if (!chatMessage.value.trim()) return this.stopChatTyping();
 
@@ -7798,48 +7519,6 @@ class RoomClient {
         }
         text.textContent = label;
         el.classList.add('is-visible');
-    }
-
-    streamMessage(element, message, speed = 100) {
-        // Cancel any in-progress stream on this element
-        if (element._streamInterval) {
-            clearInterval(element._streamInterval);
-        }
-
-        const safeMessage = this.sanitizeHtml(String(message ?? ''));
-        const words = safeMessage.split(' ').filter((w) => w.length > 0);
-
-        let textBuffer = '';
-        let wordIndex = 0;
-
-        element._streamInterval = setInterval(() => {
-            if (wordIndex < words.length) {
-                textBuffer += words[wordIndex] + ' ';
-                // Preserve visual line breaks while streaming plain text.
-                element.innerHTML = textBuffer.replace(/\n/g, '<br/>');
-                wordIndex++;
-            } else {
-                clearInterval(element._streamInterval);
-                element._streamInterval = null;
-                element.innerHTML = this.processAIMessage(message);
-                this.highlightCodeBlocks(element);
-            }
-        }, speed);
-    }
-
-    highlightCodeBlocks(element) {
-        element.querySelectorAll('pre code').forEach((block) => {
-            hljs.highlightElement(block);
-        });
-    }
-
-    processAIMessage(message) {
-        const raw = String(message ?? '');
-        if (typeof marked !== 'undefined') {
-            return filterXSS(marked.parse(raw));
-        }
-        // Fallback if markdown parser is unavailable.
-        return filterXSS(raw).replace(/\n/g, '<br/>');
     }
 
     processMessage(message) {
@@ -8074,14 +7753,10 @@ class RoomClient {
     }
 
     speechText(msg) {
-        if (VideoAI.active) {
-            this.streamingTask(msg);
-        } else {
-            const speech = new SpeechSynthesisUtterance();
-            speech.text = msg;
-            speech.rate = 0.9;
-            window.speechSynthesis.speak(speech);
-        }
+        const speech = new SpeechSynthesisUtterance();
+        speech.text = msg;
+        speech.rate = 0.9;
+        window.speechSynthesis.speak(speech);
     }
 
     chatToggleBg() {
@@ -8124,13 +7799,9 @@ class RoomClient {
                     }
                 }
                 // Remove child nodes from different message containers
-                removeAllChildNodes(chatGPTMessages);
-                removeAllChildNodes(deepSeekMessages);
                 removeAllChildNodes(chatPublicMessages);
                 removeAllChildNodes(chatPrivateMessages);
                 this.chatMessages = [];
-                this.chatGPTContext = [];
-                this.deepSeekContext = [];
                 updateChatEmptyNotice();
                 this.sound('delete');
             }
@@ -8144,8 +7815,6 @@ class RoomClient {
         const grouped = {
             room: this.room_id,
             public: [],
-            chatGPT: [],
-            deepSeek: [],
             private: {},
         };
         for (const msg of this.chatMessages) {
@@ -8153,12 +7822,6 @@ class RoomClient {
             switch (msg.toId) {
                 case 'all':
                     grouped.public.push(entry);
-                    break;
-                case 'ChatGPT':
-                    grouped.chatGPT.push(entry);
-                    break;
-                case 'DeepSeek':
-                    grouped.deepSeek.push(entry);
                     break;
                 default:
                     const name = msg.toName || msg.toId;
@@ -8169,8 +7832,6 @@ class RoomClient {
         }
         // Remove empty sections
         if (grouped.public.length === 0) delete grouped.public;
-        if (grouped.chatGPT.length === 0) delete grouped.chatGPT;
-        if (grouped.deepSeek.length === 0) delete grouped.deepSeek;
         if (Object.keys(grouped.private).length === 0) delete grouped.private;
         saveObjToJsonFile(grouped, 'CHAT');
     }
@@ -11070,12 +10731,6 @@ class RoomClient {
             case 'chat_cant_publicly':
                 notifySwitch(`${icons.moderator} Moderator: everyone can't chat publicly ${status}`);
                 break;
-            case 'chat_cant_chatgpt':
-                notifySwitch(`${icons.moderator} Moderator: everyone can't chat with ChatGPT ${status}`);
-                break;
-            case 'chat_cant_deep_seek':
-                notifySwitch(`${icons.moderator} Moderator: everyone can't chat with DeepSeek ${status}`);
-                break;
             case 'media_cant_sharing':
                 notifySwitch(`${icons.moderator} Moderator: everyone can't share media ${status}`);
                 break;
@@ -11743,7 +11398,6 @@ class RoomClient {
 
     getOutputAudioElements() {
         const elements = Array.from(this.remoteAudioEl?.querySelectorAll('audio') || []);
-        if (this.videoAIElement) elements.push(this.videoAIElement);
         return elements;
     }
 
@@ -13201,16 +12855,10 @@ class RoomClient {
     showPeerAboutAndMessages(peer_id, peer_name, peer_avatar = false, event = null) {
         // Early moderator guards: refuse to switch (and to mutate any state) when the
         // requested chat is currently blocked by the moderator.
-        if (peer_id === 'ChatGPT' && this._moderator.chat_cant_chatgpt) {
-            return userLog('warning', 'The moderator does not allow you to chat with ChatGPT', 'top-end', 6000);
-        }
-        if (peer_id === 'DeepSeek' && this._moderator.chat_cant_deep_seek) {
-            return userLog('warning', 'The moderator does not allow you to chat with DeepSeek', 'top-end', 6000);
-        }
         if (peer_id === 'all' && this._moderator.chat_cant_publicly) {
             return userLog('warning', 'The moderator does not allow you to chat publicly', 'top-end', 6000);
         }
-        if (!['all', 'ChatGPT', 'DeepSeek'].includes(peer_id) && this._moderator.chat_cant_privately) {
+        if (peer_id !== 'all' && this._moderator.chat_cant_privately) {
             return userLog('warning', 'The moderator does not allow you to chat privately', 'top-end', 6000);
         }
 
@@ -13232,15 +12880,10 @@ class RoomClient {
         const avatarImg = getParticipantAvatar(peer_name, peer_avatar);
 
         const generateChatAboutHTML = (imgSrc, title, status = 'online', participants = '', category = '') => {
-            const isSensitiveChat = !['all', 'ChatGPT', 'DeepSeek'].includes(peer_id) && title.length > 15;
+            const isSensitiveChat = peer_id !== 'all' && title.length > 15;
             const truncatedTitle = isSensitiveChat ? `${title.substring(0, 10)}*****` : title;
             const categoryHTML = category ? `<span class="chat-header-category">${category}</span>` : '';
-            const statusText =
-                category === 'AI ASSISTANT'
-                    ? 'Assistant replies are visible only to you'
-                    : peer_id === 'all'
-                      ? `Everyone in room ${participants}`
-                      : `${status}`;
+            const statusText = peer_id === 'all' ? `Everyone in room ${participants}` : `${status}`;
             return `
                 <a data-toggle="modal" data-target="#view_info">
                     <img src="${imgSrc}" alt="avatar" />
@@ -13264,43 +12907,15 @@ class RoomClient {
         const selectedLi = this.getId(peer_id);
         if (selectedLi) selectedLi.classList.remove('pulsate');
 
-        if (!['all', 'ChatGPT', 'DeepSeek'].includes(peer_id)) {
-            // unread-count badge cleared by updateUnreadCountBadge below
-        }
-
         // Clear unread count badge for selected peer
         this.unreadMessageCounts[peer_id] = 0;
         this.updateUnreadCountBadge(peer_id);
 
         participant.classList.add('active');
 
-        isChatGPTOn = false;
-        isDeepSeekOn = false;
-
         console.log('Display messages', peer_id);
 
         switch (peer_id) {
-            case 'ChatGPT':
-                if (this._moderator.chat_cant_chatgpt) {
-                    return userLog('warning', 'The moderator does not allow you to chat with ChatGPT', 'top-end', 6000);
-                }
-                isChatGPTOn = true;
-                chatAbout.innerHTML = generateChatAboutHTML(image.chatgpt, 'ChatGPT', 'online', '', 'AI ASSISTANT');
-                this.getId('chatGPTMessages').style.display = 'block';
-                break;
-            case 'DeepSeek':
-                if (this._moderator.chat_cant_deep_seek) {
-                    return userLog(
-                        'warning',
-                        'The moderator does not allow you to chat with DeepSeek',
-                        'top-end',
-                        6000
-                    );
-                }
-                isDeepSeekOn = true;
-                chatAbout.innerHTML = generateChatAboutHTML(image.deepSeek, 'DeepSeek', 'online', '', 'AI ASSISTANT');
-                this.getId('deepSeekMessages').style.display = 'block';
-                break;
             case 'all':
                 if (this._moderator.chat_cant_publicly) {
                     return userLog('warning', 'The moderator does not allow you to chat publicly', 'top-end', 6000);
@@ -13333,8 +12948,7 @@ class RoomClient {
 
         const chatMsg = this.getId('chatMessage');
         if (chatMsg) {
-            const isAI = ['ChatGPT', 'DeepSeek'].includes(peer_id);
-            chatMsg.placeholder = isAI ? `Ask ${peer_name} anything...` : t('Type a message...');
+            chatMsg.placeholder = t('Type a message...');
         }
 
         const emptyTitle = document.querySelector('.empty-chat-title');
@@ -13349,8 +12963,6 @@ class RoomClient {
     }
 
     hidePeerMessages() {
-        elemDisplay('chatGPTMessages', false);
-        elemDisplay('deepSeekMessages', false);
         elemDisplay('chatPublicMessages', false);
         elemDisplay('chatPrivateMessages', false);
     }
@@ -13427,10 +13039,6 @@ class RoomClient {
             case 'chat_cant_publicly':
                 this._moderator.chat_cant_publicly = data.status;
                 rc.roomMessage('chat_cant_publicly', data.status);
-                break;
-            case 'chat_cant_chatgpt':
-                this._moderator.chat_cant_chatgpt = data.status;
-                rc.roomMessage('chat_cant_chatgpt', data.status);
                 break;
             case 'media_cant_sharing':
                 this._moderator.media_cant_sharing = data.status;
@@ -14098,1020 +13706,6 @@ class RoomClient {
                 window.location.href = `rustdesk://connection/new/${encodeURIComponent(id)}?password=${encodeURIComponent(password)}`;
             }
         });
-    }
-
-    // ##############################################
-    // Video AI (LiveAvatar / Anam)
-    // ##############################################
-
-    initVideoAIProviderSelector() {
-        const providerSelect = this.getId('avatarProvider');
-        if (!providerSelect) return;
-
-        const available = VideoAI.providers?.available || {};
-        const liveavatarEnabled = !!available.liveavatar;
-        const anamEnabled = !!available.anam;
-
-        const liveavatarOption = providerSelect.querySelector('option[value="liveavatar"]');
-        const anamOption = providerSelect.querySelector('option[value="anam"]');
-        // Safari ignores display/hidden on <option>, so disabled providers are removed from the DOM
-        if (liveavatarOption && !liveavatarEnabled) liveavatarOption.remove();
-        if (anamOption && !anamEnabled) anamOption.remove();
-
-        if (VideoAI.provider === 'anam' && !anamEnabled) {
-            VideoAI.provider = liveavatarEnabled ? 'liveavatar' : 'anam';
-        } else if (VideoAI.provider === 'liveavatar' && !liveavatarEnabled) {
-            VideoAI.provider = anamEnabled ? 'anam' : 'liveavatar';
-        }
-
-        providerSelect.value = VideoAI.provider;
-    }
-
-    loadVideoAIProviderData() {
-        this.initVideoAIProviderSelector();
-        this.getAvatarList(VideoAI.provider);
-        this.getVoiceList(VideoAI.provider);
-    }
-
-    getAvatarList(provider = VideoAI.provider) {
-        this.socket
-            .request('getAvatarList', { provider })
-            .then(function (completion) {
-                VideoAI.provider = completion?.provider || provider || VideoAI.provider;
-                const avatarVideoAIPreview = document.getElementById('avatarVideoAIPreview');
-                const avatarVideoAISpinner = document.getElementById('avatarVideoAISpinner');
-                const avatarVideoAIcontainer = document.getElementById('avatarVideoAIcontainer');
-                const avatarVideoAICount = document.getElementById('avatarVideoAICount');
-                const avatarVideoAISelectedName = document.getElementById('avatarVideoAISelectedName');
-                const avatarSearchInput = document.getElementById('avatarSearchInput');
-                avatarVideoAIcontainer.innerHTML = '';
-
-                const avatars = completion?.response?.avatars || [];
-                let firstPreviewSet = false;
-
-                avatarVideoAICount.innerText = `Avatars: ${avatars.length}`;
-
-                function selectAvatar(avatar, card) {
-                    document.querySelectorAll('.avatarCard').forEach((c) => c.classList.remove('selected'));
-                    if (card) card.classList.add('selected');
-                    VideoAI.avatarId = avatar.avatar_id;
-                    VideoAI.avatarName = avatar.avatar_name;
-                    VideoAI.avatarModel = avatar.avatar_model || null;
-                    avatarVideoAIPreview.src = avatar.preview_image_url;
-                    avatarVideoAIPreview.alt = avatar.avatar_name;
-                    avatarVideoAIPreview.onload = () => {
-                        if (avatarVideoAISpinner) avatarVideoAISpinner.style.display = 'none';
-                        avatarVideoAIPreview.classList.remove('hidden');
-                    };
-                    avatarVideoAISelectedName.textContent = avatar.avatar_name;
-                    console.log('Avatar image click event', { avatar });
-                }
-
-                avatars.forEach((avatar) => {
-                    const div = document.createElement('div');
-                    div.className = 'avatarCard';
-                    div.dataset.name = avatar.avatar_name.toLowerCase();
-                    div.title = avatar.avatar_name;
-                    const img = document.createElement('img');
-                    const label = document.createElement('label');
-                    label.className = 'avatarLabel';
-                    label.textContent = avatar.avatar_name;
-                    img.setAttribute('id', avatar.avatar_id);
-                    img.setAttribute('class', 'avatarImg');
-                    img.setAttribute('src', avatar.preview_image_url);
-                    img.setAttribute('alt', avatar.avatar_name);
-                    img.setAttribute('loading', 'lazy');
-                    div.onclick = () => selectAvatar(avatar, div);
-                    div.append(img);
-                    div.append(label);
-                    avatarVideoAIcontainer.append(div);
-
-                    if (!firstPreviewSet && avatar.preview_image_url) {
-                        selectAvatar(avatar, div);
-                        firstPreviewSet = true;
-                    }
-                });
-
-                if (!firstPreviewSet && avatars.length) {
-                    selectAvatar(avatars[0], avatarVideoAIcontainer.querySelector('.avatarCard'));
-                }
-
-                // Search/filter avatars by name
-                avatarSearchInput.value = '';
-                avatarSearchInput.oninput = () => {
-                    const query = avatarSearchInput.value.toLowerCase().trim();
-                    const cards = avatarVideoAIcontainer.querySelectorAll('.avatarCard');
-                    let visible = 0;
-                    cards.forEach((card) => {
-                        const match = card.dataset.name.includes(query);
-                        card.style.display = match ? '' : 'none';
-                        if (match) visible++;
-                    });
-                    avatarVideoAICount.innerText = query
-                        ? `Avatars: ${visible}/${avatars.length}`
-                        : `Avatars: ${avatars.length}`;
-                };
-            })
-            .catch((err) => {
-                console.error('Video AI getAvatarList error:', err);
-                this.userLog('warning', 'Video AI getAvatarList error:\n' + err, 'top-end', 6000);
-            });
-    }
-
-    getVoiceList(provider = VideoAI.provider) {
-        this.socket
-            .request('getVoiceList', { provider })
-            .then((completion) => {
-                VideoAI.provider = completion?.provider || provider || VideoAI.provider;
-                const voiceList = completion?.response?.voices || [];
-
-                const selectElement = document.getElementById('avatarVoiceIDs');
-                selectElement.innerHTML = '<option value="">Select Avatar Voice</option>'; // Reset options with default
-
-                if (!voiceList.length) {
-                    VideoAI.avatarVoice = null;
-                    console.warn('No voices available in the response');
-                    return;
-                }
-
-                // Sort the list alphabetically by language
-                const sortedList = voiceList.sort((a, b) => (a.language ?? '').localeCompare(b.language ?? ''));
-
-                // Populate the select element with options
-                sortedList.forEach((voice) => {
-                    const { voice_id, language, name, gender } = voice;
-                    const option = document.createElement('option');
-                    option.value = voice_id;
-                    option.textContent = `${language ? language + ', ' : ''}${name || 'Unnamed'} (${gender || 'N/A'})`;
-                    selectElement.appendChild(option);
-                });
-
-                const voicePreviewPlayer = document.getElementById('avatarVoicePreview');
-
-                // Event listener for changes on the select element
-                selectElement.onchange = async (event) => {
-                    VideoAI.avatarVoice = event.target.value || null;
-
-                    // Fetch and play real voice preview from LiveAvatar API
-                    if (voicePreviewPlayer && event.target.value) {
-                        try {
-                            voicePreviewPlayer.pause();
-                            voicePreviewPlayer.src = '';
-                            const result = await this.socket.request(
-                                'previewVoice',
-                                {
-                                    voice_id: event.target.value,
-                                    provider: VideoAI.provider,
-                                },
-                                0 // external API, no timeout
-                            );
-                            if (result?.audio) {
-                                voicePreviewPlayer.src = result.audio;
-                                voicePreviewPlayer.play().catch(() => {});
-                            }
-                        } catch (err) {
-                            console.warn('Voice preview failed', err);
-                        }
-                    } else if (voicePreviewPlayer) {
-                        voicePreviewPlayer.pause();
-                        voicePreviewPlayer.src = '';
-                    }
-
-                    if (VideoAI.active && VideoAI.avatarVoice) {
-                        console.log('Video AI voice changed during active session, restarting...');
-                        this.streamingStop();
-                        await this.createLiveAvatarSession();
-                    }
-                };
-            })
-            .catch((err) => {
-                console.error('Video AI getVoiceList error', err);
-            });
-    }
-
-    async handleVideoAI() {
-        if (!VideoAI.avatarId) {
-            return this.userLog('warning', 'Please select an avatar before starting', 'top-end', 6000);
-        }
-
-        const vb = document.createElement('div');
-        vb.setAttribute('id', 'avatar__vb');
-        vb.className = 'videoAvatarMenuBar fadein';
-
-        const interrupt = this.createButton('avatar__interrupt', html.stop);
-        const fs = this.createButton('avatar__fs', html.fullScreen);
-        const pin = this.createButton('avatar__pin', html.pin);
-        const mic = this.createButton('avatar__mic', html.audioOn);
-        const ss = this.createButton('avatar__stopSession', html.kickOut);
-
-        // Mute avatar audio (local only) toggle button
-        const muteAvatarAudioBtn = this.createButton('avatar__muteAvatarAudio', html.volume);
-
-        // Share-to-room toggle button
-        const shareBtn = this.createButton('avatar__shareToRoom', html.share);
-
-        // ChatGPT interaction toggle button (only when ChatGPT is enabled)
-        let chatGPTToggleBtn = null;
-        if (this.chatGPTEnabled) {
-            chatGPTToggleBtn = this.createButton('avatar__chatGPTToggle', html.robot);
-            setColor(chatGPTToggleBtn, VideoAI.useChatGPT ? 'lime' : '');
-        }
-
-        const avatarName = document.createElement('div');
-        const an = document.createElement('span');
-        an.id = 'avatar__name';
-        an.className = html.userName;
-        an.innerText = VideoAI.avatarName;
-
-        // Create video container element
-        this.videoAIContainer = document.createElement('div');
-        this.videoAIContainer.className = 'Camera';
-        this.videoAIContainer.id = 'videoAIContainer';
-
-        // Create video element for avatar
-        this.videoAIElement = document.createElement('video');
-        this.videoAIElement.id = 'videoAIElement';
-        this.videoAIElement.setAttribute('playsinline', true);
-        this.videoAIElement.autoplay = true;
-        this.videoAIElement.muted = false;
-        this.videoAIElement.volume = 1;
-        this.videoAIElement.className = '';
-        this.videoAIElement.style.objectFit = 'cover';
-
-        const videoAILoader = this.createVideoLoader('videoAILoader');
-
-        // Session time limit countdown
-        const sessionTimerSpan = document.createElement('span');
-        sessionTimerSpan.id = 'avatar__sessionTimer';
-        sessionTimerSpan.className = 'avatar-session-timer notranslate';
-        sessionTimerSpan.style.display = 'none';
-
-        // Append elements to video container
-        vb.appendChild(ss);
-        this.isVideoFullScreenSupported && vb.appendChild(fs);
-        vb.appendChild(muteAvatarAudioBtn);
-        vb.appendChild(interrupt);
-        speechRecognition && vb.appendChild(mic);
-        vb.appendChild(shareBtn);
-        chatGPTToggleBtn && vb.appendChild(chatGPTToggleBtn);
-        !this.isMobileDevice && vb.appendChild(pin);
-        vb.appendChild(sessionTimerSpan);
-        avatarName.appendChild(an);
-
-        this.videoAIContainer.appendChild(this.videoAIElement);
-        this.videoAIContainer.appendChild(videoAILoader);
-        this.videoAIContainer.appendChild(vb);
-        this.videoAIContainer.appendChild(avatarName);
-        this.videoMediaContainer.appendChild(this.videoAIContainer);
-
-        this.isVideoFullScreenSupported && this.handleFS(this.videoAIElement.id, fs.id);
-        this.handlePN(this.videoAIElement.id, pin.id, this.videoAIContainer.id, true, true);
-
-        muteAvatarAudioBtn.onclick = () => {
-            VideoAI.muteAvatarAudio = !VideoAI.muteAvatarAudio;
-            setColor(muteAvatarAudioBtn, VideoAI.muteAvatarAudio ? 'lime' : '');
-            console.log('Video AI muteAvatarAudio:', VideoAI.muteAvatarAudio);
-            if (this.videoAIElement) {
-                this.videoAIElement.muted = VideoAI.muteAvatarAudio;
-            }
-        };
-
-        interrupt.onclick = () => {
-            this.streamingInterrupt();
-        };
-
-        mic.onclick = () => {
-            if (!speechRecognition) {
-                return this.userLog('warning', 'Speech recognition is not supported in this browser', 'top-end', 6000);
-            }
-            if (this.videoAIRecording) {
-                this.videoAIRecognitionPersistent = false;
-                if (this.videoAISpeechRecognition) {
-                    this.videoAISpeechRecognition.stop();
-                }
-            } else {
-                this.startVideoAISpeechRecognition(mic);
-            }
-        };
-
-        ss.onclick = () => {
-            this.stopSession();
-        };
-
-        shareBtn.onclick = async () => {
-            if (!VideoAI.shareToRoom) {
-                const result = await Swal.fire({
-                    background: swalBackground,
-                    position: 'center',
-                    title: 'Share Avatar to Room?',
-                    text: 'Are you sure you want to share the avatar video and audio with all participants?',
-                    showCancelButton: true,
-                    confirmButtonText: 'Share avatar',
-                    cancelButtonText: 'Cancel',
-                    showClass: { popup: 'animate__animated animate__fadeInDown' },
-                    hideClass: { popup: 'animate__animated animate__fadeOutUp' },
-                });
-                if (!result.isConfirmed) return;
-            }
-
-            VideoAI.shareToRoom = !VideoAI.shareToRoom;
-            setColor(shareBtn, VideoAI.shareToRoom ? 'lime' : '');
-            console.log('Video AI shareToRoom:', VideoAI.shareToRoom);
-
-            if (VideoAI.shareToRoom) {
-                // Start sharing: produce current tracks from the live mediaStream
-                if (this.videoAIElement.srcObject) {
-                    const tracks = [
-                        ...this.videoAIElement.srcObject.getVideoTracks(),
-                        ...this.videoAIElement.srcObject.getAudioTracks(),
-                    ];
-                    for (const rawTrack of tracks) {
-                        await this.publishAvatarTrack(rawTrack);
-                    }
-                }
-            } else {
-                // Stop sharing: close avatar producers (host keeps seeing/hearing locally)
-                this.stopAvatarProducers();
-            }
-        };
-
-        if (chatGPTToggleBtn) {
-            chatGPTToggleBtn.onclick = () => {
-                VideoAI.useChatGPT = !VideoAI.useChatGPT;
-                setColor(chatGPTToggleBtn, VideoAI.useChatGPT ? 'lime' : '');
-                console.log('Video AI useChatGPT:', VideoAI.useChatGPT);
-            };
-        }
-
-        if (!this.isMobileDevice) {
-            this.setTippy(pin.id, 'Toggle Pin', 'bottom');
-            this.setTippy(muteAvatarAudioBtn.id, 'Mute avatar audio (local only)', 'bottom');
-            this.setTippy(interrupt.id, 'Interrupt avatar speaking', 'bottom');
-            this.setTippy(mic.id, 'Speech to avatar', 'bottom');
-            this.setTippy(shareBtn.id, 'Share avatar to room', 'bottom');
-            chatGPTToggleBtn && this.setTippy(chatGPTToggleBtn.id, 'Toggle ChatGPT interaction', 'bottom');
-            this.setTippy(fs.id, 'Toggle full screen', 'bottom');
-            this.setTippy(ss.id, 'Stop VideoAI session', 'bottom');
-        }
-
-        handleAspectRatio();
-
-        this.setVideoAIControlsDisabled(true);
-
-        await this.createLiveAvatarSession();
-    }
-
-    async createLiveAvatarSession() {
-        try {
-            const { quality, avatarId, avatarVoice, provider } = VideoAI;
-            if (provider === 'anam' && !avatarVoice) {
-                this.userLog('warning', 'Please select an Anam voice before starting', 'top-end', 6000);
-                this.stopSession();
-                return;
-            }
-            if (provider === 'liveavatar' && !avatarVoice) {
-                this.userLog('warning', 'Please select a LiveAvatar voice before starting', 'top-end', 6000);
-                this.stopSession();
-                return;
-            }
-
-            // Step 1: Create session token
-            const tokenResponse = await this.socket.request(
-                'createSessionToken',
-                {
-                    quality: quality,
-                    avatar_id: avatarId,
-                    voice_id: avatarVoice,
-                    avatar_model: VideoAI.avatarModel,
-                    provider: VideoAI.provider,
-                },
-                0 // external API, no timeout
-            );
-
-            if (!tokenResponse || Object.keys(tokenResponse).length === 0 || tokenResponse.error) {
-                const errMsg =
-                    tokenResponse?.error?.message || tokenResponse?.error || 'Error creating the avatar session';
-                this.userLog('warning', errMsg, 'top-end');
-                this.stopSession();
-                return;
-            }
-
-            const isAnamProvider = provider === 'anam';
-            if (!isAnamProvider && tokenResponse.response.code !== 1000) {
-                this.userLog('warning', tokenResponse.response.message, 'top-end');
-                this.stopSession();
-                return;
-            }
-
-            const sessionData = isAnamProvider ? tokenResponse.response : tokenResponse.response.data;
-            const { session_id, session_token } = sessionData;
-            if (isAnamProvider && !session_token) {
-                this.userLog('error', 'Anam session token is missing. Please check server logs.', 'top-end', 6000);
-                this.stopSession();
-                return;
-            }
-            VideoAI.info = { session_id };
-            VideoAI.sessionToken = session_token;
-
-            console.log('Video AI createSessionToken', VideoAI);
-
-            if (isAnamProvider) {
-                await this.connectToAnam(session_token);
-                return;
-            }
-
-            // Step 2: Start session to get LiveKit credentials
-            const startResponse = await this.socket.request(
-                'startSession',
-                {
-                    session_token: session_token,
-                    provider: VideoAI.provider,
-                },
-                0 // external API, no timeout
-            );
-
-            if (!startResponse || startResponse.error) {
-                const errMsg =
-                    startResponse?.error?.message || startResponse?.error || 'Error starting the avatar session';
-                this.userLog('warning', errMsg, 'top-end');
-                this.stopSession();
-                return;
-            }
-
-            const { livekit_url, livekit_client_token } = startResponse.response;
-
-            console.log('Video AI startSession', { livekit_url, session_id });
-
-            // Step 3: Connect to LiveKit room
-            await this.connectToLiveKit(livekit_url, livekit_client_token);
-        } catch (error) {
-            const errMsg =
-                typeof error === 'string' ? error : error?.response?.data?.message || error?.message || 'Unknown error';
-            if (errMsg.toLowerCase().includes('insufficient credits') || errMsg === 'quota not enough') {
-                this.msgPopup(
-                    'warning',
-                    'Insufficient AI Avatar credits. Please check your LiveAvatar subscription.',
-                    6000,
-                    'top'
-                );
-            } else {
-                this.userLog('error', errMsg, 'top-end');
-            }
-            console.error('Video AI createLiveAvatarSession error:', errMsg);
-            this.stopSession();
-        }
-    }
-
-    async connectToAnam(sessionToken) {
-        const { createClient, AnamEvent } = await import('https://esm.sh/@anam-ai/js-sdk@latest');
-
-        const anamClient = createClient(sessionToken, { disableInputAudio: true });
-        this.hideVideoLoaderOnPlay(this.videoAIElement);
-        anamClient.addListener(AnamEvent.SESSION_READY, (sessionId) => {
-            VideoAI.anamSessionId = sessionId;
-            VideoAI.info = { session_id: sessionId };
-            console.log('Video AI Anam session ready', sessionId);
-        });
-        anamClient.addListener(AnamEvent.VIDEO_PLAY_STARTED, () => {
-            if (this.videoAIContainer) this.hideVideoLoader(this.videoAIContainer);
-        });
-        anamClient.addListener(AnamEvent.CONNECTION_CLOSED, (reason) => {
-            console.log('Video AI Anam connection closed', reason);
-        });
-
-        await anamClient.streamToVideoElement('videoAIElement');
-
-        VideoAI.anamClient = anamClient;
-        VideoAI.active = true;
-
-        this.startRendering();
-
-        this.isMobileDevice ? this.handleMobileVideoAiChat() : this.handleDesktopVideoAiChat();
-
-        this.startVideoAISessionTimer();
-
-        this.userLog('info', 'Video AI streaming started', 'top-end');
-    }
-
-    async connectToLiveKit(livekitUrl, livekitToken) {
-        const { Room, RoomEvent } = LivekitClient;
-
-        const room = new Room();
-
-        // Collect tracks into a single MediaStream for the video element
-        const mediaStream = new MediaStream();
-        const deferredAudioTracks = new Map();
-
-        const attachLiveKitTrack = async (kind, mediaStreamTrack) => {
-            const existing = kind === 'video' ? mediaStream.getVideoTracks() : mediaStream.getAudioTracks();
-            existing.forEach((t) => mediaStream.removeTrack(t));
-
-            mediaStream.addTrack(mediaStreamTrack);
-
-            this.videoAIElement.srcObject = mediaStream;
-            this.videoAIElement.play().catch((error) => {
-                console.warn('Video AI playback blocked:', error?.message || error);
-            });
-
-            // Keep avatar audio on the selected output device when speaker changes.
-            if (sinkId && speakerSelect?.value) {
-                await this.changeAudioDestination(this.videoAIElement, false);
-            }
-
-            if (kind === 'video') {
-                this.hideVideoLoaderOnPlay(this.videoAIElement);
-            }
-
-            // Re-publish the avatar track into mediasoup so all participants see/hear it
-            if (VideoAI.shareToRoom) {
-                await this.publishAvatarTrack(mediaStreamTrack);
-            }
-        };
-
-        // Handle incoming tracks (avatar video/audio)
-        room.on(RoomEvent.TrackSubscribed, async (track, publication, participant) => {
-            const participantIdentity = participant?.identity || 'unknown';
-
-            console.log('Video AI LiveKit track subscribed:', track.kind, participantIdentity);
-
-            if (track.kind !== 'video' && track.kind !== 'audio') {
-                return;
-            }
-
-            const mediaStreamTrack = track.mediaStreamTrack;
-            if (!mediaStreamTrack) {
-                console.warn('Video AI: no mediaStreamTrack for', track.kind);
-                return;
-            }
-
-            // Bind media playback to a single LiveKit participant to avoid replacing avatar audio
-            // with secondary agent/system audio tracks from other participants.
-            if (track.kind === 'video') {
-                if (!VideoAI.mediaParticipantIdentity) {
-                    VideoAI.mediaParticipantIdentity = participantIdentity;
-                    console.log('Video AI selected media participant:', VideoAI.mediaParticipantIdentity);
-
-                    const deferredAudioTrack = deferredAudioTracks.get(VideoAI.mediaParticipantIdentity);
-                    if (deferredAudioTrack) {
-                        console.log(
-                            'Video AI attaching deferred audio track for selected participant:',
-                            VideoAI.mediaParticipantIdentity
-                        );
-                        await attachLiveKitTrack('audio', deferredAudioTrack);
-                        deferredAudioTracks.delete(VideoAI.mediaParticipantIdentity);
-                    }
-                } else if (participantIdentity !== VideoAI.mediaParticipantIdentity) {
-                    console.log('Video AI ignoring video track from non-selected participant:', participantIdentity);
-                    return;
-                }
-            }
-
-            if (track.kind === 'audio') {
-                if (!VideoAI.mediaParticipantIdentity) {
-                    deferredAudioTracks.set(participantIdentity, mediaStreamTrack);
-                    console.log(
-                        'Video AI deferring audio track until video participant is selected:',
-                        participantIdentity
-                    );
-                    return;
-                }
-                if (participantIdentity !== VideoAI.mediaParticipantIdentity) {
-                    console.log('Video AI ignoring audio track from non-selected participant:', participantIdentity);
-                    return;
-                }
-            }
-
-            await attachLiveKitTrack(track.kind, mediaStreamTrack);
-        });
-
-        // Handle track unsubscribed
-        room.on(RoomEvent.TrackUnsubscribed, (track) => {
-            console.log('Video AI LiveKit track unsubscribed:', track.kind);
-            track.detach();
-        });
-
-        // Handle server events from agent-response topic
-        room.on(RoomEvent.DataReceived, (payload, participant, kind, topic) => {
-            if (topic === 'agent-response') {
-                try {
-                    const event = JSON.parse(new TextDecoder().decode(payload));
-                    this.handleLiveAvatarEvent(event);
-                } catch (e) {
-                    console.warn('Video AI: failed to parse agent-response event', e);
-                }
-            }
-        });
-
-        room.on(RoomEvent.Disconnected, () => {
-            console.log('Video AI LiveKit room disconnected');
-        });
-
-        await room.connect(livekitUrl, livekitToken);
-
-        VideoAI.livekitRoom = room;
-        VideoAI.active = true;
-
-        this.startRendering();
-
-        this.isMobileDevice ? this.handleMobileVideoAiChat() : this.handleDesktopVideoAiChat();
-
-        this.startVideoAISessionTimer();
-
-        this.userLog('info', 'Video AI streaming started', 'top-end');
-    }
-
-    handleLiveAvatarEvent(event) {
-        console.log('Video AI LiveAvatar event:', event);
-        switch (event.event_type) {
-            case 'avatar.speak_started':
-                console.log('Video AI: Avatar started speaking');
-                break;
-            case 'avatar.speak_ended':
-                console.log('Video AI: Avatar finished speaking');
-                break;
-            case 'user.transcription':
-                console.log('Video AI: User said:', event.text);
-                break;
-            case 'avatar.transcription':
-                console.log('Video AI: Avatar said:', event.text);
-                break;
-            case 'session.stopped':
-                console.log('Video AI: Session stopped:', event.end_reason);
-                this.stopSession();
-                break;
-            default:
-                break;
-        }
-    }
-
-    handleDesktopVideoAiChat() {
-        if (!this.isChatOpen) {
-            this.toggleChat();
-        }
-        this.sendMessageToVideoAi();
-    }
-
-    handleMobileVideoAiChat() {
-        if (this.videoMediaContainer.childElementCount <= 2) {
-            isHideMeActive = !isHideMeActive;
-            this.handleHideMe();
-        }
-    }
-
-    sendMessageToVideoAi() {
-        const tasks = [
-            { delay: 1000, action: () => this.chatPin() },
-            { delay: 1200, action: () => this.toggleShowParticipants() },
-            { delay: 1400, action: () => this.showPeerAboutAndMessages('ChatGPT', 'ChatGPT') },
-            { delay: 1600, action: () => this.streamingTask(`Welcome to ${BRAND.app.name}!`) },
-            {
-                delay: 2000,
-                action: () => {
-                    if (this.chatGPTEnabled && VideoAI.useChatGPT) {
-                        chatMessage.value = 'Hello!';
-                        this.sendMessage();
-                    } else {
-                        const hint = `I'm your AI Avatar. Type a message or use the microphone, and I will speak it for you.`;
-                        this.setMsgAvatar('right', 'Avatar');
-                        this.appendMessage('right', image.chatgpt, 'Avatar', this.peer_id, hint, 'VideoAI', 'Avatar');
-                        this.streamingTask(hint);
-                    }
-                },
-            },
-        ];
-        this.executeTasksSequentially(tasks);
-    }
-
-    executeTasksSequentially(tasks) {
-        tasks.reduce((promise, task) => {
-            return promise.then(
-                () =>
-                    new Promise((resolve) => {
-                        setTimeout(() => {
-                            task.action();
-                            resolve();
-                        }, task.delay);
-                    })
-            );
-        }, Promise.resolve());
-    }
-
-    startVideoAISpeechRecognition(micBtn) {
-        const SpeechAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechAPI) {
-            return this.userLog('warning', 'Speech recognition is not supported in this browser', 'top-end', 6000);
-        }
-
-        this.videoAIRecognitionPersistent = true;
-
-        this.videoAISpeechRecognition = new SpeechAPI();
-        this.videoAISpeechRecognition.lang = typeof currentLangCode !== 'undefined' ? currentLangCode : 'en-US';
-        this.videoAISpeechRecognition.continuous = false;
-        this.videoAISpeechRecognition.interimResults = false;
-        this.videoAISpeechRecognition.maxAlternatives = 1;
-
-        this.videoAISpeechRecognition.onstart = () => {
-            this.videoAIRecording = true;
-            setColor(micBtn, 'lime');
-            console.log('Video AI speech recognition started');
-        };
-
-        this.videoAISpeechRecognition.onresult = (e) => {
-            const transcript = e.results[0][0].transcript;
-            if (transcript) {
-                console.log('Video AI speech recognized:', transcript);
-                if (!isChatGPTOn) {
-                    if (!this.isChatOpen) this.toggleChat();
-                    this.showPeerAboutAndMessages('ChatGPT', 'ChatGPT');
-                }
-                chatMessage.value = transcript;
-                this.sendMessage();
-            }
-        };
-
-        this.videoAISpeechRecognition.onerror = (event) => {
-            console.error('Video AI speech recognition error:', event.error);
-            if (event.error !== 'no-speech') {
-                this.userLog('warning', `Speech recognition error: ${event.error}`, 'top-end', 6000);
-            }
-        };
-
-        this.videoAISpeechRecognition.onend = () => {
-            // Prevent stopping in the absence of speech...
-            if (this.videoAIRecognitionPersistent && VideoAI.active) {
-                this.videoAIRecording = false;
-                setTimeout(() => {
-                    if (this.videoAIRecognitionPersistent && VideoAI.active && !this.videoAIRecording) {
-                        this.startVideoAISpeechRecognition(micBtn);
-                    }
-                }, 2000);
-            } else {
-                this.videoAIRecording = false;
-                setColor(micBtn, 'white');
-                console.log('Video AI speech recognition stopped');
-            }
-        };
-
-        try {
-            this.videoAISpeechRecognition.start();
-        } catch (error) {
-            console.error('Video AI speech recognition start error:', error);
-            this.userLog('warning', 'Failed to start speech recognition', 'top-end', 6000);
-        }
-    }
-
-    streamingTask(message) {
-        if (VideoAI.provider === 'anam' && VideoAI.anamClient && VideoAI.active && message) {
-            try {
-                VideoAI.anamClient.talk(message);
-                console.log('Video AI Anam talk sent:', message);
-            } catch (err) {
-                console.error('Video AI Anam talk error:', err);
-            }
-            return;
-        }
-
-        if (VideoAI.enabled && VideoAI.active && message && VideoAI.livekitRoom) {
-            const event = {
-                event_type: 'avatar.speak_text',
-                session_id: VideoAI.info.session_id,
-                text: message,
-            };
-            const data = new TextEncoder().encode(JSON.stringify(event));
-            VideoAI.livekitRoom.localParticipant
-                .publishData(data, { topic: 'agent-control' })
-                .then(() => {
-                    console.log('Video AI streamingTask sent:', message);
-                })
-                .catch((err) => {
-                    console.error('Video AI streamingTask error:', err);
-                });
-        }
-    }
-
-    streamingInterrupt() {
-        if (VideoAI.provider === 'anam' && VideoAI.anamClient && VideoAI.active) {
-            try {
-                VideoAI.anamClient.interruptPersona();
-                console.log('Video AI Anam interrupt sent');
-            } catch (err) {
-                console.error('Video AI Anam interrupt error:', err);
-            }
-            return;
-        }
-
-        if (VideoAI.enabled && VideoAI.active && VideoAI.info.session_id && VideoAI.livekitRoom) {
-            const event = {
-                event_type: 'avatar.interrupt',
-                session_id: VideoAI.info.session_id,
-            };
-            const data = new TextEncoder().encode(JSON.stringify(event));
-            VideoAI.livekitRoom.localParticipant
-                .publishData(data, { topic: 'agent-control' })
-                .then(() => {
-                    console.log('Video AI streamingInterrupt sent');
-                })
-                .catch((err) => {
-                    console.error('Video AI streamingInterrupt error:', err);
-                });
-        }
-    }
-
-    startRendering() {
-        // Ensure video playback starts reliably (autoplay can fail on subsequent sessions)
-        const ensurePlayback = () => {
-            if (this.videoAIElement && this.videoAIElement.paused && this.videoAIElement.srcObject) {
-                this.videoAIElement.play().catch(() => {});
-            }
-        };
-        setTimeout(ensurePlayback, 500);
-        setTimeout(ensurePlayback, 1500);
-    }
-
-    stopRendering() {
-        if (isHideMeActive) {
-            isHideMeActive = !isHideMeActive;
-            this.handleHideMe();
-        }
-    }
-
-    startVideoAISessionTimer() {
-        if (VideoAI.sessionTimeLimit > 0) {
-            console.log(`Video AI session time limit: ${VideoAI.sessionTimeLimit}s`);
-
-            let remaining = VideoAI.sessionTimeLimit;
-            const timerEl = this.getId('avatar__sessionTimer');
-
-            if (timerEl) {
-                timerEl.style.display = 'inline';
-                timerEl.innerText = this.formatSessionTime(remaining);
-            }
-
-            VideoAI.sessionCountdown = setInterval(() => {
-                remaining--;
-                if (timerEl) {
-                    timerEl.innerText = this.formatSessionTime(remaining);
-                    timerEl.style.color = remaining <= 10 ? '#ff4040' : 'white';
-                }
-                if (remaining <= 0) {
-                    console.log('Video AI session time limit reached, stopping session');
-                    this.userLog('warning', 'Video AI session time limit reached', 'top-end', 6000);
-                    this.stopSession();
-                }
-            }, 1000);
-        }
-    }
-
-    stopVideoAISessionTimer() {
-        if (VideoAI.sessionCountdown) {
-            clearInterval(VideoAI.sessionCountdown);
-            VideoAI.sessionCountdown = null;
-        }
-    }
-
-    formatSessionTime(seconds) {
-        const m = Math.floor(seconds / 60)
-            .toString()
-            .padStart(2, '0');
-        const s = (seconds % 60).toString().padStart(2, '0');
-        return `⏱️ ${m}:${s}`;
-    }
-
-    stopSession() {
-        this.stopVideoAISessionTimer();
-
-        // Restore avatar audio if muted
-        if (VideoAI.muteParticipants) {
-            if (this.videoAIElement) this.videoAIElement.muted = false;
-            VideoAI.muteParticipants = false;
-        }
-
-        this.videoAIRecognitionPersistent = false;
-
-        if (this.videoAISpeechRecognition) {
-            this.videoAISpeechRecognition.stop();
-            this.videoAISpeechRecognition = null;
-        }
-        this.videoAIRecording = false;
-
-        const videoAIElement = this.getId('videoAIElement');
-        if (videoAIElement) {
-            // Stop old MediaStream tracks to release resources
-            if (videoAIElement.srcObject) {
-                videoAIElement.srcObject.getTracks().forEach((t) => t.stop());
-                videoAIElement.srcObject = null;
-            }
-            videoAIElement.parentNode.removeChild(videoAIElement);
-        }
-        const videoAIContainer = this.getId('videoAIContainer');
-        if (videoAIContainer) {
-            videoAIContainer.parentNode.removeChild(videoAIContainer);
-            if (this.isVideoPinned && this.pinnedVideoPlayerId === 'videoAIElement') {
-                this.removeVideoPinMediaContainer();
-            }
-        }
-
-        handleAspectRatio();
-
-        this.setVideoAIControlsDisabled(false);
-
-        this.streamingStop();
-    }
-
-    setVideoAIControlsDisabled(disabled) {
-        const ids = ['avatarProvider', 'avatarQuality', 'avatarVoiceIDs', 'avatarVideoAIStart'];
-        ids.forEach((id) => {
-            const el = this.getId(id);
-            if (el) el.disabled = disabled;
-        });
-    }
-
-    async publishAvatarTrack(rawTrack) {
-        if (!this.producerTransport || this.producerTransport.closed) return;
-        // Guard: skip if we already have an active producer of the same kind (prevents duplicates on track reconnect)
-        if (VideoAI.avatarProducers.some((p) => !p.closed && p.kind === rawTrack.kind)) {
-            console.warn('Video AI: skipping duplicate producer for kind:', rawTrack.kind);
-            return;
-        }
-        try {
-            const avatarProducer = await this.producerTransport.produce({
-                track: rawTrack.clone(), // clone so producer.close() doesn't kill the local track
-                appData: { mediaType: rawTrack.kind === 'video' ? mediaType.video : mediaType.audio },
-            });
-            VideoAI.avatarProducers.push(avatarProducer);
-            console.log('Video AI published track to room:', rawTrack.kind, avatarProducer.id);
-        } catch (err) {
-            console.warn('Video AI failed to publish track to room:', err);
-        }
-    }
-
-    stopAvatarProducers() {
-        if (VideoAI.avatarProducers.length > 0) {
-            let hadVideoProducer = false;
-            VideoAI.avatarProducers.forEach((producer) => {
-                if (producer.kind === 'video') hadVideoProducer = true;
-                try {
-                    if (!producer.closed) {
-                        this.socket.emit('producerClosed', {
-                            peer_name: this.peer_name,
-                            producer_id: producer.id,
-                            type: producer.kind === 'video' ? 'videoAI' : 'audioAI',
-                            status: false,
-                        });
-                        producer.close();
-                    }
-                } catch (err) {
-                    console.warn('Video AI producer close error:', err);
-                }
-            });
-            VideoAI.avatarProducers = [];
-            // If avatar video was shared but host's real camera is off,
-            // notify other participants to re-show the video-off tile
-            if (hadVideoProducer && !this.peer_info.peer_video) {
-                this.sendVideoOff();
-            }
-        }
-    }
-
-    streamingStop() {
-        // Close mediasoup avatar producers and reset share state
-        this.stopAvatarProducers();
-        VideoAI.shareToRoom = false;
-        const shareBtn = this.getId('avatar__shareToRoom');
-        if (shareBtn) setColor(shareBtn, 'white');
-
-        if (VideoAI.provider === 'anam' && VideoAI.anamClient) {
-            VideoAI.anamClient
-                .stopStreaming()
-                .then(() => console.info('Video AI Anam stopStreaming done!'))
-                .catch((error) => console.warn('Video AI Anam stopStreaming:', error?.message || error));
-            VideoAI.anamClient = null;
-        }
-
-        // Disconnect LiveKit room
-        if (VideoAI.livekitRoom) {
-            console.info('Video AI LiveKit room disconnect');
-            VideoAI.livekitRoom.disconnect();
-            VideoAI.livekitRoom = null;
-        }
-        if (VideoAI.active && VideoAI.info && VideoAI.info.session_id) {
-            const sessionId = VideoAI.info.session_id;
-            this.socket
-                .request('stopSession', { session_id: sessionId, provider: VideoAI.provider })
-                .then(() => {
-                    console.info('Video AI stopSession done!');
-                })
-                .catch((error) => {
-                    console.warn('Video AI stopSession:', error?.message || error);
-                });
-        }
-
-        this.stopRendering();
-
-        VideoAI.active = false;
-        VideoAI.sessionToken = null;
-        VideoAI.mediaParticipantIdentity = null;
-        VideoAI.anamSessionId = null;
     }
 
     // ##############################################

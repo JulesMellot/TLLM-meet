@@ -65,26 +65,12 @@ module.exports = class Room {
             screen_annotations_cant_draw: false,
             chat_cant_privately: false,
             chat_cant_publicly: false,
-            chat_cant_chatgpt: false,
-            chat_cant_deep_seek: false,
             media_cant_sharing: false,
             polls_cant_create: false,
         };
         this._followMe = null;
         this.survey = config?.features?.survey;
         this.redirect = config?.features?.redirect;
-        this.videoAIEnabled = config?.integrations?.videoAI?.enabled || false;
-        const videoAIConfig = config?.integrations?.videoAI || {};
-        this.videoAIProviders = this.videoAIEnabled
-            ? {
-                  available: {
-                      liveavatar: !!(videoAIConfig?.liveavatar?.enabled && videoAIConfig?.liveavatar?.apiKey),
-                      anam: !!(videoAIConfig?.anam?.enabled && videoAIConfig?.anam?.apiKey),
-                  },
-                  defaultProvider: videoAIConfig?.defaultProvider || 'liveavatar',
-              }
-            : null;
-        this.videoAISessionTimeLimit = videoAIConfig?.sessionTimeLimit || 0;
         this.peers = new Map();
         this.videoTextAnnotations = new Map();
         this.videoDrawingAnnotations = new Map();
@@ -143,10 +129,6 @@ module.exports = class Room {
             followMe: this._followMe,
             survey: this.survey,
             redirect: this.redirect,
-            videoAIEnabled: this.videoAIEnabled,
-            videoAIProviders: this.videoAIProviders,
-            videoAISessionTimeLimit: this.videoAISessionTimeLimit,
-            chatGPTEnabled: config?.integrations?.chatGPT?.enabled || false,
             remoteControlEnabled: config?.features?.remoteControl?.enabled || false,
             remoteControlDownloadUrl: config?.features?.remoteControl?.downloadUrl,
             whisperEnabled: config?.integrations?.whisper?.enabled || false,
@@ -486,12 +468,6 @@ module.exports = class Room {
                 break;
             case 'chat_cant_publicly':
                 this._moderator.chat_cant_publicly = data.status;
-                break;
-            case 'chat_cant_chatgpt':
-                this._moderator.chat_cant_chatgpt = data.status;
-                break;
-            case 'chat_cant_deep_seek':
-                this._moderator.chat_cant_deep_seek = data.status;
                 break;
             case 'media_cant_sharing':
                 this._moderator.media_cant_sharing = data.status;
