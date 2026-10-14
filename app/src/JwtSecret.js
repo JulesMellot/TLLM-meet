@@ -12,6 +12,7 @@ const KNOWN_DEFAULT_SECRETS = ['mirotalksfu_jwt_secret'];
 const PURPOSES = {
     auth: 'auth',
     createRoom: 'create-room',
+    adminSession: 'admin-session',
 };
 
 let cached = null;
@@ -45,6 +46,7 @@ function getJwtKeys(rawSecret = process.env.JWT_SECRET) {
             keys: Object.freeze({
                 auth: deriveKey(secret, PURPOSES.auth),
                 createRoom: deriveKey(secret, PURPOSES.createRoom),
+                adminSession: deriveKey(secret, PURPOSES.adminSession),
             }),
         };
     }
