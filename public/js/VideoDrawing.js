@@ -667,6 +667,8 @@ class VideoDrawingOverlay {
             labels.forEach((object, index) => (object.visible = visibility[index]));
         }
         if (!this.textAnnotations.size) return snapshot;
+        // TLLM*meet: html2canvas is loaded on demand (see public/js/tllm.js)
+        if (typeof window.html2canvas !== 'function' && window.tllmLoadLib) await window.tllmLoadLib('html2canvas');
         if (typeof window.html2canvas !== 'function') throw new Error('Screen capture library is unavailable');
 
         const frame = document.createElement('div');
@@ -722,6 +724,7 @@ class VideoDrawingOverlay {
             const snapshot = await this.captureSnapshot();
             const fileName = `screen-annotations-${new Date().toISOString().replace(/[:.]/g, '-')}`;
             if (format === 'pdf') {
+                if (!window.jspdf?.jsPDF && window.tllmLoadLib) await window.tllmLoadLib('jspdf');
                 if (!window.jspdf?.jsPDF) throw new Error('PDF library is unavailable');
                 const pdf = new window.jspdf.jsPDF({
                     orientation: snapshot.width >= snapshot.height ? 'landscape' : 'portrait',

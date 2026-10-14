@@ -6618,6 +6618,8 @@ function readBlob(blob) {
 }
 
 async function loadPDF(pdfData, pages) {
+    // TLLM*meet: pdf.js is loaded on demand (see public/js/tllm.js)
+    if (!window['pdfjs-dist/build/pdf'] && window.tllmLoadLib) await window.tllmLoadLib('pdfjs');
     const pdfjsLib = window['pdfjs-dist/build/pdf'];
     pdfData = pdfData instanceof Blob ? await readBlob(pdfData) : pdfData;
     const data = atob(pdfData.startsWith(Base64Prefix) ? pdfData.substring(Base64Prefix.length) : pdfData);
