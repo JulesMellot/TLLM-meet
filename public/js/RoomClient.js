@@ -55,7 +55,6 @@ const html = {
     sendMsg: 'fas fa-paper-plane',
     sendVideo: 'fab fa-youtube',
     geolocation: 'fas fa-location-dot',
-    remoteControl: 'fas fa-computer-mouse',
     ban: 'fas fa-ban',
     kickOut: 'fas fa-times',
     presenterRole: 'fa-solid fa-user-shield',
@@ -908,8 +907,6 @@ class RoomClient {
             }
             // Store ChatGPT enabled state for VideoAI fallback
             this.chatGPTEnabled = room.chatGPTEnabled || false;
-            this.remoteControlEnabled = room.remoteControlEnabled || false;
-            this.remoteControlDownloadUrl = room.remoteControlDownloadUrl;
             // Whisper server-side transcription
             this.whisperEnabled = room.whisperEnabled || false;
             if (typeof transcription !== 'undefined' && transcription) {
@@ -1611,7 +1608,7 @@ class RoomClient {
     };
 
     handleCmdData = (data) => {
-        console.log('SocketOn Peer cmd:', data.type === 'remoteControlOK' ? { ...data, data: '[redacted]' } : data);
+        console.log('SocketOn Peer cmd:', data);
         this.handleCmd(data);
     };
 
@@ -4194,7 +4191,7 @@ class RoomClient {
     }
 
     async handleConsumer(id, type, stream, peer_name, peer_info) {
-        let elem, vb, d, p, i, cm, au, pip, fs, ts, sf, sm, sv, gl, rcb, ban, ko, pb, pm, pv, pn, ha, hg, mv, dw, role;
+        let elem, vb, d, p, i, cm, au, pip, fs, ts, sf, sm, sv, gl, ban, ko, pb, pm, pv, pn, ha, hg, mv, dw, role;
 
         let eDiv, eBtn, eVc; // expand buttons
 
@@ -4261,7 +4258,6 @@ class RoomClient {
                 cm = this.createButton(id + '___' + remotePeerId + '___video', html.videoOn);
                 au = this.createButton(remotePeerId + '__audio', remotePeerAudio ? html.audioOn : html.audioOff);
                 gl = this.createButton(id + '___' + remotePeerId + '___geoLocation', html.geolocation);
-                rcb = this.createButton(id + '___' + remotePeerId + '___remoteControl', html.remoteControl);
                 ban = this.createButton(id + '___' + remotePeerId + '___ban', html.ban);
                 ko = this.createButton(id + '___' + remotePeerId + '___kickOut', html.kickOut);
                 role = this.createButton(
@@ -4330,9 +4326,6 @@ class RoomClient {
                     eVc.appendChild(this.createDropdownItem(sm, 'Private Message', eVc));
                 BUTTONS.consumerVideo.geolocationButton &&
                     eVc.appendChild(this.createDropdownItem(gl, 'Geo Location', eVc));
-                this.remoteControlEnabled &&
-                    isPresenter &&
-                    eVc.appendChild(this.createDropdownItem(rcb, 'Remote control', eVc));
                 BUTTONS.consumerVideo.sendFileButton && eVc.appendChild(this.createDropdownItem(sf, 'Send File', eVc));
                 BUTTONS.consumerVideo.sendVideoButton &&
                     eVc.appendChild(this.createDropdownItem(sv, 'Send Video/Audio', eVc));
@@ -4393,7 +4386,6 @@ class RoomClient {
                 BUTTONS.consumerVideo.muteAudioButton && this.handleAU(au.id, remotePeerId);
                 this.handleCV(pv.id);
                 this.handleGL(gl.id, remotePeerId);
-                this.handleRC(rcb.id, remotePeerId);
                 this.handleBAN(ban.id, remotePeerId);
                 this.handleKO(ko.id, remotePeerId);
                 this.handleRole(role.id, remotePeerId, remotePeerPresenter);
@@ -4571,7 +4563,7 @@ class RoomClient {
 
     setVideoOff(peer_info, remotePeer = false) {
         //console.log('setVideoOff', peer_info);
-        let d, vb, i, h, au, sf, sm, sv, gl, rcb, ban, ko, hg, p, pm, pb, pv, pn, st, ri, role;
+        let d, vb, i, h, au, sf, sm, sv, gl, ban, ko, hg, p, pm, pb, pv, pn, st, ri, role;
         let eDiv, eBtn, eVc;
 
         const { peer_id, peer_name, peer_avatar, peer_audio, peer_presenter } = peer_info;
@@ -4610,7 +4602,6 @@ class RoomClient {
             sm = this.createButton('remotePeer___' + peer_id + '___sendMsg', html.sendMsg);
             sv = this.createButton('remotePeer___' + peer_id + '___sendVideo', html.sendVideo);
             gl = this.createButton('remotePeer___' + peer_id + '___geoLocation', html.geolocation);
-            rcb = this.createButton('remotePeer___' + peer_id + '___remoteControl', html.remoteControl);
             ban = this.createButton('remotePeer___' + peer_id + '___ban', html.ban);
             ko = this.createButton('remotePeer___' + peer_id + '___kickOut', html.kickOut);
             hg = this.createButton('remotePeer___' + peer_id + '___hideFromGrid', html.hideFromGrid);
@@ -4670,9 +4661,6 @@ class RoomClient {
             BUTTONS.videoOff.hideFromGridButton && eVc.appendChild(this.createDropdownItem(hg, 'Hide from grid', eVc));
             BUTTONS.videoOff.sendMessageButton && eVc.appendChild(this.createDropdownItem(sm, 'Private Message', eVc));
             BUTTONS.videoOff.geolocationButton && eVc.appendChild(this.createDropdownItem(gl, 'Geo Location', eVc));
-            this.remoteControlEnabled &&
-                isPresenter &&
-                eVc.appendChild(this.createDropdownItem(rcb, 'Remote control', eVc));
             BUTTONS.videoOff.sendFileButton && eVc.appendChild(this.createDropdownItem(sf, 'Send File', eVc));
             BUTTONS.videoOff.sendVideoButton && eVc.appendChild(this.createDropdownItem(sv, 'Send Video/Audio', eVc));
             BUTTONS.videoOff.banButton && eVc.appendChild(this.createDropdownItem(ban, 'Ban', eVc, 'red'));
@@ -4722,7 +4710,6 @@ class RoomClient {
             this.handleSF(sf.id, peer_name, peer_id);
             this.handleSV(sv.id, peer_name, peer_id);
             this.handleGL(gl.id, peer_id);
-            this.handleRC(rcb.id, peer_id);
             this.handleBAN(ban.id, peer_id);
             this.handleKO(ko.id, peer_id);
             this.handleHFG(hg.id, peer_id);
@@ -4749,7 +4736,6 @@ class RoomClient {
             this.setTippy(pv.id, '🔊 Volume', 'bottom');
             this.setTippy(pn.id, 'Pin', 'bottom');
             this.setTippy(gl.id, 'Geolocation', 'bottom');
-            this.setTippy(rcb.id, 'Remote control', 'bottom');
             this.setTippy(ban.id, 'Ban', 'bottom');
             this.setTippy(ko.id, 'Eject', 'bottom');
             this.setTippy(hg.id, 'Hide from grid', 'bottom');
@@ -11941,25 +11927,6 @@ class RoomClient {
     }
 
     // ####################################################
-    // HANDLE REMOTE CONTROL
-    // ###################################################
-
-    handleRC(uid, peer_id) {
-        const btnRc = this.getId(uid);
-        if (btnRc) {
-            btnRc.addEventListener('click', () => {
-                isPresenter
-                    ? this.askPeerRemoteControl(peer_id)
-                    : this.userLog(
-                          'warning',
-                          'Only the presenter can ask remote control to the participants',
-                          'top-end'
-                      );
-            });
-        }
-    }
-
-    // ####################################################
     // HANDLE BAN
     // ###################################################
 
@@ -12167,16 +12134,6 @@ class RoomClient {
                     this.handleGL(gl.id, remotePeerId);
                 }
             );
-            this.reconcilePresenterMenuItem(
-                eVc,
-                `${prefix}remoteControl`,
-                canModerate && this.remoteControlEnabled,
-                () => {
-                    const rcb = this.createButton(`${prefix}remoteControl`, html.remoteControl);
-                    eVc.appendChild(this.createDropdownItem(rcb, 'Remote control', eVc));
-                    this.handleRC(rcb.id, remotePeerId);
-                }
-            );
             this.reconcilePresenterMenuItem(eVc, `${prefix}ban`, canModerate && BUTTONS.consumerVideo.banButton, () => {
                 const ban = this.createButton(`${prefix}ban`, html.ban);
                 eVc.appendChild(this.createDropdownItem(ban, 'Ban', eVc, 'red'));
@@ -12250,16 +12207,6 @@ class RoomClient {
                     const gl = this.createButton(`${prefix}geoLocation`, html.geolocation);
                     eVc.appendChild(this.createDropdownItem(gl, 'Geo Location', eVc));
                     this.handleGL(gl.id, peerId);
-                }
-            );
-            this.reconcilePresenterMenuItem(
-                eVc,
-                `${prefix}remoteControl`,
-                canModerate && this.remoteControlEnabled,
-                () => {
-                    const rcb = this.createButton(`${prefix}remoteControl`, html.remoteControl);
-                    eVc.appendChild(this.createDropdownItem(rcb, 'Remote control', eVc));
-                    this.handleRC(rcb.id, peerId);
                 }
             );
         });
@@ -12406,16 +12353,6 @@ class RoomClient {
                 this.handleGeoPeerLocation(cmd);
                 break;
             case 'geoLocationKO':
-                this.sound('alert');
-                this.userLog('warning', cmd.data, 'top-end', 5000);
-                break;
-            case 'remoteControl':
-                this.confirmPeerRemoteControl(cmd);
-                break;
-            case 'remoteControlOK':
-                this.handleRemoteControlOK(cmd);
-                break;
-            case 'remoteControlKO':
                 this.sound('alert');
                 this.userLog('warning', cmd.data, 'top-end', 5000);
                 break;
@@ -13907,138 +13844,6 @@ class RoomClient {
     }
 
     // ####################################################
-    // HANDLE REMOTE CONTROL (RustDesk handshake)
-    // ####################################################
-
-    getRemotePeerName(peer_id) {
-        // this.peers is only filled at join time, so peers who joined later are read from the DOM
-        const name = this.getId(peer_id + '__name')?.textContent || this.peers.get(peer_id)?.peer_info?.peer_name;
-        return name?.trim() || 'Participant';
-    }
-
-    async askPeerRemoteControl(peer_id) {
-        if (!this.remoteControlEnabled || !isPresenter) return;
-        const result = await Swal.fire({
-            background: swalBackground,
-            position: 'center',
-            title: 'Request remote control?',
-            html: renderRoomTemplate('popupRemoteControlConfirmTemplate', {
-                text: { name: this.getRemotePeerName(peer_id) },
-            }),
-            showCancelButton: true,
-            confirmButtonText: 'Send request',
-            cancelButtonText: 'Cancel',
-            focusCancel: true,
-            showClass: { popup: 'animate__animated animate__fadeInDown' },
-            hideClass: { popup: 'animate__animated animate__fadeOutUp' },
-        });
-        if (!result.isConfirmed || !this.remoteControlEnabled || !isPresenter) return;
-        this.remoteControlPeerId = peer_id;
-        this.emitCmd({
-            type: 'remoteControl',
-            from_peer_name: this.peer_name,
-            from_peer_id: this.peer_id,
-            from_peer_uuid: this.peer_uuid,
-            peer_id: peer_id,
-            broadcast: false,
-        });
-        this.userLog('success', 'Remote control requested. Waiting for confirmation...', 'top-end', 6000);
-    }
-
-    sendPeerRemoteControl(peer_id, type, data) {
-        this.emitCmd({
-            type: type,
-            from_peer_name: this.peer_name,
-            from_peer_id: this.peer_id,
-            peer_id: peer_id,
-            data: data,
-            broadcast: false,
-        });
-    }
-
-    confirmPeerRemoteControl(cmd) {
-        if (!this.remoteControlEnabled) return;
-        this.sound('notify');
-        let downloadUrl = /^(https?:\/\/|\/(?!\/))/i.test(this.remoteControlDownloadUrl)
-            ? this.remoteControlDownloadUrl
-            : null;
-        // The built-in setup page requires the room token sent with the request
-        if (downloadUrl === '/remote-control/setup' && typeof cmd.setup_token === 'string') {
-            downloadUrl += `?t=${encodeURIComponent(cmd.setup_token)}`;
-        }
-        Swal.fire({
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            background: swalBackground,
-            position: 'center',
-            title: 'Remote control request',
-            html: renderRoomTemplate('popupRemoteControlPromptTemplate', {
-                text: { name: cmd.from_peer_name },
-                attrs: { downloadUrl },
-            }),
-            showDenyButton: true,
-            confirmButtonText: 'Allow control',
-            denyButtonText: 'Deny',
-            focusConfirm: false,
-            didOpen: () => this.getId('remoteControlId').focus(),
-            preConfirm: () => {
-                // RustDesk shows the ID grouped by spaces (123 456 789)
-                const id = this.getId('remoteControlId').value.replace(/\s+/g, '');
-                const password = this.getId('remoteControlPassword').value.trim();
-                if (!/^[\w.@:-]{6,64}$/.test(id)) return Swal.showValidationMessage('Enter a valid RustDesk ID');
-                if (!/^[^\s<>&"'`]{1,64}$/.test(password)) {
-                    return Swal.showValidationMessage('Enter a valid RustDesk password');
-                }
-                return { id, password };
-            },
-            showClass: { popup: 'animate__animated animate__fadeInDown' },
-            hideClass: { popup: 'animate__animated animate__fadeOutUp' },
-        }).then((result) => {
-            result.isConfirmed
-                ? this.sendPeerRemoteControl(cmd.from_peer_id, 'remoteControlOK', result.value)
-                : this.sendPeerRemoteControl(
-                      cmd.from_peer_id,
-                      'remoteControlKO',
-                      `${this.peer_name}: Has declined the remote control request`
-                  );
-        });
-    }
-
-    handleRemoteControlOK(cmd) {
-        // Accept answers only from the peer we asked
-        if (!this.remoteControlEnabled || cmd.from_peer_id !== this.remoteControlPeerId) return;
-        this.remoteControlPeerId = null;
-        const { id, password } = cmd.data;
-        this.sound('notify');
-        Swal.fire({
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            background: swalBackground,
-            position: 'center',
-            title: 'Remote control',
-            html: renderRoomTemplate('popupRemoteControlReadyTemplate', {
-                text: { name: cmd.from_peer_name, id, password },
-            }),
-            showCancelButton: true,
-            confirmButtonText: 'Open RustDesk',
-            cancelButtonText: 'Cancel',
-            didOpen: (popup) => {
-                popup.querySelectorAll('[data-copy]').forEach((btn) => {
-                    btn.addEventListener('click', () =>
-                        copyToClipboard(btn.dataset.copy === 'id' ? id : password, false)
-                    );
-                });
-            },
-            showClass: { popup: 'animate__animated animate__fadeInDown' },
-            hideClass: { popup: 'animate__animated animate__fadeOutUp' },
-        }).then((result) => {
-            // Desktop RustDesk ignores the password parameter, so it must be pasted manually
-            if (result.isConfirmed) {
-                window.location.href = `rustdesk://connection/new/${encodeURIComponent(id)}?password=${encodeURIComponent(password)}`;
-            }
-        });
-    }
-
     // ##############################################
     // Video AI (LiveAvatar / Anam)
     // ##############################################

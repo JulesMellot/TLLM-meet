@@ -13,7 +13,6 @@ const PURPOSES = {
     auth: 'auth',
     recUpload: 'rec-upload',
     createRoom: 'create-room',
-    rcSetup: 'rc-setup',
 };
 
 let cached = null;
@@ -48,7 +47,6 @@ function getJwtKeys(rawSecret = process.env.JWT_SECRET) {
                 auth: deriveKey(secret, PURPOSES.auth),
                 recUpload: deriveKey(secret, PURPOSES.recUpload),
                 createRoom: deriveKey(secret, PURPOSES.createRoom),
-                rcSetup: deriveKey(secret, PURPOSES.rcSetup),
             }),
         };
     }

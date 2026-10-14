@@ -82,7 +82,6 @@ const _PEER = {
     banPeer: '<i class="fas fa-ban red"></i>',
     ejectPeer: '<i class="fas fa-right-from-bracket red"></i>',
     geoLocation: '<i class="fas fa-location-dot"></i>',
-    remoteControl: '<i class="fas fa-computer-mouse"></i>',
     sendFile: '<i class="fas fa-upload"></i>',
     sendMsg: '<i class="fas fa-paper-plane"></i>',
     sendVideo: '<i class="fab fa-youtube"></i>',
@@ -8049,17 +8048,6 @@ function getParticipantsList(peers) {
                             onClick: `rc.askPeerGeoLocation('${peer_id}')`,
                             iconHtml: peer_geoLocation,
                             label: 'Get geolocation',
-                        })
-                    );
-                }
-                if (rc.remoteControlEnabled) {
-                    menuItems += renderParticipantMenuItem(
-                        renderParticipantActionButton({
-                            buttonClass: 'btn-sm ml5',
-                            buttonId: `${peer_id}___remoteControl`,
-                            onClick: `rc.askPeerRemoteControl('${peer_id}')`,
-                            iconHtml: _PEER.remoteControl,
-                            label: 'Remote control',
                         })
                     );
                 }
