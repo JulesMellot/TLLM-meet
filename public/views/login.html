@@ -172,30 +172,21 @@
                                     <div class="login-icon login-icon-success">
                                         <i class="fa-solid fa-video"></i>
                                     </div>
-                                    <h2 class="join-room-title">
-                                        Pick name.<br />
-                                        Share URL.<br />
-                                        Start conference.
-                                    </h2>
+                                    <h2 class="join-room-title">Nouvelle visio</h2>
                                     <div class="room-input-row">
                                         <div class="login-input-group">
-                                            <i class="fa-solid fa-door-open"></i>
-                                            <select id="selectRoom" class="form-input"></select>
+                                            <i class="fa-solid fa-video"></i>
+                                            <input
+                                                id="roomNameInput"
+                                                class="form-input"
+                                                type="text"
+                                                placeholder="Nom de la visio"
+                                                maxlength="40"
+                                                autocomplete="off"
+                                            />
                                         </div>
-                                        <button
-                                            id="generateRoomButton"
-                                            class="random-room-btn"
-                                            title="Generate random room name"
-                                        >
-                                            <i class="fa-solid fa-arrows-rotate"></i>
-                                        </button>
-                                        <button id="shareRoomButton" class="random-room-btn" title="Share room link">
-                                            <i class="fa-solid fa-share-nodes"></i>
-                                        </button>
                                     </div>
-                                    <button id="joinSelectRoomButton" class="join-room-btn">
-                                        <i class="fa-solid fa-right-to-bracket"></i>&nbsp; JOIN ROOM
-                                    </button>
+                                    <button id="joinSelectRoomButton" class="join-room-btn">Créer la visio</button>
                                 </div>
                             </div>
                             <div class="hero-figure anime-element">

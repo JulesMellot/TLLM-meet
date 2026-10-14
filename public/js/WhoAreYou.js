@@ -8,7 +8,7 @@ console.log('Settings:', settings);
 const pollInterval = 5000;
 
 const pathParts = window.location.pathname.split('/');
-const roomId = filterXSS(pathParts[pathParts.length - 1]);
+const roomId = filterXSS(decodeURIComponent(pathParts[pathParts.length - 1]));
 
 const statusEl = document.getElementById('waitingStatus');
 const loginLink = document.getElementById('loginLink');
@@ -91,7 +91,8 @@ function checkRoom() {
                 statusEl.textContent = getWaitingRoomBrand('waitingRoomReady', 'Room is ready! Joining...');
                 statusEl.classList.add('ready');
                 setTimeout(function () {
-                    window.location.href = '/join/' + encodeURIComponent(roomId);
+                    // Keep the original join parameters (name, audio, video...)
+                    window.location.href = '/join/' + encodeURIComponent(roomId) + window.location.search;
                 }, 800);
             } else if (!isActive) {
                 statusEl.textContent = getWaitingRoomBrand(

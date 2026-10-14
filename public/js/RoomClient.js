@@ -580,17 +580,11 @@ class RoomClient {
     // GET STARTED
     // ####################################################
 
-    // Short-lived token proving the HTTP room creation policy (OIDC / host protection) allows this user to create the room
+    // Short-lived token proving the admin session (HttpOnly cookie) allows this user to create the room
     async getCreateRoomToken(room_id) {
         try {
-            const headers = {};
-            if (this.peer_info?.peer_token) headers.Authorization = `Bearer ${this.peer_info.peer_token}`;
             const query = new URLSearchParams({ room: room_id });
-            if (!this.peer_info?.peer_token && this.peer_info?.peer_name) query.set('name', this.peer_info.peer_name);
-            const response = await fetch(`/createRoomToken?${query}`, {
-                headers,
-                credentials: 'same-origin',
-            });
+            const response = await fetch(`/createRoomToken?${query}`, { credentials: 'same-origin' });
             if (!response.ok) return null;
             const data = await response.json();
             return data?.token || null;
@@ -602,14 +596,20 @@ class RoomClient {
 
     async createRoom(room_id) {
         const token = await this.getCreateRoomToken(room_id);
-        await this.socket
+        const res = await this.socket
             .request('createRoom', {
                 room_id,
                 token,
             })
             .catch((err) => {
                 console.log('Create room:', err);
+                return { error: typeof err === 'string' ? err : err?.message };
             });
+        // TLLM*meet: only the admin can start a meeting, guests wait on the "not started yet" page
+        if (res?.error === 'Room creation not authorized') {
+            window.location.href = '/whoAreYou/' + encodeURIComponent(room_id) + window.location.search;
+            return new Promise(() => {}); // stop the join flow while the page changes
+        }
     }
 
     async join(data) {
@@ -684,7 +684,6 @@ class RoomClient {
                 // ##########################################
                 this.peers = new Map(JSON.parse(room.peers));
                 // ##########################################
-
 
                 await this.joinAllowed(room);
             })
@@ -9023,8 +9022,8 @@ class RoomClient {
         }
     }
 
-        // Prefer the server-side session ID so recordings correlate with the same conference instance;
-        // fall back to a client UUID if unavailable.
+    // Prefer the server-side session ID so recordings correlate with the same conference instance;
+    // fall back to a client UUID if unavailable.
     handleMediaRecorderStart(evt) {
         console.log('MediaRecorder started: ', evt);
         rc.cleanLastRecordingInfo();
