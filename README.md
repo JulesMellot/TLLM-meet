@@ -36,19 +36,26 @@ La déconnexion la révoque, et changer le mot de passe invalide les sessions ou
 
 ## Déploiement (Coolify derrière Cloudflare)
 
-Coolify construit l'image à partir du `Dockerfile` du dépôt. Les variables se règlent dans Coolify ;
-la liste complète est dans [`.env.template`](.env.template).
+Le dépôt contient [`docker-compose.coolify.yml`](docker-compose.coolify.yml), prévu pour Coolify :
 
-| Variable | Valeur |
-|---|---|
-| `NODE_ENV` | `production` |
-| `SERVER_HOST_URL` | l'URL publique, par exemple `https://meet.exemple.fr` |
-| `SFU_ANNOUNCED_IP` | l'IP publique du serveur |
-| `TRUST_PROXY` | `2` (Cloudflare + proxy Coolify) |
-| `JWT_SECRET` | au moins 32 caractères : `openssl rand -hex 32` |
-| `HOST_USERS` | comptes admin `identifiant:motdepasse:Nom affiché`, séparés par `\|` |
-| `UI_STYLE` | `sobre` (par défaut) ou `papier` |
-| `SOURCE_URL` | lien vers le code source de l'instance (AGPL-3.0, article 13) |
+1. Dans Coolify, créer une ressource à partir du dépôt, type de build **Docker Compose**.
+2. Dans _Docker Compose Location_, indiquer `/docker-compose.coolify.yml`.
+3. Attribuer le domaine au service `tllm-meet`, par exemple `https://meet.exemple.fr`.
+4. Dans les variables d'environnement, remplir `HOST_USERS`, puis déployer.
+
+Coolify lit le fichier et affiche les variables dans son interface :
+
+| Variable           | Valeur                                                                                                                                 |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `HOST_USERS`       | **à remplir** : comptes admin `identifiant:motdepasse:Nom affiché`, séparés par `\|` ; le déploiement est bloqué tant qu'elle est vide |
+| `JWT_SECRET`       | généré par Coolify (64 caractères), conservé entre deux déploiements                                                                   |
+| `SERVER_HOST_URL`  | repris du domaine attribué dans Coolify                                                                                                |
+| `TRUST_PROXY`      | `2` par défaut (Cloudflare + proxy Coolify)                                                                                            |
+| `SFU_ANNOUNCED_IP` | vide par défaut : l'IP publique est détectée au démarrage                                                                              |
+| `UI_STYLE`         | `sobre` par défaut, ou `papier`                                                                                                        |
+| `SOURCE_URL`       | lien vers le code source de l'instance (AGPL-3.0, article 13)                                                                          |
+
+Les autres réglages de [`.env.template`](.env.template) peuvent être ajoutés dans Coolify.
 
 Le serveur refuse de démarrer si `JWT_SECRET` manque ou est trop court,
 ou si `HOST_USERS` est vide ou contient des identifiants connus (`admin:admin`…).
@@ -57,7 +64,7 @@ Réseau :
 
 - Le port HTTP `3010` passe par Coolify et Cloudflare.
 - Les flux audio et vidéo ne passent pas par Cloudflare. Les ports `40000-40100`, en UDP et en TCP,
-  doivent être ouverts directement sur le serveur (`SFU_MIN_PORT` et `SFU_MAX_PORT`).
+  doivent être ouverts directement sur le serveur (pare-feu de l'hébergeur compris).
 - `TRUST_PROXY` doit correspondre au nombre exact de proxys devant l'application.
   Une valeur trop haute permet de falsifier l'IP utilisée par les limites de connexion.
 
@@ -84,14 +91,14 @@ En local, le serveur utilise le certificat de test de `app/ssl` ; le navigateur 
 
 Le code propre au fork est rangé dans des fichiers séparés, pour limiter les conflits avec l'upstream :
 
-| Fichier | Rôle |
-|---|---|
-| `public/css/tllm.css` | apparence de la visio |
-| `public/css/tllm-pages.css` | accueil, connexion, attente, erreurs |
-| `public/js/tllm.js` | menu « Plus », chargement à la demande des bibliothèques |
-| `public/js/TllmHome.js` | page d'accueil |
-| `app/src/AdminAuth.js` | session admin, noms de visio |
-| `app/src/ClientIp.js` | IP du client derrière les proxys |
+| Fichier                     | Rôle                                                     |
+| --------------------------- | -------------------------------------------------------- |
+| `public/css/tllm.css`       | apparence de la visio                                    |
+| `public/css/tllm-pages.css` | accueil, connexion, attente, erreurs                     |
+| `public/js/tllm.js`         | menu « Plus », chargement à la demande des bibliothèques |
+| `public/js/TllmHome.js`     | page d'accueil                                           |
+| `app/src/AdminAuth.js`      | session admin, noms de visio                             |
+| `app/src/ClientIp.js`       | IP du client derrière les proxys                         |
 
 ## Mise à jour depuis MiroTalk SFU
 

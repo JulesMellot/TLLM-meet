@@ -1,0 +1,34 @@
+# TLLM*meet - déploiement Coolify (type de build « Docker Compose »)
+#
+# Coolify lit ce fichier et affiche les variables dans son interface :
+#   - JWT_SECRET est généré par Coolify (SERVICE_PASSWORD_64_JWT) et conservé entre deux déploiements ;
+#   - SERVER_HOST_URL reprend le domaine attribué au service dans Coolify ;
+#   - HOST_USERS est obligatoire : le déploiement est bloqué tant qu'il est vide ;
+#   - les autres variables ont une valeur par défaut, modifiable dans Coolify.
+# La liste complète des variables est dans .env.template.
+
+services:
+    tllm-meet:
+        build: .
+        restart: unless-stopped
+        ports:
+            # Les flux audio et vidéo ne passent pas par Cloudflare : ces ports doivent être ouverts sur le serveur.
+            - '40000-40100:40000-40100/udp'
+            - '40000-40100:40000-40100/tcp'
+        environment:
+            # Domaine géré par Coolify, proxy vers le port HTTP de l'application
+            - SERVICE_FQDN_TLLMMEET_3010
+            - NODE_ENV=production
+            - SERVER_HOST_URL=${SERVICE_URL_TLLMMEET}
+            - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+            # Comptes admin : identifiant:motdepasse:Nom affiché, séparés par |
+            - HOST_USERS=${HOST_USERS:?}
+            - HOST_SESSION_HOURS=${HOST_SESSION_HOURS:-12}
+            # Cloudflare + proxy Coolify
+            - TRUST_PROXY=${TRUST_PROXY:-2}
+            # Vide : l'IP publique est détectée au démarrage
+            - SFU_ANNOUNCED_IP=${SFU_ANNOUNCED_IP:-}
+            - SFU_MIN_PORT=40000
+            - SFU_MAX_PORT=40100
+            - UI_STYLE=${UI_STYLE:-sobre}
+            - SOURCE_URL=${SOURCE_URL:-https://github.com/JulesMellot/TLLM-meet}
