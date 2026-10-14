@@ -876,41 +876,6 @@ module.exports = {
         },
 
         /**
-         * Sentry Error Tracking Configuration
-         * ==================================
-         * Real-time error monitoring and performance tracking
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Create a project at https://sentry.io/signup/
-         * 2. Get your DSN from:
-         *    Project Settings → Client Keys (DSN)
-         * 3. Configure alert rules and integrations as needed
-         *
-         * Core Settings:
-         * -------------
-         * enabled              : Enable/disable Sentry [true/false] (default: false)
-         * logLevels            : Array of log levels to capture (default: ['error'])
-         * DSN                  : Data Source Name (from Sentry dashboard)
-         * tracesSampleRate     : Percentage of transactions to capture (0.0-1.0)
-         *
-         * Performance Tuning:
-         * ------------------
-         * - Production         : 0.1-0.2 (10-20% of transactions)
-         * - Staging            : 0.5-1.0
-         * - Development        : 0.0 (disable performance tracking)
-         *
-         */
-        sentry: {
-            enabled: process.env.SENTRY_ENABLED === 'true',
-            logLevels: process.env.SENTRY_LOG_LEVELS
-                ? process.env.SENTRY_LOG_LEVELS.split(splitChar).map((level) => level.trim())
-                : ['error'],
-            DSN: process.env.SENTRY_DSN || '',
-            tracesSampleRate: Math.min(Math.max(parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE) || 0.5, 0), 1),
-        },
-
-        /**
          * Webhook Configuration Settings
          * =============================
          * Controls the webhook notification system for sending event data to external services.

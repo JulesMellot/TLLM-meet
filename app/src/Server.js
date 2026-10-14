@@ -8,7 +8,6 @@
 ███████ ███████ ██   ██   ████   ███████ ██   ██                                           
 
 prod dependencies: {
-    @sentry/node            : https://www.npmjs.com/package/@sentry/node
     axios                   : https://www.npmjs.com/package/axios
     chokidar                : https://www.npmjs.com/package/chokidar
     colors                  : https://www.npmjs.com/package/colors
@@ -101,7 +100,6 @@ const log = new Logger('Server');
 const yaml = require('js-yaml');
 const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = yaml.load(fs.readFileSync(path.join(__dirname, '/../api/swagger.yaml'), 'utf8'));
-const Sentry = require('@sentry/node');
 const restrictAccessByIP = require('./middleware/IpWhitelist');
 const { applyEmbedHeaders, embedAllowedOrigins, embedCsp } = require('./middleware/EmbedHeaders');
 const { createVideoAIService } = require('./videoai/service');
@@ -343,52 +341,6 @@ const restApi = {
     docs: host + '/api/v1/docs', // api docs
     allowed: config.api?.allowed || {},
 };
-
-// Sentry monitoring
-const sentryEnabled = config.integrations?.sentry?.enabled || false;
-const sentryDSN = config.integrations.sentry.DSN;
-const sentryTracesSampleRate = config.integrations.sentry.tracesSampleRate;
-if (sentryEnabled && typeof sentryDSN === 'string' && sentryDSN.trim()) {
-    log.info('Sentry monitoring started...');
-
-    Sentry.init({
-        dsn: sentryDSN,
-        tracesSampleRate: sentryTracesSampleRate,
-    });
-
-    // Accept logLevels as an array, e.g., ['warn', 'error']
-    const logLevels = config.integrations?.sentry?.logLevels || ['error'];
-
-    const stripAnsi = (str) => (typeof str === 'string' ? str.replace(/\u001b\[[\d;]*m/g, '') : str);
-
-    const sanitizeArgs = (args) =>
-        args
-            .map((arg) =>
-                typeof arg === 'string' ? stripAnsi(arg) : typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-            )
-            .join(' ');
-
-    const originalConsole = {};
-    logLevels.forEach((level) => {
-        originalConsole[level] = console[level];
-        console[level] = function (...args) {
-            switch (level) {
-                case 'warn':
-                    Sentry.captureMessage(sanitizeArgs(args), 'warning');
-                    break;
-                case 'error':
-                    args[0] instanceof Error
-                        ? Sentry.captureException(args[0])
-                        : Sentry.captureException(new Error(sanitizeArgs(args)));
-                    break;
-            }
-            originalConsole[level].apply(console, args);
-        };
-    });
-
-    // log.error('Sentry error', { foo: 'bar' });
-    // log.warn('Sentry warning');
-}
 
 // Handle WebHook
 const webhook = {
@@ -2141,7 +2093,6 @@ function startServer() {
 
             // Monitoring & Analytics
             monitoring: {
-                sentry: sentryEnabled ? config.integrations?.sentry : false,
                 stats: config.features?.stats?.enabled ? config.features.stats : false,
                 system_info: config.system?.info,
             },
