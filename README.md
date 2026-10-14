@@ -208,7 +208,6 @@ For detailed guides and references, visit the **[official documentation](https:/
 - [REST API Documentation](https://docs.mirotalk.com/mirotalk-sfu/api/)
 - [Scalability](https://docs.mirotalk.com/mirotalk-sfu/scalability/)
 - [Updates](https://docs.mirotalk.com/mirotalk-sfu/updates/)
-- [WebHook](https://docs.mirotalk.com/mirotalk-sfu/webhook/)
 
 </details>
 

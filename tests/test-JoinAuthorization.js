@@ -83,7 +83,6 @@ describe('Socket.IO join authorization', () => {
             getRTMPActiveStreams: () => [],
             widget: { alert: { enabled: false }, enabled: false },
             nodemailer: { sendEmailAlert() {} },
-            handleJoinWebHook: sinon.spy(),
             serverRecordingEnabled: true,
             createRecUploadToken: sinon.stub().returns('recording-token'),
             rtmpEnabled: true,
@@ -123,7 +122,6 @@ describe('Socket.IO join authorization', () => {
         assert.equal(state.room.toJson.callCount, 0);
         assert.equal(state.context.createRecUploadToken.callCount, 0);
         assert.equal(state.context.createRtmpStreamToken.callCount, 0);
-        assert.equal(state.context.handleJoinWebHook.callCount, 0);
     }
 
     for (const flags of [

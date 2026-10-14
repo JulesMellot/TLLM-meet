@@ -342,12 +342,6 @@ const restApi = {
     allowed: config.api?.allowed || {},
 };
 
-// Handle WebHook
-const webhook = {
-    enabled: config?.integrations?.webhook?.enabled || false,
-    url: config?.integrations?.webhook?.url || 'http://localhost:8888/webhook-endpoint',
-};
-
 // Stats
 const defaultStats = {
     enabled: true,
@@ -2054,7 +2048,6 @@ function startServer() {
             // API & Services
             api: {
                 rest_api: restApi,
-                webhook: webhook.enabled ? webhook : false,
             },
 
             // Media Configuration
@@ -2591,8 +2584,6 @@ function startServer() {
                         log.warn('Unknown alert type for widget', { type: widget.type });
                 }
             }
-
-            handleJoinWebHook(room.id, room.getSessionId(), data.peer_info);
 
             // Notify main room when a peer joins a breakout room
             if (socket.room_id.includes('_breakout_')) {
@@ -3350,8 +3341,6 @@ function startServer() {
                     if (!peer.peer_lobby) continue;
 
                     peer.updatePeerInfo({ type: 'lobby', status: false });
-
-                    handleJoinWebHook(room.id, room.getSessionId(), peer.peer_info);
                 }
             }
         });
@@ -5234,21 +5223,6 @@ function startServer() {
 
             log.debug('[Disconnect] - peer name', { peer_name, reason });
 
-            if (webhook.enabled && peer) {
-                const data = {
-                    timestamp: log.getDateTime(false),
-                    room_id: socket.room_id,
-                    session_id: room?.getSessionId ? room.getSessionId() : undefined,
-                    peer: peer?.peer_info,
-                    reason: reason,
-                };
-                // Trigger a POST request when a user disconnects
-                axios
-                    .post(webhook.url, { event: 'disconnect', data }, { timeout: 5000 })
-                    .then((response) => log.debug('Disconnect event tracked:', response.data))
-                    .catch((error) => log.error('Error tracking disconnect event:', error.message));
-            }
-
             room.removePeer(socket.id);
 
             // Sockets that never joined (e.g. rejected by a lock) are not announced to the room
@@ -5320,20 +5294,6 @@ function startServer() {
 
             log.debug('Exit room', peer_name);
 
-            if (webhook.enabled) {
-                const data = {
-                    timestamp: log.getDateTime(false),
-                    room_id: socket.room_id,
-                    session_id: room?.getSessionId ? room.getSessionId() : undefined,
-                    peer: peer?.peer_info,
-                };
-                // Trigger a POST request when a user exits
-                axios
-                    .post(webhook.url, { event: 'exit', data }, { timeout: 5000 })
-                    .then((response) => log.debug('ExitRoom event tracked:', response.data))
-                    .catch((error) => log.error('Error tracking exitRoom event:', error.message));
-            }
-
             room.removePeer(socket.id);
 
             room.broadCast(socket.id, 'removeMe', removeMeData(room, peer_name, isPresenter));
@@ -5384,24 +5344,6 @@ function startServer() {
         });
 
         // Helpers
-
-        async function handleJoinWebHook(room_id, session_id, peer_info) {
-            // handle WebHook
-            if (webhook.enabled) {
-                // Trigger a POST request when a user joins
-                const data = {
-                    timestamp: log.getDateTime(false),
-                    room_id,
-                    session_id,
-                    peer_info,
-                };
-
-                axios
-                    .post(webhook.url, { event: 'join', data }, { timeout: 5000 })
-                    .then((response) => log.debug('Join event tracked:', response.data))
-                    .catch((error) => log.error('Error tracking join event:', error.message));
-            }
-        }
 
         function getRoomAndPeer(socket) {
             const room = getRoom(socket);

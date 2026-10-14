@@ -876,26 +876,6 @@ module.exports = {
         },
 
         /**
-         * Webhook Configuration Settings
-         * =============================
-         * Controls the webhook notification system for sending event data to external services.
-         *
-         * Core Settings:
-         * ---------------------
-         * - enabled: Turns webhook notifications on/off
-         * - url: The endpoint URL where webhook payloads will be sent in JSON format
-         *
-         * Implementation Guide:
-         * --------------------
-         * - For complete implementation examples, refer to:
-         *      - Project demo: /mirotalksfu/webhook/ folder
-         */
-        webhook: {
-            enabled: process.env.WEBHOOK_ENABLED === 'true',
-            url: process.env.WEBHOOK_URL || 'https://your-site.com/webhook-endpoint',
-        },
-
-        /**
          * IP Geolocation Service Configuration
          * ===================================
          * Enables lookup of geographical information based on IP addresses using the GeoJS.io API.

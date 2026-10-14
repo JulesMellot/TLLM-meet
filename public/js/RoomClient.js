@@ -9500,8 +9500,8 @@ class RoomClient {
     getServerRecFileName() {
         const roomName = this.room_id.trim();
         const dateTime = getDataTimeStringFormat();
-        // Prefer the server-side session ID so recordings correlate with join/exit webhook
-        // events for the same conference instance; fall back to a client UUID if unavailable.
+        // Prefer the server-side session ID so recordings correlate with the same conference instance;
+        // fall back to a client UUID if unavailable.
         const uuid = this.sessionId || this.generateUUIDv4();
         return `Rec_${roomName}_${dateTime}_${uuid}.webm`;
     }
