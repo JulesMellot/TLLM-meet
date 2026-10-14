@@ -151,7 +151,7 @@ install_native_dependencies() {
     log info 'Installing native runtime and build dependencies'
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        build-essential ca-certificates curl ffmpeg gnupg openssl python3 python3-pip
+        build-essential ca-certificates curl gnupg openssl python3 python3-pip
     install_nodejs
 }
 
