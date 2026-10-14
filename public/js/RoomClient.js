@@ -1397,6 +1397,13 @@ class RoomClient {
     };
 
     handleNewProducers = async (data, reconcile = false) => {
+        // TLLM*meet: a producer announced while this client is still creating its receive transport
+        // used to fail with a blocking "Consume" error popup. Skip it: getProducers runs right after
+        // the transports are ready, and the periodic reconcile catches anything missed.
+        if (!this.consumerTransport) {
+            console.log('New producers before the consumer transport is ready: deferred to getProducers', data);
+            return;
+        }
         if (data.length > 0) {
             if (!reconcile) {
                 console.log('SocketOn New producers', {
