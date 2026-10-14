@@ -159,10 +159,6 @@ module.exports = {
          * - 'self'         → only same-origin embedding (frame-ancestors 'self' + X-Frame-Options: SAMEORIGIN).
          * - list           → comma-separated origins, 'self' is always implicitly included.
          *                    Wildcards like https://*.example.com are valid in CSP.
-         *
-         * IMPORTANT: This affects the widget too — the MiroTalk widget embeds
-         * the room in an iframe on the host site, so every site that should
-         * load the widget must be listed here.
          */
         embed: {
             allowedOrigins: process.env.ALLOWED_EMBED_ORIGINS
@@ -620,13 +616,10 @@ module.exports = {
      * - meeting    : Enable/disable single meeting operations [true/false] (default: true)
      * - join       : Enable/disable meeting join endpoint [true/false] (default: true)
      * - token      : Enable/disable token generation endpoint [true/false] (default: false)
-     * - slack      : Enable/disable Slack webhook integration [true/false] (default: true)
-     * - mattermost : Enable/disable Mattermost webhook integration [true/false] (default: true)
      *
      * API Documentation:
      * ------------------
      * - Complete API reference: https://docs.mirotalk.com/mirotalk-sfu/api/
-     * - Webhook setup: See integration guides for Slack/Mattermost
      */
     api: {
         keySecret: process.env.API_KEY_SECRET,
@@ -637,8 +630,6 @@ module.exports = {
             meetingEnd: process.env.API_ALLOW_MEETING_END === 'true',
             join: process.env.API_ALLOW_JOIN !== 'false',
             token: process.env.API_ALLOW_TOKEN === 'true',
-            slack: process.env.API_ALLOW_SLACK !== 'false',
-            mattermost: process.env.API_ALLOW_MATTERMOST !== 'false',
         },
     },
 
@@ -730,227 +721,6 @@ module.exports = {
             password: process.env.EMAIL_PASSWORD || 'test',
             from: process.env.EMAIL_FROM || process.env.EMAIL_USERNAME,
             sendTo: process.env.EMAIL_SEND_TO || 'test@mirotalk.com',
-        },
-
-        /**
-         * Slack Integration Configuration
-         * ==============================
-         * Settings for Slack slash commands and interactivity
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Create a Slack app at https://api.slack.com/apps
-         * 2. Under "Basic Information" → "App Credentials":
-         *    - Copy the Signing Secret
-         * 3. Enable "Interactivity & Shortcuts" and "Slash Commands"
-         * 4. Set Request URL to: https://your-domain.com/slack/commands
-         *
-         * Core Settings:
-         * -------------
-         * - enabled         : Enable/disable Slack integration [true/false] (default: false)
-         * - signingSecret   : From Slack app credentials (store ONLY in .env)
-         *
-         */
-        slack: {
-            enabled: process.env.SLACK_ENABLED === 'true',
-            signingSecret: process.env.SLACK_SIGNING_SECRET || '',
-        },
-
-        /**
-         * Mattermost Integration Configuration
-         * ===================================
-         * Settings for Mattermost slash commands and bot integration
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Go to Mattermost System Console → Integrations → Bot Accounts
-         * 2. Create a new bot account and copy:
-         *    - Server URL (e.g., 'https://chat.yourdomain.com')
-         *    - Access Token
-         * 3. For slash commands:
-         *    - Navigate to Integrations → Slash Commands
-         *    - Set Command: '/sfu'
-         *    - Set Request URL: 'https://your-sfu-server.com/mattermost/commands'
-         *
-         * Core Settings:
-         * -------------
-         * - enabled      : Enable/disable integration [true/false] (default: false)
-         * - serverUrl    : Mattermost server URL (include protocol)
-         * - token        : Bot account access token (most secure option)
-         * - OR
-         * - username     : Legacy auth username (less secure)
-         * - password     : Legacy auth password (deprecated)
-         *
-         * Command Configuration:
-         * ---------------------
-         * - commands     : Slash command definitions:
-         *   - name       : Command trigger (e.g., '/sfu')
-         *   - message    : Default response template
-         *
-         */
-        mattermost: {
-            enabled: process.env.MATTERMOST_ENABLED === 'true',
-            serverUrl: process.env.MATTERMOST_SERVER_URL || '',
-            username: process.env.MATTERMOST_USERNAME || '',
-            password: process.env.MATTERMOST_PASSWORD || '',
-            token: process.env.MATTERMOST_TOKEN || '',
-            commands: [
-                {
-                    name: process.env.MATTERMOST_COMMAND_NAME || '/sfu',
-                    message: process.env.MATTERMOST_DEFAULT_MESSAGE || 'Here is your meeting room:',
-                },
-            ],
-            texts: [
-                {
-                    name: process.env.MATTERMOST_COMMAND_NAME || '/sfu',
-                    message: process.env.MATTERMOST_DEFAULT_MESSAGE || 'Here is your meeting room:',
-                },
-            ],
-        },
-
-        /**
-         * Discord Integration Configuration
-         * ================================
-         * Settings for Discord bot and slash commands integration
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Create a Discord application at https://discord.com/developers/applications
-         * 2. Navigate to "Bot" section and:
-         *    - Click "Add Bot"
-         *    - Copy the bot token (DISCORD_TOKEN)
-         * 3. Under "OAuth2 → URL Generator":
-         *    - Select "bot" and "applications.commands" scopes
-         *    - Select required permissions (see below)
-         * 4. Invite bot to your server using generated URL
-         *
-         * Core Settings:
-         * -------------
-         * - enabled        : Enable/disable Discord bot [true/false] (default: false)
-         * - token          : Bot token from Discord Developer Portal (store in .env)
-         *
-         * Command Configuration:
-         * ---------------------
-         * - commands       : Slash command definitions:
-         *   - name         : Command trigger (e.g., '/sfu')
-         *   - message      : Response template
-         *   - baseUrl      : Meeting room base URL
-         *
-         */
-        discord: {
-            enabled: process.env.DISCORD_ENABLED === 'true',
-            token: process.env.DISCORD_TOKEN || '',
-            commands: [
-                {
-                    name: process.env.DISCORD_COMMAND_NAME || '/sfu',
-                    message: process.env.DISCORD_DEFAULT_MESSAGE || 'Here is your SFU meeting room:',
-                    baseUrl: process.env.DISCORD_BASE_URL || 'https://sfu.mirotalk.com/join/',
-                },
-            ],
-        },
-
-        /**
-         * Ngrok Tunnel Configuration
-         * =========================
-         * Secure tunneling for local development and testing
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Sign up at https://dashboard.ngrok.com/signup
-         * 2. Get your auth token from:
-         *    https://dashboard.ngrok.com/get-started/your-authtoken
-         * 3. For reserved domains/subdomains:
-         *    - Upgrade to paid plan if needed
-         *    - Reserve at https://dashboard.ngrok.com/cloud-edge/domains
-         *
-         * Core Settings:
-         * -------------
-         * - enabled      : Enable/disable Ngrok tunneling [true/false] (default: false)
-         * - authToken    : Your Ngrok authentication token (from dashboard)
-         */
-        ngrok: {
-            enabled: process.env.NGROK_ENABLED === 'true',
-            authToken: process.env.NGROK_AUTH_TOKEN || '',
-        },
-
-        /**
-         * Sentry Error Tracking Configuration
-         * ==================================
-         * Real-time error monitoring and performance tracking
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Create a project at https://sentry.io/signup/
-         * 2. Get your DSN from:
-         *    Project Settings → Client Keys (DSN)
-         * 3. Configure alert rules and integrations as needed
-         *
-         * Core Settings:
-         * -------------
-         * enabled              : Enable/disable Sentry [true/false] (default: false)
-         * logLevels            : Array of log levels to capture (default: ['error'])
-         * DSN                  : Data Source Name (from Sentry dashboard)
-         * tracesSampleRate     : Percentage of transactions to capture (0.0-1.0)
-         *
-         * Performance Tuning:
-         * ------------------
-         * - Production         : 0.1-0.2 (10-20% of transactions)
-         * - Staging            : 0.5-1.0
-         * - Development        : 0.0 (disable performance tracking)
-         *
-         */
-        sentry: {
-            enabled: process.env.SENTRY_ENABLED === 'true',
-            logLevels: process.env.SENTRY_LOG_LEVELS
-                ? process.env.SENTRY_LOG_LEVELS.split(splitChar).map((level) => level.trim())
-                : ['error'],
-            DSN: process.env.SENTRY_DSN || '',
-            tracesSampleRate: Math.min(Math.max(parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE) || 0.5, 0), 1),
-        },
-
-        /**
-         * Webhook Configuration Settings
-         * =============================
-         * Controls the webhook notification system for sending event data to external services.
-         *
-         * Core Settings:
-         * ---------------------
-         * - enabled: Turns webhook notifications on/off
-         * - url: The endpoint URL where webhook payloads will be sent in JSON format
-         *
-         * Implementation Guide:
-         * --------------------
-         * - For complete implementation examples, refer to:
-         *      - Project demo: /mirotalksfu/webhook/ folder
-         */
-        webhook: {
-            enabled: process.env.WEBHOOK_ENABLED === 'true',
-            url: process.env.WEBHOOK_URL || 'https://your-site.com/webhook-endpoint',
-        },
-
-        /**
-         * IP Geolocation Service Configuration
-         * ===================================
-         * Enables lookup of geographical information based on IP addresses using the GeoJS.io API.
-         *
-         * Core Settings:
-         * ---------------------
-         * - enabled: Enable/disable the IP lookup functionality [true/false] default false
-         *
-         * Service Details:
-         * --------------
-         * - Uses GeoJS.io free API service (https://www.geojs.io/)
-         * - Returns JSON data containing:
-         *   - Country, region, city
-         *   - Latitude/longitude
-         *   - Timezone and organization
-         * - Rate limits: 60 requests/minute (free tier)
-         */
-        IPLookup: {
-            enabled: process.env.IP_LOOKUP_ENABLED === 'true',
-            getEndpoint(ip) {
-                return `https://get.geojs.io/v1/ip/geo/${ip}.json`;
-            },
         },
 
         /**
@@ -1220,51 +990,6 @@ module.exports = {
                 `,
             },
 
-            /**
-             * Widget Configuration
-             * --------------------
-             * Controls the appearance and behavior of the support widget.
-             * Supports dynamic configuration via environment variables.
-             */
-            widget: {
-                enabled: process.env.WIDGET_ENABLED === 'true',
-                roomId: process.env.WIDGET_ROOM_ID || 'support-room',
-                theme: process.env.WIDGET_THEME || 'dark',
-                widgetState: process.env.WIDGET_STATE || 'minimized',
-                widgetType: process.env.WIDGET_TYPE || 'support',
-                supportWidget: {
-                    position: process.env.WIDGET_SUPPORT_POSITION || 'top-right',
-                    expertImages: process.env.WIDGET_SUPPORT_EXPERT_IMAGES
-                        ? process.env.WIDGET_SUPPORT_EXPERT_IMAGES.split(splitChar)
-                              .map((url) => url.trim())
-                              .filter(Boolean)
-                        : [
-                              'https://photo.cloudron.pocketsolution.net/uploads/original/95/7d/a5f7f7a2c89a5fee7affda5f013c.jpeg',
-                          ],
-                    buttons: {
-                        audio: process.env.WIDGET_SUPPORT_BUTTON_AUDIO !== 'false',
-                        video: process.env.WIDGET_SUPPORT_BUTTON_VIDEO !== 'false',
-                        screen: process.env.WIDGET_SUPPORT_BUTTON_SCREEN !== 'false',
-                        chat: process.env.WIDGET_SUPPORT_BUTTON_CHAT !== 'false',
-                        join: process.env.WIDGET_SUPPORT_BUTTON_JOIN !== 'false',
-                    },
-                    checkOnlineStatus: process.env.WIDGET_SUPPORT_CHECK_ONLINE_STATUS === 'true',
-                    isOnline: process.env.WIDGET_SUPPORT_IS_ONLINE !== 'false',
-                    customMessages: {
-                        heading: process.env.WIDGET_SUPPORT_HEADING || 'Need Help?',
-                        subheading:
-                            process.env.WIDGET_SUPPORT_SUBHEADING || 'Get instant support from our expert team!',
-                        connectText: process.env.WIDGET_SUPPORT_CONNECT_TEXT || 'connect in < 5 seconds',
-                        onlineText: process.env.WIDGET_SUPPORT_ONLINE_TEXT || 'We are online',
-                        offlineText: process.env.WIDGET_SUPPORT_OFFLINE_TEXT || 'We are offline',
-                        poweredBy: process.env.WIDGET_SUPPORT_POWERED_BY || 'TLLM*meet',
-                    },
-                },
-                alert: {
-                    enabled: process.env.WIDGET_ALERT_ENABLED === 'true',
-                    type: process.env.WIDGET_ALERT_TYPE || 'email',
-                },
-            },
             //...
         },
 
@@ -1556,38 +1281,6 @@ module.exports = {
         createRoomRateLimit: {
             windowMs: Math.max(parseInt(process.env.CREATE_ROOM_RATE_LIMIT_WINDOW_MINUTES, 10) || 1, 1) * 60 * 1000,
             max: Math.max(parseInt(process.env.CREATE_ROOM_RATE_LIMIT_MAX, 10) || 10, 1),
-        },
-
-        /**
-         * Usage Statistics Configuration (Umami)
-         * =====================================
-         * Privacy-focused analytics tracking for service improvement
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Self-host Umami or use cloud version:
-         *    - GitHub: https://github.com/umami-software/umami
-         *    - Official Docs: https://umami.is/docs
-         * 2. Create website entry in Umami dashboard
-         * 3. Obtain tracking script URL and website ID
-         *
-         * Privacy & Security:
-         * ------------------
-         * - No cookies used (GDPR compliant)
-         * - No persistent user tracking
-         * - All data aggregated and anonymized
-         * - Self-hosted option keeps data in your infrastructure
-         *
-         * Core Settings:
-         * -------------
-         * - enabled      : Enable/disable analytics [true/false] (default: true)
-         * - src          : Umami tracking script URL
-         * - id           : Your website ID from Umami
-         */
-        stats: {
-            enabled: process.env.STATS_ENABLED !== 'false',
-            src: process.env.STATS_SRC || 'https://stats.mirotalk.com/script.js',
-            id: process.env.STATS_ID || '41d26670-f275-45bb-af82-3ce91fe57756',
         },
     },
 

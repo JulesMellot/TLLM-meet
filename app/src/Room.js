@@ -14,7 +14,7 @@ module.exports = class Room {
         // Unique, one-time-use identifier for this specific room/conference instance.
         // Generated when the room is created (first peer joins) and destroyed with the room
         // (last peer leaves). Reusing the same room name later yields a brand-new sessionId,
-        // so webhook events and recordings can be reliably grouped per meeting instance.
+        // so recordings can be reliably grouped per meeting instance.
         this.sessionId = uuidv4();
         this.worker = worker;
         this.webRtcServer = worker.appData.webRtcServer;

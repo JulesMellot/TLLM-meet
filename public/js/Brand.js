@@ -123,40 +123,6 @@ let BRAND = {
             </div>
         `,
     },
-    widget: {
-        enabled: false,
-        roomId: 'support-room',
-        theme: 'dark',
-        widgetState: 'minimized',
-        widgetType: 'support',
-        supportWidget: {
-            position: 'top-right',
-            expertImages: [
-                'https://photo.cloudron.pocketsolution.net/uploads/original/95/7d/a5f7f7a2c89a5fee7affda5f013c.jpeg',
-            ],
-            buttons: {
-                audio: true,
-                video: true,
-                screen: true,
-                chat: true,
-                join: true,
-            },
-            checkOnlineStatus: false,
-            isOnline: true,
-            customMessages: {
-                heading: 'Need Help?',
-                subheading: 'Get instant support from our expert team!',
-                connectText: 'connect in < 5 seconds',
-                onlineText: 'We are online',
-                offlineText: 'We are offline',
-                poweredBy: 'TLLM*meet',
-            },
-            alert: {
-                enabled: false,
-                type: 'email',
-            },
-        },
-    },
     //...
 };
 
@@ -168,8 +134,6 @@ async function initialize() {
     customizeMetaTags();
 
     customizeApp();
-
-    customizeWidget();
 
     customizeWhoAreYou();
 
@@ -264,25 +228,6 @@ function customizeApp() {
     }
     if (joinLastLabel && BRAND.app?.joinLastLabel) {
         joinLastLabel.innerText = BRAND.app.joinLastLabel;
-    }
-}
-
-// WIDGET customize
-function customizeWidget() {
-    if (BRAND.widget?.enabled) {
-        const domain = window.location.host;
-        const roomId = BRAND.widget?.roomId || 'support-room';
-        const userName = 'guest-' + Math.floor(Math.random() * 10000);
-        if (typeof MiroTalkWidget !== 'undefined') {
-            new MiroTalkWidget(domain, roomId, userName, BRAND.widget);
-        } else {
-            console.warn('MiroTalkWidget is not defined in the current context. Please check Widget.js loading.', {
-                domain,
-                roomId,
-                userName,
-                widget: BRAND.widget,
-            });
-        }
     }
 }
 

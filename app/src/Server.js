@@ -8,16 +8,12 @@
 ███████ ███████ ██   ██   ████   ███████ ██   ██                                           
 
 prod dependencies: {
-    @mattermost/client      : https://www.npmjs.com/package/@mattermost/client
-    @ngrok/ngrok            : https://www.npmjs.com/package/@ngrok/ngrok
-    @sentry/node            : https://www.npmjs.com/package/@sentry/node
     axios                   : https://www.npmjs.com/package/axios
     chokidar                : https://www.npmjs.com/package/chokidar
     colors                  : https://www.npmjs.com/package/colors
     compression             : https://www.npmjs.com/package/compression
     cors                    : https://www.npmjs.com/package/cors
     crypto-js               : https://www.npmjs.com/package/crypto-js
-    discord.js              : https://www.npmjs.com/package/discord.js
     dompurify               : https://www.npmjs.com/package/dompurify
     express                 : https://www.npmjs.com/package/express
     express-openid-connect  : https://www.npmjs.com/package/express-openid-connect
@@ -30,7 +26,6 @@ prod dependencies: {
     mediasoup               : https://www.npmjs.com/package/mediasoup
     mediasoup-client        : https://www.npmjs.com/package/mediasoup-client
     nodemailer              : https://www.npmjs.com/package/nodemailer
-    qs                      : https://www.npmjs.com/package/qs
     sanitize-filename       : https://www.npmjs.com/package/sanitize-filename
     socket.io               : https://www.npmjs.com/package/socket.io
     swagger-ui-express      : https://www.npmjs.com/package/swagger-ui-express
@@ -82,7 +77,6 @@ const mediasoupClient = require('mediasoup-client');
 const http = require('http');
 const path = require('path');
 const axios = require('axios');
-const ngrok = require('@ngrok/ngrok');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const sanitizeFilename = require('sanitize-filename');
@@ -105,9 +99,6 @@ const log = new Logger('Server');
 const yaml = require('js-yaml');
 const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = yaml.load(fs.readFileSync(path.join(__dirname, '/../api/swagger.yaml'), 'utf8'));
-const Sentry = require('@sentry/node');
-const Discord = require('./Discord');
-const Mattermost = require('./Mattermost');
 const restrictAccessByIP = require('./middleware/IpWhitelist');
 const { applyEmbedHeaders, embedAllowedOrigins, embedCsp } = require('./middleware/EmbedHeaders');
 const packageJson = require('../../package.json');
@@ -188,11 +179,7 @@ const { SCHEDULE_MEETING_LIMITS } = nodemailer;
 // Whisper transcription helpers (pure, unit-testable)
 const { resolveAudioExtension, decodeAudioPayload, filterTranscript } = require('./lib/whisper');
 
-// Slack API
 const CryptoJS = require('crypto-js');
-const qS = require('qs');
-const slackEnabled = config?.integrations?.slack?.enabled || false;
-const slackSigningSecret = config?.integrations?.slack?.signingSecret || '';
 
 const app = express();
 
@@ -338,86 +325,10 @@ if (
     process.exit(1);
 }
 
-const widget = {
-    enabled: config?.ui?.brand?.widget?.enabled,
-    roomId: config?.ui?.brand?.widget?.roomId || 'support-room',
-    alert: {
-        enabled: config?.ui?.brand?.widget?.alert?.enabled,
-        type: config?.ui?.brand?.widget?.alert?.type || 'email',
-    },
-};
-
 const restApi = {
     basePath: '/api/v1', // api endpoint path
     docs: host + '/api/v1/docs', // api docs
     allowed: config.api?.allowed || {},
-};
-
-// Sentry monitoring
-const sentryEnabled = config.integrations?.sentry?.enabled || false;
-const sentryDSN = config.integrations.sentry.DSN;
-const sentryTracesSampleRate = config.integrations.sentry.tracesSampleRate;
-if (sentryEnabled && typeof sentryDSN === 'string' && sentryDSN.trim()) {
-    log.info('Sentry monitoring started...');
-
-    Sentry.init({
-        dsn: sentryDSN,
-        tracesSampleRate: sentryTracesSampleRate,
-    });
-
-    // Accept logLevels as an array, e.g., ['warn', 'error']
-    const logLevels = config.integrations?.sentry?.logLevels || ['error'];
-
-    const stripAnsi = (str) => (typeof str === 'string' ? str.replace(/\u001b\[[\d;]*m/g, '') : str);
-
-    const sanitizeArgs = (args) =>
-        args
-            .map((arg) =>
-                typeof arg === 'string' ? stripAnsi(arg) : typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-            )
-            .join(' ');
-
-    const originalConsole = {};
-    logLevels.forEach((level) => {
-        originalConsole[level] = console[level];
-        console[level] = function (...args) {
-            switch (level) {
-                case 'warn':
-                    Sentry.captureMessage(sanitizeArgs(args), 'warning');
-                    break;
-                case 'error':
-                    args[0] instanceof Error
-                        ? Sentry.captureException(args[0])
-                        : Sentry.captureException(new Error(sanitizeArgs(args)));
-                    break;
-            }
-            originalConsole[level].apply(console, args);
-        };
-    });
-
-    // log.error('Sentry error', { foo: 'bar' });
-    // log.warn('Sentry warning');
-}
-
-// Handle WebHook
-const webhook = {
-    enabled: config?.integrations?.webhook?.enabled || false,
-    url: config?.integrations?.webhook?.url || 'http://localhost:8888/webhook-endpoint',
-};
-
-// Discord Bot
-const { enabled, commands, token } = config?.integrations?.discord || {};
-
-if (enabled && commands.length > 0 && token) {
-    const discordBot = new Discord(token, commands);
-    log.info('Discord bot is enabled and starting');
-}
-
-// Stats
-const defaultStats = {
-    enabled: true,
-    src: 'https://stats.mirotalk.com/script.js',
-    id: '41d26670-f275-45bb-af82-3ce91fe57756',
 };
 
 // OpenID Connect
@@ -649,9 +560,6 @@ function startServer() {
         next();
     });
     */
-
-    // Mattermost
-    const mattermost = new Mattermost(app);
 
     // Remove trailing slashes in url handle bad requests
     app.use((err, req, res, next) => {
@@ -900,14 +808,6 @@ function startServer() {
         } else {
             res.status(400).json({ message: 'Unauthorized' });
         }
-    });
-
-    // Check if Widget room active (exists)
-    app.post('/isWidgetRoomActive', (req, res) => {
-        const { roomId } = checkXSS(req.body);
-        const roomWidgetActive = roomId && roomId === widget.roomId && roomList.has(roomId);
-        log.debug('isWidgetRoomActive', { roomId, roomWidgetActive });
-        res.status(200).json({ message: roomWidgetActive });
     });
 
     // Schedule Meeting feature flag
@@ -1225,13 +1125,6 @@ function startServer() {
         if (!allowed) return res.status(404).sendFile(views.notFound);
         res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
         res.type('html').send(renderSetupPage(setup, { appName: config?.app?.name }));
-    });
-
-    // Get stats endpoint
-    app.get('/stats', (req, res) => {
-        const stats = config?.features?.stats || defaultStats;
-        // log.debug('Send stats', stats);
-        res.send(stats);
     });
 
     // handle who are you: Presenter or Guest
@@ -1686,9 +1579,7 @@ function startServer() {
             rtmpStreamKey = uuidv4();
             log.info('initRTMP using custom RTMP URL', { rtmp });
         } else {
-            const domainName = config?.integrations?.ngrok?.enabled
-                ? 'localhost'
-                : req.headers.host?.split(':')[0] || 'localhost';
+            const domainName = req.headers.host?.split(':')[0] || 'localhost';
 
             const rtmpUseNodeMediaServer = rtmpCfg.useNodeMediaServer ?? true;
             const rtmpServer = rtmpCfg.server != '' ? rtmpCfg.server : false;
@@ -2015,43 +1906,6 @@ function startServer() {
     });
 
     // ####################################################
-    // SLACK API
-    // ####################################################
-
-    app.post('/slack', (req, res) => {
-        if (!slackEnabled) return res.end('`Under maintenance` - Please check back soon.');
-
-        if (restApi.allowed && !restApi.allowed.slack) {
-            return res.end(
-                '`This endpoint has been disabled`. Please contact the administrator for further information.'
-            );
-        }
-
-        log.debug('Slack', req.headers);
-
-        if (!slackSigningSecret) return res.end('`Slack Signing Secret is empty!`');
-
-        const slackSignature = req.headers['x-slack-signature'];
-        const requestBody = qS.stringify(req.body, { format: 'RFC1738' });
-        const timeStamp = req.headers['x-slack-request-timestamp'];
-        const time = Math.floor(new Date().getTime() / 1000);
-
-        if (Math.abs(time - timeStamp) > 300) return res.end('`Wrong timestamp` - Ignore this request.');
-
-        const sigBaseString = 'v0:' + timeStamp + ':' + requestBody;
-        const mySignature = 'v0=' + CryptoJS.HmacSHA256(sigBaseString, slackSigningSecret);
-
-        if (mySignature == slackSignature) {
-            const host = req.headers.host;
-            const api = new ServerApi(host);
-            const meetingURL = api.getMeetingURL();
-            log.debug('Slack', { meeting: meetingURL });
-            return res.end(meetingURL);
-        }
-        return res.end('`Wrong signature` - Verification failed!');
-    });
-
-    // ####################################################
     // AUTHORIZED API IF ALLOWED
     // ####################################################
 
@@ -2109,12 +1963,11 @@ function startServer() {
     // SERVER CONFIG
     // ####################################################
 
-    function getServerConfig(tunnel = false) {
+    function getServerConfig() {
         const safeConfig = {
             // Network & Connectivity
             network: {
                 server_listen: host,
-                server_tunnel: tunnel,
                 trust_proxy: trustProxy,
                 sfu: {
                     announcedIP: announcedAddress,
@@ -2123,7 +1976,6 @@ function startServer() {
                     rtcMinPort: config.mediasoup?.worker?.rtcMinPort,
                     rtcMaxPort: config.mediasoup?.worker?.rtcMaxPort,
                 },
-                ngrok_enabled: config.ngrok?.enabled ? config.ngrok : false,
             },
 
             // Security & Authentication
@@ -2135,7 +1987,6 @@ function startServer() {
                 },
                 jwtCfg: jwtCfg,
                 host: hostCfg?.protected || hostCfg?.user_auth ? hostCfg : { presenters: hostCfg.presenters },
-                ip_lookup: config.integrations?.IPLookup?.enabled ? config.integrations.IPLookup : false,
                 oidc: OIDC?.enabled ? OIDC : false,
                 middleware: {
                     IpWhitelist: config?.security?.middleware?.IpWhitelist?.enabled
@@ -2148,7 +1999,6 @@ function startServer() {
             // API & Services
             api: {
                 rest_api: restApi,
-                webhook: webhook.enabled ? webhook : false,
             },
 
             // Media Configuration
@@ -2163,9 +2013,6 @@ function startServer() {
 
             // Communication Integrations
             integrations: {
-                discord: config.integrations?.discord?.enabled ? config.integrations.discord : false,
-                mattermost: config.integrations?.mattermost?.enabled ? config.integrations.mattermost : false,
-                slack: slackEnabled ? config.integrations?.slack : false,
                 email_alerts: config?.integrations?.email?.alert ? config.integrations.email : false,
             },
 
@@ -2175,10 +2022,8 @@ function startServer() {
                 buttons: config.ui?.buttons,
             },
 
-            // Monitoring & Analytics
+            // Monitoring
             monitoring: {
-                sentry: sentryEnabled ? config.integrations?.sentry : false,
-                stats: config.features?.stats?.enabled ? config.features.stats : false,
                 system_info: config.system?.info,
             },
 
@@ -2206,23 +2051,6 @@ function startServer() {
         };
 
         return safeConfig;
-    }
-
-    // ####################################################
-    // NGROK
-    // ####################################################
-
-    async function ngrokStart() {
-        try {
-            await ngrok.authtoken(config?.integrations?.ngrok?.authToken);
-            const listener = await ngrok.forward({ addr: config?.server?.listen?.port });
-            const tunnelUrl = listener.url();
-            log.info('Server config', getServerConfig(tunnelUrl));
-        } catch (err) {
-            log.warn('Ngrok Start error', err);
-            await ngrok.kill();
-            process.exit(1);
-        }
     }
 
     // ####################################################
@@ -2257,9 +2085,6 @@ function startServer() {
                 'font-family:monospace'
             );
 
-            if (config?.integrations?.ngrok?.enabled && config?.integrations?.ngrok?.authToken !== '') {
-                return ngrokStart();
-            }
             log.info('Server config', getServerConfig());
 
             // Warn if default secrets are still in use
@@ -2443,11 +2268,6 @@ function startServer() {
 
             // Get peer IPv4 (::1 Its the loopback address in ipv6, equal to 127.0.0.1 in ipv4)
             const peer_ip = getIpSocket(socket);
-
-            // Get peer Geo Location
-            if (config?.integrations?.IPLookup?.enabled && peer_ip != '::1') {
-                dataObject.peer_geo = await getPeerGeoLocation(peer_ip);
-            }
 
             const data = checkXSS(dataObject);
 
@@ -2671,8 +2491,8 @@ function startServer() {
             const firstJoin = room.getPeersCount() === 1;
             const guestJoin = room.getPeersCount() === 2;
 
-            // SCENARIO: Notify when the first user join room and is awaiting assistance (global email alert)
-            if (firstJoin && !widget.alert.enabled) {
+            // SCENARIO: Notify when the first user joins the room (global email alert)
+            if (firstJoin) {
                 nodemailer.sendEmailAlert('join', emailPayload);
             }
 
@@ -2684,20 +2504,6 @@ function startServer() {
                     nodemailer.sendEmailNotifications('join', emailPayload, notifications);
                 }
             }
-
-            // SCENARIO: Notify when a user joins the widget room for expert assistance
-            if (firstJoin && widget.enabled && widget.alert && widget.alert.enabled && widget.roomId === room.id) {
-                switch (widget.alert.type) {
-                    case 'email':
-                        nodemailer.sendEmailAlert('widget', emailPayload);
-                        break;
-                    // case slack, discord, webhook, ...
-                    default:
-                        log.warn('Unknown alert type for widget', { type: widget.type });
-                }
-            }
-
-            handleJoinWebHook(room.id, room.getSessionId(), data.peer_info);
 
             // Notify main room when a peer joins a breakout room
             if (socket.room_id.includes('_breakout_')) {
@@ -3455,8 +3261,6 @@ function startServer() {
                     if (!peer.peer_lobby) continue;
 
                     peer.updatePeerInfo({ type: 'lobby', status: false });
-
-                    handleJoinWebHook(room.id, room.getSessionId(), peer.peer_info);
                 }
             }
         });
@@ -4709,9 +4513,7 @@ function startServer() {
             const room = getRoom(socket);
 
             const DEFAULT_HOST = 'localhost';
-            const host = config?.ngrok?.enabled
-                ? DEFAULT_HOST
-                : socket?.handshake?.headers?.host?.split(':')[0] || DEFAULT_HOST;
+            const host = socket?.handshake?.headers?.host?.split(':')[0] || DEFAULT_HOST;
 
             const customRtmpUrl = data.customRtmpUrl || null;
 
@@ -4768,9 +4570,7 @@ function startServer() {
             const room = getRoom(socket);
 
             const DEFAULT_HOST = 'localhost';
-            const host = config?.integrations?.ngrok?.enabled
-                ? DEFAULT_HOST
-                : socket?.handshake?.headers?.host?.split(':')[0] || DEFAULT_HOST;
+            const host = socket?.handshake?.headers?.host?.split(':')[0] || DEFAULT_HOST;
 
             const customRtmpUrl = data.customRtmpUrl || null;
 
@@ -4996,21 +4796,6 @@ function startServer() {
 
             log.debug('[Disconnect] - peer name', { peer_name, reason });
 
-            if (webhook.enabled && peer) {
-                const data = {
-                    timestamp: log.getDateTime(false),
-                    room_id: socket.room_id,
-                    session_id: room?.getSessionId ? room.getSessionId() : undefined,
-                    peer: peer?.peer_info,
-                    reason: reason,
-                };
-                // Trigger a POST request when a user disconnects
-                axios
-                    .post(webhook.url, { event: 'disconnect', data }, { timeout: 5000 })
-                    .then((response) => log.debug('Disconnect event tracked:', response.data))
-                    .catch((error) => log.error('Error tracking disconnect event:', error.message));
-            }
-
             room.removePeer(socket.id);
 
             // Sockets that never joined (e.g. rejected by a lock) are not announced to the room
@@ -5082,20 +4867,6 @@ function startServer() {
 
             log.debug('Exit room', peer_name);
 
-            if (webhook.enabled) {
-                const data = {
-                    timestamp: log.getDateTime(false),
-                    room_id: socket.room_id,
-                    session_id: room?.getSessionId ? room.getSessionId() : undefined,
-                    peer: peer?.peer_info,
-                };
-                // Trigger a POST request when a user exits
-                axios
-                    .post(webhook.url, { event: 'exit', data }, { timeout: 5000 })
-                    .then((response) => log.debug('ExitRoom event tracked:', response.data))
-                    .catch((error) => log.error('Error tracking exitRoom event:', error.message));
-            }
-
             room.removePeer(socket.id);
 
             room.broadCast(socket.id, 'removeMe', removeMeData(room, peer_name, isPresenter));
@@ -5146,24 +4917,6 @@ function startServer() {
         });
 
         // Helpers
-
-        async function handleJoinWebHook(room_id, session_id, peer_info) {
-            // handle WebHook
-            if (webhook.enabled) {
-                // Trigger a POST request when a user joins
-                const data = {
-                    timestamp: log.getDateTime(false),
-                    room_id,
-                    session_id,
-                    peer_info,
-                };
-
-                axios
-                    .post(webhook.url, { event: 'join', data }, { timeout: 5000 })
-                    .then((response) => log.debug('Join event tracked:', response.data))
-                    .catch((error) => log.error('Error tracking join event:', error.message));
-            }
-        }
 
         function getRoomAndPeer(socket) {
             const room = getRoom(socket);
@@ -5647,15 +5400,6 @@ function startServer() {
         }
     }
 
-    async function getPeerGeoLocation(ip) {
-        const endpoint = config?.integrations?.IPLookup?.getEndpoint(ip);
-        log.debug('Get peer geo', { ip: ip, endpoint: endpoint });
-        return axios
-            .get(endpoint)
-            .then((response) => response.data)
-            .catch((error) => log.error(error));
-    }
-
     function getIP(req) {
         // Security: only trust X-Forwarded-For when behind a trusted reverse proxy.
         const forwarded = trustProxy ? req.headers['x-forwarded-for'] || req.headers['X-Forwarded-For'] : null;
@@ -5841,12 +5585,6 @@ async function gracefulShutdown(signal) {
         // 7. Cleanup HTML injector
         log.debug('Cleaning up HTML injector...');
         htmlInjector.cleanup();
-
-        // 8. Close ngrok if active
-        if (config?.integrations?.ngrok?.enabled) {
-            log.debug('Closing ngrok tunnel...');
-            await ngrok.kill();
-        }
 
         log.info('Graceful shutdown completed successfully');
         process.exit(0);

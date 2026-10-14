@@ -5237,34 +5237,6 @@ function redirectOnLeave(disconnectAll = false) {
     rc.exitRoom(disconnectAll);
 
     const url = new URL(redirect && redirect.enabled ? redirect.url : '/newroom', window.location.href).href;
-    const target = isEmbedded
-        ? window.parent
-        : getQueryParam('mirotalk_widget') === '1' && window.opener && !window.opener.closed
-          ? window.opener
-          : null;
-
-    if (target) {
-        const requestId = `${Date.now()}-${Math.random()}`;
-        let acknowledged = false;
-        const handleAcknowledgment = (event) => {
-            if (event.source !== target || event.data?.type !== 'mirotalk:redirect-ack' || event.data.id !== requestId)
-                return;
-
-            acknowledged = true;
-            window.removeEventListener('message', handleAcknowledgment);
-            if (!isEmbedded) window.close();
-        };
-
-        window.addEventListener('message', handleAcknowledgment);
-        target.postMessage({ type: 'mirotalk:redirect', url, id: requestId }, '*');
-        setTimeout(() => {
-            window.removeEventListener('message', handleAcknowledgment);
-            // Host did not ack: stay inside the frame and load the destination there
-            if (!acknowledged) openURL(url);
-        }, 500);
-        return;
-    }
-
     openURL(url);
 }
 

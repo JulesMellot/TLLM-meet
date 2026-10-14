@@ -77,7 +77,6 @@ function createHarness({ server = false, s3 = false, state = 'recording' } = {})
         bypassBeforeUnloadOnce: false,
         survey: { enabled: false, url: 'https://survey.example' },
         redirect: { enabled: false },
-        isEmbedded: false,
         swalBackground: '#000',
         image: {},
         swalDestructiveOptions: () => ({}),
@@ -418,24 +417,6 @@ describe('recording finalization before room exit', () => {
         download.resolve();
         await tick();
         assert.deepEqual(h.events.at(-1), ['navigate', 'https://meet.example/join?room=test']);
-    });
-
-    it('does not notify an embedded host to redirect until saving completes', async () => {
-        const h = createHarness();
-        const download = deferred();
-        h.client.handleLocalRecordingStop = () => download.promise;
-        h.context.isEmbedded = true;
-        h.context.window.parent = { postMessage: (data) => h.events.push(['redirect-message', data]) };
-        const exit = h.context.completeRoomExit();
-        assert.equal(
-            h.events.some((event) => event[0] === 'redirect-message'),
-            false
-        );
-        h.stopEvent();
-        download.resolve();
-        await exit;
-        assert.equal(h.events.at(-1)[0], 'redirect-message');
-        assert.equal(h.events.at(-1)[1].url, 'https://meet.example/newroom');
     });
 
     it('restores the back-button guard when the user stays after saving fails', async () => {

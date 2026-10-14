@@ -14,7 +14,7 @@ const handlersSource = serverSource.slice(
 );
 const authorizationSource = serverSource.slice(
     serverSource.indexOf('    async function isRoomAllowedForUser('),
-    serverSource.indexOf('    async function getPeerGeoLocation(')
+    serverSource.indexOf('    function getIP(req) {')
 );
 
 describe('Socket.IO join authorization', () => {
@@ -81,9 +81,7 @@ describe('Socket.IO join authorization', () => {
             },
             getActiveRooms: () => [],
             getRTMPActiveStreams: () => [],
-            widget: { alert: { enabled: false }, enabled: false },
             nodemailer: { sendEmailAlert() {} },
-            handleJoinWebHook: sinon.spy(),
             serverRecordingEnabled: true,
             createRecUploadToken: sinon.stub().returns('recording-token'),
             rtmpEnabled: true,
@@ -123,7 +121,6 @@ describe('Socket.IO join authorization', () => {
         assert.equal(state.room.toJson.callCount, 0);
         assert.equal(state.context.createRecUploadToken.callCount, 0);
         assert.equal(state.context.createRtmpStreamToken.callCount, 0);
-        assert.equal(state.context.handleJoinWebHook.callCount, 0);
     }
 
     for (const flags of [
