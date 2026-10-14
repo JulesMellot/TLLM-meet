@@ -87,7 +87,7 @@ href="https://docs.mirotalk.com/mirotalk-sfu/self-hosting/">Documentation</a> ·
 - 💬 Chat with Markdown & emoji · Collaborative whiteboard and Rich text editor · File sharing
 - 🤖 ChatGPT (OpenAI) & DeepSeek integration · VideoAI avatars · Speech recognition
 - 🔒 OIDC auth · [Host protection](https://docs.mirotalk.com/mirotalk-sfu/host-protection/) · JWT credentials · Room passwords · Lobby & spam mitigation
-- 🔌 REST API · Discord · Embeddable [iframe](https://docs.mirotalk.com/mirotalk-sfu/integration/#iframe) & [widget](https://docs.mirotalk.com/mirotalk-sfu/integration/#widgets-integration) · 133 languages
+- 🔌 REST API · Embeddable [iframe](https://docs.mirotalk.com/mirotalk-sfu/integration/#iframe) & [widget](https://docs.mirotalk.com/mirotalk-sfu/integration/#widgets-integration) · 133 languages
 
 **[See all features →](https://docs.mirotalk.com/mirotalk-sfu/)**
 

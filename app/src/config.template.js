@@ -876,47 +876,6 @@ module.exports = {
         },
 
         /**
-         * Discord Integration Configuration
-         * ================================
-         * Settings for Discord bot and slash commands integration
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Create a Discord application at https://discord.com/developers/applications
-         * 2. Navigate to "Bot" section and:
-         *    - Click "Add Bot"
-         *    - Copy the bot token (DISCORD_TOKEN)
-         * 3. Under "OAuth2 → URL Generator":
-         *    - Select "bot" and "applications.commands" scopes
-         *    - Select required permissions (see below)
-         * 4. Invite bot to your server using generated URL
-         *
-         * Core Settings:
-         * -------------
-         * - enabled        : Enable/disable Discord bot [true/false] (default: false)
-         * - token          : Bot token from Discord Developer Portal (store in .env)
-         *
-         * Command Configuration:
-         * ---------------------
-         * - commands       : Slash command definitions:
-         *   - name         : Command trigger (e.g., '/sfu')
-         *   - message      : Response template
-         *   - baseUrl      : Meeting room base URL
-         *
-         */
-        discord: {
-            enabled: process.env.DISCORD_ENABLED === 'true',
-            token: process.env.DISCORD_TOKEN || '',
-            commands: [
-                {
-                    name: process.env.DISCORD_COMMAND_NAME || '/sfu',
-                    message: process.env.DISCORD_DEFAULT_MESSAGE || 'Here is your SFU meeting room:',
-                    baseUrl: process.env.DISCORD_BASE_URL || 'https://sfu.mirotalk.com/join/',
-                },
-            ],
-        },
-
-        /**
          * Ngrok Tunnel Configuration
          * =========================
          * Secure tunneling for local development and testing

@@ -16,7 +16,6 @@ prod dependencies: {
     compression             : https://www.npmjs.com/package/compression
     cors                    : https://www.npmjs.com/package/cors
     crypto-js               : https://www.npmjs.com/package/crypto-js
-    discord.js              : https://www.npmjs.com/package/discord.js
     dompurify               : https://www.npmjs.com/package/dompurify
     express                 : https://www.npmjs.com/package/express
     express-openid-connect  : https://www.npmjs.com/package/express-openid-connect
@@ -105,7 +104,6 @@ const yaml = require('js-yaml');
 const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = yaml.load(fs.readFileSync(path.join(__dirname, '/../api/swagger.yaml'), 'utf8'));
 const Sentry = require('@sentry/node');
-const Discord = require('./Discord');
 const restrictAccessByIP = require('./middleware/IpWhitelist');
 const { applyEmbedHeaders, embedAllowedOrigins, embedCsp } = require('./middleware/EmbedHeaders');
 const { createVideoAIService } = require('./videoai/service');
@@ -399,14 +397,6 @@ const webhook = {
     enabled: config?.integrations?.webhook?.enabled || false,
     url: config?.integrations?.webhook?.url || 'http://localhost:8888/webhook-endpoint',
 };
-
-// Discord Bot
-const { enabled, commands, token } = config?.integrations?.discord || {};
-
-if (enabled && commands.length > 0 && token) {
-    const discordBot = new Discord(token, commands);
-    log.info('Discord bot is enabled and starting');
-}
 
 // Stats
 const defaultStats = {
@@ -2144,7 +2134,6 @@ function startServer() {
 
             // Communication Integrations
             integrations: {
-                discord: config.integrations?.discord?.enabled ? config.integrations.discord : false,
                 chatGPT: config.integrations?.chatGPT?.enabled ? config.integrations.chatGPT : false,
                 deepSeek: config.integrations?.deepSeek?.enabled ? config.integrations.deepSeek : false,
                 email_alerts: config?.integrations?.email?.alert ? config.integrations.email : false,
