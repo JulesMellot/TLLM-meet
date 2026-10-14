@@ -8,7 +8,6 @@
 ███████ ███████ ██   ██   ████   ███████ ██   ██                                           
 
 prod dependencies: {
-    @mattermost/client      : https://www.npmjs.com/package/@mattermost/client
     @ngrok/ngrok            : https://www.npmjs.com/package/@ngrok/ngrok
     @sentry/node            : https://www.npmjs.com/package/@sentry/node
     axios                   : https://www.npmjs.com/package/axios
@@ -107,7 +106,6 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = yaml.load(fs.readFileSync(path.join(__dirname, '/../api/swagger.yaml'), 'utf8'));
 const Sentry = require('@sentry/node');
 const Discord = require('./Discord');
-const Mattermost = require('./Mattermost');
 const restrictAccessByIP = require('./middleware/IpWhitelist');
 const { applyEmbedHeaders, embedAllowedOrigins, embedCsp } = require('./middleware/EmbedHeaders');
 const { createVideoAIService } = require('./videoai/service');
@@ -661,9 +659,6 @@ function startServer() {
         next();
     });
     */
-
-    // Mattermost
-    const mattermost = new Mattermost(app);
 
     // Remove trailing slashes in url handle bad requests
     app.use((err, req, res, next) => {
@@ -2150,7 +2145,6 @@ function startServer() {
             // Communication Integrations
             integrations: {
                 discord: config.integrations?.discord?.enabled ? config.integrations.discord : false,
-                mattermost: config.integrations?.mattermost?.enabled ? config.integrations.mattermost : false,
                 chatGPT: config.integrations?.chatGPT?.enabled ? config.integrations.chatGPT : false,
                 deepSeek: config.integrations?.deepSeek?.enabled ? config.integrations.deepSeek : false,
                 email_alerts: config?.integrations?.email?.alert ? config.integrations.email : false,

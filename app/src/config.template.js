@@ -620,12 +620,10 @@ module.exports = {
      * - meeting    : Enable/disable single meeting operations [true/false] (default: true)
      * - join       : Enable/disable meeting join endpoint [true/false] (default: true)
      * - token      : Enable/disable token generation endpoint [true/false] (default: false)
-     * - mattermost : Enable/disable Mattermost webhook integration [true/false] (default: true)
      *
      * API Documentation:
      * ------------------
      * - Complete API reference: https://docs.mirotalk.com/mirotalk-sfu/api/
-     * - Webhook setup: See integration guides for Mattermost
      */
     api: {
         keySecret: process.env.API_KEY_SECRET,
@@ -636,7 +634,6 @@ module.exports = {
             meetingEnd: process.env.API_ALLOW_MEETING_END === 'true',
             join: process.env.API_ALLOW_JOIN !== 'false',
             token: process.env.API_ALLOW_TOKEN === 'true',
-            mattermost: process.env.API_ALLOW_MATTERMOST !== 'false',
         },
     },
 
@@ -876,58 +873,6 @@ module.exports = {
             password: process.env.EMAIL_PASSWORD || 'test',
             from: process.env.EMAIL_FROM || process.env.EMAIL_USERNAME,
             sendTo: process.env.EMAIL_SEND_TO || 'test@mirotalk.com',
-        },
-
-        /**
-         * Mattermost Integration Configuration
-         * ===================================
-         * Settings for Mattermost slash commands and bot integration
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Go to Mattermost System Console → Integrations → Bot Accounts
-         * 2. Create a new bot account and copy:
-         *    - Server URL (e.g., 'https://chat.yourdomain.com')
-         *    - Access Token
-         * 3. For slash commands:
-         *    - Navigate to Integrations → Slash Commands
-         *    - Set Command: '/sfu'
-         *    - Set Request URL: 'https://your-sfu-server.com/mattermost/commands'
-         *
-         * Core Settings:
-         * -------------
-         * - enabled      : Enable/disable integration [true/false] (default: false)
-         * - serverUrl    : Mattermost server URL (include protocol)
-         * - token        : Bot account access token (most secure option)
-         * - OR
-         * - username     : Legacy auth username (less secure)
-         * - password     : Legacy auth password (deprecated)
-         *
-         * Command Configuration:
-         * ---------------------
-         * - commands     : Slash command definitions:
-         *   - name       : Command trigger (e.g., '/sfu')
-         *   - message    : Default response template
-         *
-         */
-        mattermost: {
-            enabled: process.env.MATTERMOST_ENABLED === 'true',
-            serverUrl: process.env.MATTERMOST_SERVER_URL || '',
-            username: process.env.MATTERMOST_USERNAME || '',
-            password: process.env.MATTERMOST_PASSWORD || '',
-            token: process.env.MATTERMOST_TOKEN || '',
-            commands: [
-                {
-                    name: process.env.MATTERMOST_COMMAND_NAME || '/sfu',
-                    message: process.env.MATTERMOST_DEFAULT_MESSAGE || 'Here is your meeting room:',
-                },
-            ],
-            texts: [
-                {
-                    name: process.env.MATTERMOST_COMMAND_NAME || '/sfu',
-                    message: process.env.MATTERMOST_DEFAULT_MESSAGE || 'Here is your meeting room:',
-                },
-            ],
         },
 
         /**
