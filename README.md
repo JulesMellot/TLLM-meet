@@ -202,7 +202,6 @@ For detailed guides and references, visit the **[official documentation](https:/
 - [Host Protection Mode](https://docs.mirotalk.com/mirotalk-sfu/host-protection/)
 - [Integration](https://docs.mirotalk.com/mirotalk-sfu/integration/)
 - [Direct Room Join](https://docs.mirotalk.com/mirotalk-sfu/join-room/)
-- [SIP phone](https://docs.mirotalk.com/mirotalk-sfu/sip/)
 - [REST API Documentation](https://docs.mirotalk.com/mirotalk-sfu/api/)
 - [Scalability](https://docs.mirotalk.com/mirotalk-sfu/scalability/)
 - [Ngrok](https://docs.mirotalk.com/mirotalk-sfu/ngrok/)

@@ -66,7 +66,7 @@ let BRAND = {
         description:
             'Build your own Zoom alternative with MiroTalk SFU, an open-source, self-hosted WebRTC platform powered by Mediasoup for scalable video meetings.',
         keywords:
-            'webrtc, miro, mediasoup, mediasoup-client, self hosted, voip, sip, real-time communications, chat, messaging, meet, webrtc stun, webrtc turn, webrtc p2p, webrtc sfu, video meeting, video chat, video conference, multi video chat, multi video conference, peer to peer, p2p, sfu, rtc, alternative to, zoom, microsoft teams, google meet, jitsi, meeting',
+            'webrtc, miro, mediasoup, mediasoup-client, self hosted, voip, real-time communications, chat, messaging, meet, webrtc stun, webrtc turn, webrtc p2p, webrtc sfu, video meeting, video chat, video conference, multi video chat, multi video conference, peer to peer, p2p, sfu, rtc, alternative to, zoom, microsoft teams, google meet, jitsi, meeting',
     },
     html: {
         topSponsors: true,

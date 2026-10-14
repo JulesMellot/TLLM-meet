@@ -240,28 +240,6 @@ const copyRoomUrlBtn = getId('copyRoomUrlBtn');
 const participantsSplit = getId('participantsSplit');
 const participantsInviteBtn = getId('participantsInviteBtn');
 const participantsCopyInviteLinkBtn = getId('participantsCopyInviteLinkBtn');
-const tabSipPhoneBtn = getId('tabSipPhoneBtn');
-const sipWsServer = getId('sipWsServer');
-const sipDomain = getId('sipDomain');
-const sipUsername = getId('sipUsername');
-const sipAuthUsername = getId('sipAuthUsername');
-const sipPassword = getId('sipPassword');
-const sipTarget = getId('sipTarget');
-const sipHackIpInContact = getId('sipHackIpInContact');
-const sipDisplayName = getId('sipDisplayName');
-const sipOutboundProxy = getId('sipOutboundProxy');
-const sipRegisterExpires = getId('sipRegisterExpires');
-const sipStatus = getId('sipStatus');
-const sipRemoteAudio = getId('sipRemoteAudio');
-const sipGenerateUserBtn = getId('sipGenerateUserBtn');
-const sipCopyUserBtn = getId('sipCopyUserBtn');
-const sipRegisterBtn = getId('sipRegisterBtn');
-const sipUnregisterBtn = getId('sipUnregisterBtn');
-const sipCallBtn = getId('sipCallBtn');
-const sipHangupBtn = getId('sipHangupBtn');
-const sipIncomingActions = getId('sipIncomingActions');
-const sipAcceptBtn = getId('sipAcceptBtn');
-const sipRejectBtn = getId('sipRejectBtn');
 
 const exitDropdown = getId('exitDropdown');
 const exitMenu = getId('exitMenu');
@@ -444,56 +422,6 @@ let transcription;
 let quill = null;
 
 // ####################################################
-// SIP PHONE (MVP)
-// ####################################################
-
-function initSipPhoneControls() {
-    if (typeof window.initSipPhoneMvp !== 'function') {
-        console.warn('[SIP] initSipPhoneMvp is not available');
-        return;
-    }
-
-    window.initSipPhoneMvp({
-        elements: {
-            tabSipPhoneBtn,
-            sipWsServer,
-            sipDomain,
-            sipUsername,
-            sipAuthUsername,
-            sipPassword,
-            sipTarget,
-            sipHackIpInContact,
-            sipDisplayName,
-            sipOutboundProxy,
-            sipRegisterExpires,
-            sipStatus,
-            sipRemoteAudio,
-            sipGenerateUserBtn,
-            sipCopyUserBtn,
-            sipRegisterBtn,
-            sipUnregisterBtn,
-            sipCallBtn,
-            sipHangupBtn,
-            sipAcceptBtn,
-            sipRejectBtn,
-        },
-        getPeerName: () => peer_name,
-        openSipTab: (e) => rc.openTab(e, 'tabSipPhone'),
-        setIncomingActionsVisible: (showActions) => {
-            if (!sipIncomingActions) return;
-            if (showActions) {
-                show('sipIncomingActions');
-                sipIncomingActions.style.display = 'flex';
-            } else {
-                hide('sipIncomingActions');
-                sipIncomingActions.style.display = '';
-            }
-        },
-        onUsernameCopied: () => userLog('toast', 'SIP username copied', 'top-end', 2000),
-    });
-}
-
-// ####################################################
 // INIT ROOM
 // ####################################################
 
@@ -666,7 +594,6 @@ async function initClient() {
     }
     setupWhiteboard();
     initEnumerateDevices();
-    initSipPhoneControls();
     setupInitButtons();
 }
 
@@ -2186,7 +2113,6 @@ function roomIsReady() {
     BUTTONS.settings.sendEmailInvitation && show(sendEmailInvitation);
     !BUTTONS.settings.customNoiseSuppression && hide(noiseSuppressionButton);
     BUTTONS.settings.tabNotificationsBtn && show(tabNotificationsBtn);
-    (BUTTONS.settings.tabSipPhoneBtn !== undefined ? BUTTONS.settings.tabSipPhoneBtn : true) && show(tabSipPhoneBtn);
     (BUTTONS.settings.tabNetworkBtn !== undefined ? BUTTONS.settings.tabNetworkBtn : true) && show(tabNetworkBtn);
     if (
         BUTTONS.main.settingsButton &&

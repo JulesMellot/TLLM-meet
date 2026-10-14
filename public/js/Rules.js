@@ -53,7 +53,6 @@ let BUTTONS = {
         joinLockButton: true, // presenter
         sendEmailInvitation: true, // presenter
         micOptionsButton: true,
-        tabSipPhoneBtn: true,
         tabNotificationsBtn: true, // presenter
         tabNetworkBtn: true,
         tabModerator: true, // presenter

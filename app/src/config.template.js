@@ -1342,7 +1342,6 @@ module.exports = {
                 joinLockButton: process.env.SHOW_JOIN_LOCK !== 'false',
                 sendEmailInvitation: process.env.SHOW_EMAIL_INVITE !== 'false',
                 micOptionsButton: process.env.SHOW_MIC_OPTIONS !== 'false',
-                tabSipPhoneBtn: process.env.SHOW_SIP_TAB !== 'false',
                 tabNotificationsBtn: process.env.SHOW_NOTIFICATIONS_TAB !== 'false',
                 tabNetworkBtn: process.env.SHOW_NETWORK_TAB !== 'false',
                 tabModerator: process.env.SHOW_MODERATOR_TAB !== 'false',
