@@ -72,7 +72,6 @@ href="https://docs.mirotalk.com/mirotalk-sfu/self-hosting/">Documentation</a> ·
 | 🌍 **Languages**   | 133 languages                                                                                                                                       | ~30-80                      |
 | 🔌 **API**         | Full REST API included                                                                                                                              | Paid add-on                 |
 | 📡 **RTMP/OBS**    | Built-in RTMP streaming                                                                                                                             | Third-party needed          |
-| 🤖 **AI Features** | ChatGPT, DeepSeek + VideoAI integration                                                                                                             | Paid AI add-ons             |
 | 🧩 **Rebrand**     | Full source code, white-label ready                                                                                                                 | Limited branding options    |
 | 📦 **Deploy**      | Docker, Node.js, one-click install                                                                                                                  | N/A (SaaS only)             |
 
@@ -85,7 +84,7 @@ href="https://docs.mirotalk.com/mirotalk-sfu/self-hosting/">Documentation</a> ·
 
 - 🎥 Video up to **8K @ 60fps** · Screen sharing · Recording · Picture-in-Picture
 - 💬 Chat with Markdown & emoji · Collaborative whiteboard and Rich text editor · File sharing
-- 🤖 ChatGPT (OpenAI) & DeepSeek integration · VideoAI avatars · Speech recognition
+- 🎤 Speech recognition
 - 🔒 OIDC auth · [Host protection](https://docs.mirotalk.com/mirotalk-sfu/host-protection/) · JWT credentials · Room passwords · Lobby & spam mitigation
 - 🔌 REST API · Slack, Discord & Mattermost · Embeddable [iframe](https://docs.mirotalk.com/mirotalk-sfu/integration/#iframe) & [widget](https://docs.mirotalk.com/mirotalk-sfu/integration/#widgets-integration) · 133 languages
 
@@ -283,7 +282,7 @@ Do you find MiroTalk SFU indispensable for your needs? Join us in supporting thi
 | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | [![EvoPlat](public/sponsors/EvoPlat.png)](https://evoplat.com)                 | [![Cloudron](public/sponsors/Cloudron.png)](https://cloudron.io)                                                   | [![EffectsSDK](public/sponsors/EffectsSDK.png)](https://effectssdk.ai/)                                                           |
 | [![QuestionPro](public/sponsors/QuestionPro.png)](https://www.questionpro.com) | [![TestMuAI](public/sponsors/TestMuAIBlack.svg)](https://www.testmuai.com/?utm_medium=sponsor&utm_source=mirotalk) | [![BrowserStack](public/sponsors/BrowserStack.png)](https://www.browserstack.com)                                                 |
-| [![CrystalSound](public/sponsors/CrystalSound.png)](https://crystalsound.ai)   | [![Netcup](public/sponsors/Netcup.png)](https://www.netcup.com/en/?ref=309627)                                     | [![LiveAvatar](public/sponsors/LiveAvatarByHeyGen.png)](https://www.liveavatar.com/?utm_medium=sponsership&utm_campaign=mirotalk) |
+| [![CrystalSound](public/sponsors/CrystalSound.png)](https://crystalsound.ai)   | [![Netcup](public/sponsors/Netcup.png)](https://www.netcup.com/en/?ref=309627)                                     |                                                                                                                                   |
 | [![ApiSmart](public/sponsors/ApiSmart.png)](https://www.apismart.ai)           |                                                                                                                    |                                                                                                                                   |
 
 </details>
