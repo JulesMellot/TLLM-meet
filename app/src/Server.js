@@ -16,7 +16,6 @@ prod dependencies: {
     crypto-js               : https://www.npmjs.com/package/crypto-js
     dompurify               : https://www.npmjs.com/package/dompurify
     express                 : https://www.npmjs.com/package/express
-    express-openid-connect  : https://www.npmjs.com/package/express-openid-connect
     he                      : https://www.npmjs.com/package/he
     helmet                  : https://www.npmjs.com/package/helmet
     httpolyglot             : https://www.npmjs.com/package/httpolyglot
@@ -60,7 +59,6 @@ dev dependencies: {
  */
 
 const express = require('express');
-const { auth, requiresAuth } = require('express-openid-connect');
 const cors = require('cors');
 const compression = require('compression');
 const socketIo = require('socket.io');
@@ -75,10 +73,10 @@ const fs = require('fs');
 const helmet = require('helmet');
 const config = require('./config');
 const checkXSS = require('./XSS');
-const Host = require('./Host');
 const Room = require('./Room');
 const Peer = require('./Peer');
-const { assignFallbackPresenter, isConfiguredPresenter } = require('./PresenterManager');
+const { AdminAuth, makeRoomId } = require('./AdminAuth');
+const { ipFromRequest, ipFromSocket } = require('./ClientIp');
 const ServerApi = require('./ServerApi');
 const { getJwtKeys } = require('./JwtSecret');
 const Logger = require('./Logger');
@@ -96,37 +94,26 @@ const packageJson = require('../../package.json');
 // Rate limiters
 const { createRateLimiters, ipKeyGenerator, minutesLabel } = require('./middleware/RateLimiters');
 
-// Derive a stable per-requester rate-limit key (OIDC user > bearer-token user > IP)
+// Derive a stable per-requester rate-limit key (admin session > IP)
 const getRequesterKey = (req) => {
-    if (config?.security?.oidc?.enabled && req.oidc?.isAuthenticated()) {
-        return req.oidc?.user?.sub || req.oidc?.user?.email || ipKeyGenerator(req);
-    }
-    const token = getBearerToken(req);
-    if (token) {
-        try {
-            const { username } = decodeToken(token);
-            if (username) {
-                return `user:${String(username).trim().toLowerCase()}`;
-            }
-        } catch (_) {
-            // Fall back to token hash key if the token cannot be decoded.
-        }
-        return `token:${token.slice(0, 48)}`;
-    }
-    return ipKeyGenerator(req);
+    const admin = adminAuth.fromRequest(req);
+    return admin ? `admin:${admin.username}` : ipKeyGenerator(req);
 };
 
-const { loginLimiter, createRoomTokenLimiter, checkCreateRoomLimit, createRoomLimiterMinutes } = createRateLimiters({
-    getRequesterKey,
-});
+const {
+    loginLimiter,
+    loginUserLimiter,
+    roomStatusLimiter,
+    createRoomTokenLimiter,
+    checkCreateRoomLimit,
+    createRoomLimiterMinutes,
+} = createRateLimiters({ getRequesterKey });
 
 // Branding configuration
 const brandHtmlInjection = config?.ui?.brand?.htmlInjection ?? true;
 
 // Whisper transcription helpers (pure, unit-testable)
 const { resolveAudioExtension, decodeAudioPayload, filterTranscript } = require('./lib/whisper');
-
-const CryptoJS = require('crypto-js');
 
 const app = express();
 
@@ -149,7 +136,7 @@ const io = socketIo(server, {
 });
 
 const host = config?.server?.hostUrl || `http://localhost:${config?.server?.listen?.port || 3010}`;
-const trustProxy = Boolean(config?.server?.trustProxy);
+const trustProxy = config?.server?.trustProxy || false;
 
 // Fail closed: refuse to start with a missing, weak or publicly known JWT secret.
 let jwtKeys;
@@ -166,31 +153,9 @@ const jwtCfg = {
 
 const JWT_VERIFY_OPTIONS = { algorithms: ['HS256'] };
 
-// Verify an auth JWT and return its decrypted payload (module scope, also used by getRequesterKey)
-function decodeToken(jwtToken) {
-    if (!jwtToken) return null;
-
-    // Verify and decode the JWT token
-    const decodedToken = jwt.verify(jwtToken, jwtKeys.auth, JWT_VERIFY_OPTIONS);
-    if (!decodedToken || !decodedToken.data) {
-        throw new Error('Invalid token');
-    }
-
-    // Decrypt the payload using AES decryption
-    const decryptedPayload = CryptoJS.AES.decrypt(decodedToken.data, jwtKeys.auth).toString(CryptoJS.enc.Utf8);
-
-    // Parse the decrypted payload as JSON
-    return JSON.parse(decryptedPayload);
-}
-
-// Short-lived token bound to a room, issued by GET /createRoomToken only to requesters the HTTP
-// policy allows to create rooms. The Socket.IO `createRoom` event requires it when OIDC or host
-// protection is enabled, because the socket carries no session of its own.
+// Short-lived token bound to a room, issued by GET /createRoomToken only to the admin (or for a
+// breakout room a presenter opened). The Socket.IO `createRoom` event always requires it.
 const CREATE_ROOM_TOKEN_EXP = '2m';
-
-function isRoomCreationRestricted() {
-    return Boolean(OIDC.enabled || hostCfg.protected);
-}
 
 function createCreateRoomToken(roomId) {
     return jwt.sign({ scope: 'create-room', roomId: String(roomId) }, jwtKeys.createRoom, {
@@ -208,29 +173,21 @@ function isCreateRoomTokenValid(token, roomId) {
     }
 }
 
+// TLLM*meet: admins are the accounts listed in HOST_USERS. Only they can create rooms.
 const hostCfg = {
-    protected: config?.security?.host?.protected,
-    authenticated: !config?.security?.host?.protected,
-    user_auth: config?.security?.host?.user_auth,
-    users: config?.security?.host?.users,
-    users_from_db: config?.security?.host?.users_from_db,
-    users_api_room_allowed: config?.security?.host?.users_api_room_allowed,
-    users_api_rooms_allowed: config?.security?.host?.users_api_rooms_allowed,
-    users_api_endpoint: config?.security?.host?.users_api_endpoint,
-    users_api_secret_key: config?.security?.host?.users_api_secret_key,
-    api_room_exists: config?.security?.host?.api_room_exists,
-    presenters: config?.security?.host?.presenters,
+    users: config?.security?.host?.users || [],
 };
 
-// Validate host user passwords if host protection or user authentication is enabled
-if (
-    (hostCfg.protected || hostCfg.user_auth) &&
-    (!Array.isArray(hostCfg.users) || hostCfg.users.some((user) => !user || !Validator.isValidPassword(user.password)))
-) {
+if (!Array.isArray(hostCfg.users) || hostCfg.users.length === 0) {
+    log.error('HOST_USERS is empty: set at least one admin account (username:password:displayname) in .env');
+    process.exit(1);
+}
+
+if (hostCfg.users.some((user) => !user || !user.username || !Validator.isValidPassword(user.password))) {
     throw new Error('HOST_USERS passwords must contain between 1 and 36 characters');
 }
 
-// Fail closed: refuse to start host protection with publicly known credentials
+// Fail closed: refuse to start with publicly known credentials
 const PUBLIC_DEFAULT_CREDENTIALS = [
     { username: 'admin', password: 'admin' },
     { username: 'guest', password: 'guest' },
@@ -239,8 +196,6 @@ const PUBLIC_DEFAULT_CREDENTIALS = [
     { username: 'username3', password: 'password3' },
 ];
 if (
-    (hostCfg.protected || hostCfg.user_auth) &&
-    !hostCfg.users_from_db &&
     hostCfg.users.some((u) =>
         PUBLIC_DEFAULT_CREDENTIALS.some((d) => u.username === d.username && u.password === d.password)
     )
@@ -251,14 +206,17 @@ if (
     process.exit(1);
 }
 
+const adminAuth = new AdminAuth({
+    users: hostCfg.users,
+    key: jwtKeys.adminSession,
+    sessionHours: config?.security?.host?.sessionHours,
+});
+
 const restApi = {
     basePath: '/api/v1', // api endpoint path
     docs: host + '/api/v1/docs', // api docs
     allowed: config.api?.allowed || {},
 };
-
-// OpenID Connect
-const OIDC = config?.security?.oidc || { enabled: false };
 
 // directory
 const dir = {
@@ -282,8 +240,6 @@ const views = {
 const filesPath = [views.landing, views.newRoom, views.room, views.login, views.whoAreYou, views.customizeRoom];
 
 const htmlInjector = new HtmlInjector(filesPath, config.ui.brand);
-
-const authHost = new Host(); // Authenticated IP by Login
 
 const roomList = new Map(); // All Rooms
 
@@ -361,46 +317,6 @@ function updateAnnouncedAddress(ip) {
     });
 }
 
-// Custom middleware function for OIDC authentication
-function OIDCAuth(req, res, next) {
-    if (OIDC.enabled) {
-        function handleHostProtected(req) {
-            if (!hostCfg.protected) return;
-
-            const ip = authHost.getIP(req);
-            hostCfg.authenticated = true;
-            authHost.setAuthorizedIP(ip, true);
-            // Check...
-            log.debug('OIDC ------> Host protected', {
-                authenticated: hostCfg.authenticated,
-                authorizedIPs: authHost.getAuthorizedIPs(),
-            });
-        }
-
-        if (req.oidc.isAuthenticated()) {
-            log.debug('OIDC ------> User already Authenticated');
-            handleHostProtected(req);
-            return next();
-        }
-
-        // Apply requiresAuth() middleware conditionally
-        requiresAuth()(req, res, function () {
-            log.debug('OIDC ------> requiresAuth');
-            // Check if user is authenticated
-            if (req.oidc.isAuthenticated()) {
-                log.debug('[OIDC] ------> User isAuthenticated');
-                handleHostProtected(req);
-                next();
-            } else {
-                // User is not authenticated
-                res.status(401).send('Unauthorized');
-            }
-        });
-    } else {
-        next();
-    }
-}
-
 function startServer() {
     // Start the app
     app.set('trust proxy', trustProxy); // Enables trust for proxy headers (e.g., X-Forwarded-For) based on the trustProxy setting
@@ -464,154 +380,38 @@ function startServer() {
         next();
     });
 
-    // OpenID Connect - Dynamically set baseURL based on incoming host and protocol
-    if (OIDC.enabled) {
-        // Skip OIDC for static assets to avoid state cookie races on /auth/callback
-        // when `authRequired: true`. See: https://github.com/miroslavpejic85/mirotalksfu/issues/251
-        const oidcStaticAssetRegex =
-            /\.(ico|png|jpe?g|gif|svg|webp|css|js|mjs|map|woff2?|ttf|eot|otf|mp3|mp4|webm|wav|ogg|txt|xml|json|manifest)$/i;
-        const skipStaticAssets = (mw) => (req, res, next) => {
-            if (oidcStaticAssetRegex.test(req.path)) return next();
-            return mw(req, res, next);
-        };
-
-        // Support both `baseURLDynamic` (template key) and legacy `baseUrlDynamic`
-        const oidcDynamicBaseUrl = OIDC.baseURLDynamic === true || OIDC.baseUrlDynamic === true;
-
-        if (oidcDynamicBaseUrl) {
-            // Build an allowlist of origins permitted to be used as the OIDC baseURL.
-            // This prevents Host-header injection from rewriting the redirect_uri
-            // (see: https://portswigger.net/web-security/host-header).
-            // Sources, in order of precedence:
-            //   1. config.security.oidc.allowedDynamicBaseURLs (string[] of full origins)
-            //   2. config.security.oidc.config.baseURL (always trusted)
-            const configuredAllowlist = Array.isArray(OIDC.allowedDynamicBaseURLs) ? OIDC.allowedDynamicBaseURLs : [];
-            const allowedOrigins = new Set(
-                [OIDC.config?.baseURL, ...configuredAllowlist]
-                    .filter(Boolean)
-                    .map((u) => {
-                        try {
-                            return new URL(u).origin;
-                        } catch {
-                            return null;
-                        }
-                    })
-                    .filter(Boolean)
-            );
-
-            // Cache auth middleware instances per origin to avoid re-running OIDC discovery on every request
-            const authMiddlewareCache = new Map();
-
-            app.use(
-                skipStaticAssets((req, res, next) => {
-                    const host = req.headers.host;
-                    const protocol = req.protocol === 'https' ? 'https' : 'http';
-                    const origin = `${protocol}://${host}`;
-
-                    // Reject Host headers that are not in the configured allowlist.
-                    // Without this, an attacker can force the OIDC library to emit a
-                    // redirect_uri pointing to an attacker-controlled domain.
-                    if (!allowedOrigins.has(origin)) {
-                        log.warn('OIDC Host header not in allowlist - rejecting request', {
-                            host,
-                            origin,
-                            allowed: [...allowedOrigins],
-                        });
-                        return res.status(400).send('Bad Request: invalid Host header');
-                    }
-
-                    let cachedAuth = authMiddlewareCache.get(origin);
-                    if (!cachedAuth) {
-                        try {
-                            cachedAuth = auth({ ...OIDC.config, baseURL: origin });
-                            authMiddlewareCache.set(origin, cachedAuth);
-                        } catch (err) {
-                            log.error('OIDC Auth Middleware Error', err);
-                            return next(err);
-                        }
-                    }
-                    cachedAuth(req, res, next);
-                })
-            );
-        } else {
-            // Static baseURL: create auth middleware once at startup
-            try {
-                app.use(skipStaticAssets(auth(OIDC.config)));
-            } catch (err) {
-                log.error('OIDC Auth Middleware Error', err);
-                process.exit(1);
-            }
+    // Admin display name (prefills the join form). Guests get no profile.
+    app.get('/profile', (req, res) => {
+        const admin = adminAuth.fromRequest(req);
+        res.set('Cache-Control', 'no-store');
+        if (admin) {
+            return res.json({ name: admin.displayname, peer_name: { force: false, name: true } });
         }
-    }
-
-    // Route to display user information
-    app.get('/profile', OIDCAuth, (req, res) => {
-        if (OIDC.enabled) {
-            const user = { ...req.oidc.user };
-            user.peer_name = {
-                force: OIDC.peer_name?.force || false,
-                email: OIDC.peer_name?.email || false,
-                name: OIDC.peer_name?.name || false,
-            };
-            log.debug('OIDC get Profile', user);
-            return res.json(user);
-        }
-
-        // Host protected: return displayname from JWT token
-        if (hostCfg.protected) {
-            const authHeader = req.headers.authorization;
-            const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
-            if (token) {
-                try {
-                    const { username } = decodeToken(token);
-                    const user = hostCfg.users.find((u) => u.username === username || u.displayname === username);
-                    const displayname = user?.displayname || username;
-                    log.debug('Host protected get Profile', { username, displayname });
-                    return res.json({
-                        name: displayname,
-                        peer_name: {
-                            force: true,
-                            name: true,
-                        },
-                    });
-                } catch (err) {
-                    log.warn('Profile token decode error', err.message);
-                }
-            }
-        }
-
-        // OIDC disabled, no host protection
-        res.status(201).json({
-            email: false,
-            name: false,
-            peer_name: false,
-            message: 'Profile not found because OIDC is disabled',
-        });
+        return res.status(201).json({ email: false, name: false, peer_name: false });
     });
 
-    // Authentication Callback Route
-    app.get('/auth/callback', (req, res, next) => {
-        next(); // Let express-openid-connect handle this route
+    // Admin session state, used by the landing page to show the "new meeting" form
+    app.get('/admin/session', (req, res) => {
+        const admin = adminAuth.fromRequest(req);
+        res.set('Cache-Control', 'no-store');
+        return res.json(admin ? { admin: true, name: admin.displayname } : { admin: false });
     });
 
-    // Logout Route
+    // Admin creates a meeting: the server turns the typed name into a room id with a random suffix
+    app.post('/admin/rooms', (req, res) => {
+        if (!adminAuth.fromRequest(req)) {
+            return res.status(401).json({ message: 'unauthorized' });
+        }
+        const name = typeof req.body?.name === 'string' ? req.body.name : '';
+        const room = makeRoomId(name);
+        res.set('Cache-Control', 'no-store');
+        return res.json({ room, url: '/join/' + encodeURIComponent(room) });
+    });
+
+    // Logout: revoke the admin session and clear the cookie
     app.get('/logout', (req, res) => {
-        if (OIDC.enabled) {
-            req.logout(); // Logout user
-        }
-        if (hostCfg.protected) {
-            const ip = authHost.getIP(req);
-            if (authHost.isAuthorizedIP(ip)) {
-                authHost.deleteIP(ip);
-            }
-            hostCfg.authenticated = false;
-            //
-            log.debug('[OIDC] ------> Logout', {
-                authenticated: hostCfg.authenticated,
-                authorizedIPs: authHost.getAuthorizedIPs(),
-            });
-        }
-        res.redirect('/'); // Redirect to the home page after logout
+        adminAuth.clear(req, res);
+        res.redirect('/');
     });
 
     // Favicon
@@ -632,224 +432,87 @@ function startServer() {
         res.status(200).json({ message: config?.ui?.themes ? config.ui.themes : false });
     });
 
-    // main page
-    app.get('/', OIDCAuth, (req, res) => {
-        //log.debug('/ - hostCfg ----->', hostCfg);
-        if (!OIDC.enabled && hostCfg.protected) {
-            hostCfg.authenticated = false;
-            res.redirect('/login');
-            return;
-        } else {
-            return htmlInjector.injectHtml(views.landing, res);
-        }
+    // main page (admin: new meeting form, guest: "you need a link")
+    app.get('/', (req, res) => {
+        return htmlInjector.injectHtml(views.landing, res);
     });
 
-    // set new room name and join
-    app.get('/newroom', OIDCAuth, (req, res) => {
-        //log.info('/newroom - hostCfg ----->', hostCfg);
-
-        if (!OIDC.enabled && hostCfg.protected) {
-            hostCfg.authenticated = false;
-            res.redirect('/login');
-            return;
-        } else {
-            htmlInjector.injectHtml(views.newRoom, res);
-        }
+    // Legacy page: rooms are now created from the main page by the admin
+    app.get('/newroom', (req, res) => {
+        res.redirect('/');
     });
 
-    // Get Customize room
-    app.get('/customizeRoom', OIDCAuth, (req, res) => {
+    // Customize room (join link options): admin only
+    app.get('/customizeRoom', (req, res) => {
+        if (!adminAuth.fromRequest(req)) return res.redirect('/');
         htmlInjector.injectHtml(views.customizeRoom, res);
     });
 
-    // Check if room active (exists)
-    app.post('/isRoomActive', (req, res) => {
-        const { roomId } = checkXSS(req.body);
-
-        if (roomId && (hostCfg.protected || hostCfg.user_auth || OIDC.enabled)) {
-            const roomActive = roomList.has(roomId);
-            if (roomActive) log.debug('isRoomActive', { roomId, roomActive });
-            res.status(200).json({ message: roomActive });
-        } else {
-            res.status(400).json({ message: 'Unauthorized' });
+    // Check if room active (exists): used by the "meeting has not started yet" page
+    app.post('/isRoomActive', roomStatusLimiter, (req, res) => {
+        const roomId = typeof req.body?.roomId === 'string' ? req.body.roomId : '';
+        if (!roomId || !Validator.isValidRoomName(roomId)) {
+            return res.status(400).json({ message: false });
         }
+        res.set('Cache-Control', 'no-store');
+        return res.status(200).json({ message: roomList.has(roomId) });
     });
 
     // Issue a short-lived token that authorizes the Socket.IO `createRoom` event for this room.
-    // It applies the same room creation policy as the HTTP join routes (OIDC session, host login,
-    // valid join token or an allowed user name).
-    app.get('/createRoomToken', createRoomTokenLimiter, async (req, res) => {
-        const { room, name } = checkXSS(req.query);
+    // Only the admin session (cookie) or a breakout room opened by a presenter qualifies.
+    // Guests joining a running meeting skip the limiter (no token needed, the room exists)
+    const createRoomTokenGate = (req, res, next) => {
+        const room = typeof req.query?.room === 'string' ? req.query.room : '';
+        if (room && roomList.has(room)) {
+            res.set('Cache-Control', 'no-store');
+            return res.json({ required: false, token: null, exists: true });
+        }
+        return createRoomTokenLimiter(req, res, next);
+    };
+
+    app.get('/createRoomToken', createRoomTokenGate, (req, res) => {
+        const room = typeof req.query?.room === 'string' ? req.query.room : '';
 
         if (!room || !Validator.isValidRoomName(room)) {
             return res.status(400).json({ message: 'Invalid room' });
         }
 
-        if (!isRoomCreationRestricted()) {
-            return res.json({ required: false, token: null });
-        }
+        res.set('Cache-Control', 'no-store');
 
-        // Creation policy only: ignore whether the room currently exists
-        const creationRoomList = { has: () => false, size: roomList.size };
-        let allowed = isAllowedRoomAccess('/createRoomToken', req, hostCfg, creationRoomList, room);
-
-        if (!allowed) {
-            const authHeader = req.headers.authorization || '';
-            const joinToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-            allowed = await isJoinTokenAuthorized(joinToken, room);
-        }
-
-        // Host protection only: same as the HTTP direct join by user name (never trusted with OIDC)
-        if (!allowed && !OIDC.enabled && hostCfg.authenticated) {
-            allowed = await isRoomAllowedForUser('Create room by name', name, room);
-        }
-
-        if (!allowed) {
-            log.warn('Room creation token denied', { room });
+        if (!adminAuth.fromRequest(req) && !isAuthorizedBreakout(room)) {
+            log.warn('Room creation token denied', { room, ip: getIP(req) });
             return res.status(403).json({ required: true, token: null });
         }
 
-        res.set('Cache-Control', 'no-store');
         return res.json({ required: true, token: createCreateRoomToken(room) });
     });
 
-    // Handle Direct join room with params
-    app.get('/join/', async (req, res) => {
-        if (Object.keys(req.query).length > 0) {
-            //log.debug('/join/params - hostCfg ----->', hostCfg);
-
-            log.debug('Direct Join', req.query);
-
-            // http://localhost:3010/join?room=test&name=mirotalksfu&audio=0&video=0&screen=0&notify=0&chat=1
-            // http://localhost:3010/join?room=test&roomPassword=0&name=mirotalksfu&audio=1&video=1&screen=0&hide=0&notify=1&duration=00:00:30
-            // http://localhost:3010/join?room=test&roomPassword=0&name=mirotalksfu&audio=1&video=1&screen=0&hide=0&notify=0&token=token
-
-            const { room, roomPassword, name, audio, video, screen, hide, notify, chat, duration, token, isPresenter } =
-                checkXSS(req.query);
-
-            if (!room) {
-                log.warn('/join/params room empty', room);
-                return res.redirect('/');
-            }
-
-            if (!Validator.isValidRoomName(room)) {
-                return res.redirect('/');
-            }
-
-            let peerUsername = '';
-            let peerPassword = '';
-            let isPeerValid = false;
-            let isPeerPresenter = false;
-
-            if (token) {
-                try {
-                    const validToken = await isValidToken(token);
-
-                    if (!validToken) {
-                        return res.status(401).json({ message: 'Invalid Token' });
-                    }
-
-                    const { username, password, presenter } = checkXSS(decodeToken(token));
-
-                    peerUsername = username;
-                    peerPassword = password;
-                    isPeerValid = await isAuthPeer(username, password);
-                    isPeerPresenter = presenter === '1' || presenter === 'true';
-
-                    if (isPeerPresenter && !hostCfg.users_from_db) {
-                        const roomAllowedForUser = await isRoomAllowedForUser('Direct Join with token', username, room);
-                        if (!roomAllowedForUser) {
-                            log.warn('Direct Room Join for this User is Unauthorized', {
-                                username: username,
-                                room: room,
-                            });
-                            return res.redirect('/whoAreYou/' + room);
-                        }
-                    }
-                } catch (err) {
-                    log.error('Direct Join JWT error', { error: err.message, token: token });
-                    return hostCfg.protected || hostCfg.user_auth
-                        ? htmlInjector.injectHtml(views.login, res)
-                        : htmlInjector.injectHtml(views.landing, res);
-                }
-            } else {
-                const allowRoomAccess = isAllowedRoomAccess('/join/params', req, hostCfg, roomList, room);
-                const roomAllowedForUser = await isRoomAllowedForUser('Direct Join without token', name, room);
-
-                log.debug('Direct Room Join no JWT --------------->', {
-                    allowRoomAccess: allowRoomAccess,
-                    roomAllowedForUser: roomAllowedForUser,
-                });
-
-                if (!isDirectJoinAllowed(allowRoomAccess, roomAllowedForUser)) {
-                    log.warn('Direct Room Join Unauthorized', room);
-                    return res.redirect('/whoAreYou/' + room);
-                }
-            }
-
-            const OIDCUserAuthenticated = OIDC.enabled && req.oidc.isAuthenticated();
-
-            if (
-                (hostCfg.protected && isPeerValid && isPeerPresenter && !hostCfg.authenticated) ||
-                OIDCUserAuthenticated
-            ) {
-                const ip = getIP(req);
-                hostCfg.authenticated = true;
-                authHost.setAuthorizedIP(ip, true);
-                log.debug('Direct Join user auth as host done', {
-                    ip: ip,
-                    username: peerUsername,
-                    password: peerPassword,
-                });
-            }
-
-            if (room && (hostCfg.authenticated || isPeerValid)) {
-                return htmlInjector.injectHtml(views.room, res);
-            } else {
-                return htmlInjector.injectHtml(views.login, res);
-            }
+    // Serve the room page if the meeting exists (or the admin is opening it), else the waiting page
+    function serveRoomOrWaiting(req, res, roomId) {
+        if (roomList.has(roomId) || adminAuth.fromRequest(req) || isAuthorizedBreakout(roomId)) {
+            return htmlInjector.injectHtml(views.room, res);
         }
+        const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+        return res.redirect('/whoAreYou/' + encodeURIComponent(roomId) + query);
+    }
 
-        return res.redirect('/');
+    // Handle Direct join room with params: /join?room=xxx&name=xxx&audio=1...
+    app.get('/join/', (req, res) => {
+        const room = typeof req.query?.room === 'string' ? req.query.room : '';
+        if (!room || !Validator.isValidRoomName(room)) {
+            return res.redirect('/');
+        }
+        return serveRoomOrWaiting(req, res, room);
     });
 
     // join room by id
-    app.get('/join/:roomId', async (req, res) => {
-        //
-        const { roomId } = checkXSS(req.params);
-
-        if (!roomId) {
-            log.warn('/join/:roomId empty', roomId);
-            return res.redirect('/');
-        }
-
-        if (!Validator.isValidRoomName(roomId)) {
+    app.get('/join/:roomId', (req, res) => {
+        const { roomId } = req.params;
+        if (!roomId || !Validator.isValidRoomName(roomId)) {
             log.warn('/join/:roomId invalid', roomId);
             return res.redirect('/');
         }
-
-        const allowRoomAccess = isAllowedRoomAccess('/join/:roomId', req, hostCfg, roomList, roomId);
-
-        if (allowRoomAccess) {
-            // 1. Protect room access with database check
-            if (!OIDC.enabled && hostCfg.protected && hostCfg.users_from_db) {
-                const roomExists = await roomExistsForUser(roomId);
-                log.debug('/join/:roomId exists from API endpoint', roomExists);
-                return roomExists ? htmlInjector.injectHtml(views.room, res) : res.redirect('/login?room=' + roomId);
-            }
-            // 2. Protect room access with configuration check
-            if (!OIDC.enabled && hostCfg.protected && !hostCfg.users_from_db) {
-                const roomExists = hostCfg.users.some(
-                    (user) => user.allowed_rooms && (user.allowed_rooms.includes(roomId) || roomList.has(roomId))
-                );
-                log.debug('/join/:roomId exists from config allowed rooms', roomExists);
-                return roomExists ? htmlInjector.injectHtml(views.room, res) : res.redirect('/whoAreYou/' + roomId);
-            }
-            htmlInjector.injectHtml(views.room, res);
-        } else {
-            // Who are you? (waiting room)
-            OIDC.enabled || hostCfg.protected ? res.redirect('/whoAreYou/' + roomId) : res.redirect('/');
-        }
+        return serveRoomOrWaiting(req, res, roomId);
     });
 
     // not specified correctly the room id
@@ -867,94 +530,50 @@ function startServer() {
         res.sendFile(views.privacy);
     });
 
-    // handle who are you: Presenter or Guest
+    // "This meeting has not started yet": polls /isRoomActive and joins when the admin opens it
     app.get('/whoAreYou/:roomId', (req, res) => {
         htmlInjector.injectHtml(views.whoAreYou, res);
     });
 
-    // handle login if user_auth enabled
+    // Admin login page
     app.get('/login', (req, res) => {
-        if (hostCfg.protected || hostCfg.user_auth) {
-            return htmlInjector.injectHtml(views.login, res);
-        }
-        res.redirect('/');
+        return htmlInjector.injectHtml(views.login, res);
     });
 
-    // handle logged on host protected
+    // Legacy route
     app.get('/logged', (req, res) => {
-        const { room } = checkXSS(req.query);
-        if (!OIDC.enabled && hostCfg.protected) {
-            const ip = getIP(req);
-            if (allowedIP(ip)) {
-                hostCfg.authenticated = true;
-                res.redirect(room ? '/join/' + room : '/');
-            } else {
-                hostCfg.authenticated = false;
-                res.redirect(room ? '/login?room=' + room : '/login');
-            }
-        } else {
-            res.redirect('/');
-        }
+        res.redirect('/');
     });
 
     // ####################################################
     // AXIOS
     // ####################################################
 
-    // handle login on host protected
-    app.post('/login', loginLimiter, async (req, res) => {
+    // Admin login: checks HOST_USERS and sets the session cookie. Credentials are never logged.
+    app.post('/login', loginLimiter, loginUserLimiter, (req, res) => {
         const ip = getIP(req);
-        log.debug(`Request login to host from: ${ip}`, req.body);
-
-        const safeBody = checkXSS(req.body) || {};
-        const { username, password } = safeBody;
+        const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+        const password = typeof req.body?.password === 'string' ? req.body.password : '';
 
         if (!username || !password) {
-            log.warn('Login failed: missing username or password', req.body);
             return res.status(400).json({ message: 'Missing username or password' });
         }
 
         if (!Validator.isValidPassword(password)) {
-            log.warn('Login failed: invalid password length', { ip });
             return res.status(400).json({ message: 'Invalid password' });
         }
 
-        const isPeerValid = await isAuthPeer(username, password);
+        const user = adminAuth.verifyCredentials(username, password);
 
-        if (hostCfg.protected && isPeerValid && !hostCfg.authenticated) {
-            const ip = getIP(req);
-            hostCfg.authenticated = true;
-            authHost.setAuthorizedIP(ip, true);
-            log.debug('HOST LOGIN OK', {
-                ip: ip,
-                authorized: authHost.isAuthorizedIP(ip),
-                authorizedIps: authHost.getAuthorizedIPs(),
-            });
-
-            const isPresenter = Boolean(
-                hostCfg?.presenters?.join_first || hostCfg?.presenters?.list?.includes(username)
-            );
-
-            const user = hostCfg.users.find((user) => user.displayname === username || user.username === username);
-            const token = encodeToken({ username: username, password: password, presenter: isPresenter });
-            const allowedRooms = await getUserAllowedRooms(username, password);
-
-            log.debug('login -------------->', { displayName: user?.displayname || username });
-
-            return res
-                .status(200)
-                .json({ message: token, displayname: user?.displayname || username, allowedRooms: allowedRooms });
-        }
-
-        if (isPeerValid) {
-            log.debug('PEER LOGIN OK', { ip: ip, authorized: true });
-            const isPresenter = hostCfg?.presenters?.list?.includes(username) || false;
-            const token = encodeToken({ username: username, password: password, presenter: isPresenter });
-            const allowedRooms = await getUserAllowedRooms(username, password);
-            return res.status(200).json({ message: token, allowedRooms: allowedRooms });
-        } else {
+        if (!user) {
+            log.warn('Admin login failed', { ip });
             return res.status(401).json({ message: 'unauthorized' });
         }
+
+        adminAuth.issue(res, user);
+        log.info('Admin login', { username: user.username, ip });
+        res.set('Cache-Control', 'no-store');
+        return res.status(200).json({ ok: true, name: user.displayname || user.username });
     });
 
     // Join roomId redirect to /join?room=roomId
@@ -1224,8 +843,7 @@ function startServer() {
                     csp: embedCsp ? embedCsp.csp : 'not set (embedding allowed from any origin)',
                 },
                 jwtCfg: jwtCfg,
-                host: hostCfg?.protected || hostCfg?.user_auth ? hostCfg : { presenters: hostCfg.presenters },
-                oidc: OIDC?.enabled ? OIDC : false,
+                admins: { count: hostCfg.users.length, sessionHours: adminAuth.sessionHours }, // never log credentials
                 middleware: {
                     IpWhitelist: config?.security?.middleware?.IpWhitelist?.enabled
                         ? config.security.middleware.IpWhitelist
@@ -1248,8 +866,7 @@ function startServer() {
             },
 
             // Communication Integrations
-            integrations: {
-            },
+            integrations: {},
 
             // UI & Branding
             ui: {
@@ -1447,6 +1064,13 @@ function startServer() {
                 return callback({ error: 'invalid room name' });
             }
 
+            // Joining an existing meeting is not a creation: not rate-limited, so a whole office
+            // behind one public IP can join at the same time.
+            if (roomList.has(room_id)) {
+                socket.room_id = room_id;
+                return callback({ error: 'already exists' });
+            }
+
             // Security: per-IP rate limit to prevent roomList spam/enumeration.
             const ip = getIpSocket(socket);
             if (!checkCreateRoomLimit(ip)) {
@@ -1456,13 +1080,8 @@ function startServer() {
                 });
             }
 
-            if (roomList.has(room_id)) {
-                socket.room_id = room_id;
-                return callback({ error: 'already exists' });
-            }
-
-            // Security: enforce the room creation policy (OIDC / host protection) that the HTTP routes apply.
-            if (isRoomCreationRestricted() && !isCreateRoomTokenValid(token, room_id)) {
+            // Security: only the admin (or a presenter-opened breakout room) gets a creation token.
+            if (!isCreateRoomTokenValid(token, room_id)) {
                 log.warn('[createRoom] - Room creation not authorized', { ip, room_id });
                 return callback({ error: 'Room creation not authorized' });
             }
@@ -1493,6 +1112,12 @@ function startServer() {
 
             const data = checkXSS(dataObject);
 
+            // Never trust nor log client-side role/token fields
+            if (data?.peer_info) {
+                delete data.peer_info.peer_token;
+                data.peer_info.peer_presenter = false;
+            }
+
             log.debug('User joined', data);
 
             if (!Validator.isValidRoomName(socket.room_id)) {
@@ -1502,84 +1127,13 @@ function startServer() {
 
             const room = getRoom(socket);
 
-            const {
-                peer_name,
-                peer_id,
-                peer_uuid,
-                peer_token,
-                peer_presenter,
-                os_name,
-                os_version,
-                browser_name,
-                browser_version,
-            } = data.peer_info;
+            const { peer_name, peer_id, peer_uuid, os_name, os_version, browser_name, browser_version } =
+                data.peer_info;
 
-            let is_presenter = peer_presenter;
-            let authenticatedUsername = null;
-
-            // User Auth required or detect token, we check if peer valid
-            if (hostCfg.user_auth || peer_token) {
-                // Check JWT
-                if (peer_token) {
-                    try {
-                        const validToken = await isValidToken(peer_token);
-
-                        if (!validToken) {
-                            log.warn('[Join] - Invalid token', peer_token);
-                            return cb('unauthorized');
-                        }
-
-                        const { username, password, presenter } = checkXSS(decodeToken(peer_token));
-
-                        const isPeerValid = await isAuthPeer(username, password);
-
-                        if (!isPeerValid) {
-                            // redirect peer to login page
-                            log.warn('[Join] - Invalid peer not authenticated', isPeerValid);
-                            return cb('unauthorized');
-                        }
-
-                        authenticatedUsername = username;
-
-                        const tokenPresenter = presenter === '1' || presenter === 'true';
-
-                        /*
-                            In breakout rooms: only presenters.list members get presenter role
-                            join_first and token-based presenter flags are ignored
-                        */
-                        if (socket.room_id.includes('_breakout_')) {
-                            is_presenter = isConfiguredPresenter(authenticatedUsername, hostCfg?.presenters?.list);
-                        } else {
-                            is_presenter =
-                                tokenPresenter || (hostCfg?.presenters?.join_first && room?.getPeersCount() === 0);
-                        }
-
-                        log.debug('[Join] - HOST PROTECTED - USER AUTH check peer', {
-                            ip: peer_ip,
-                            peer_username: username,
-                            peer_password: password,
-                            peer_valid: isPeerValid,
-                            peer_presenter: is_presenter,
-                        });
-                    } catch (err) {
-                        log.error('[Join] - JWT error', {
-                            error: err.message,
-                            token: peer_token,
-                        });
-                        return cb('unauthorized');
-                    }
-                } else {
-                    if (!hostCfg.users_from_db) return cb('unauthorized');
-                }
-
-                if (!hostCfg.users_from_db) {
-                    const roomAllowedForUser = await isRoomAllowedForUser('[Join]', authenticatedUsername, room.id);
-                    if (!roomAllowedForUser) {
-                        log.warn('[Join] - Room not allowed for this peer', { peer_name, room_id: room.id });
-                        return cb('notAllowed');
-                    }
-                }
-            }
+            // TLLM*meet: the presenter role comes only from a verified admin session (cookie sent with the
+            // Socket.IO handshake). Client flags (peer_presenter, peer_token) are ignored.
+            const admin = adminAuth.fromSocket(socket);
+            const is_presenter = Boolean(admin);
 
             // check if banned...
             if (room.isBanned(peer_uuid)) {
@@ -1602,25 +1156,11 @@ function startServer() {
             );
             if (usernameExists) return cb('isNameInUse');
 
-            const configuredPresenter = isConfiguredPresenter(authenticatedUsername, hostCfg?.presenters?.list);
-            const isBreakoutRoom = socket.room_id.includes('_breakout_');
-            const shouldRegisterPresenter =
-                configuredPresenter ||
-                (!isBreakoutRoom &&
-                    hostCfg?.presenters?.join_first &&
-                    Object.keys(presenters[socket.room_id] || {}).length === 0) ||
-                (peer_token && is_presenter);
-            const isPresenter = peer_token
-                ? is_presenter
-                : shouldRegisterPresenter || isPeerPresenter(socket.room_id, socket.id, peer_name, peer_uuid);
-
-            if ((hostCfg.protected || hostCfg.user_auth) && isPresenter && !hostCfg.users_from_db) {
-                const roomAllowedForUser = await isRoomAllowedForUser('[Join]', authenticatedUsername, room.id);
-                if (!roomAllowedForUser) {
-                    log.warn('[Join] - Room not allowed for this peer', { peer_name, room_id: room.id });
-                    return cb('notAllowed');
-                }
-            }
+            // The admin is always presenter (and cannot be demoted). A guest is presenter only if a
+            // presenter promoted this very socket during the meeting (stored server-side).
+            const configuredPresenter = is_presenter;
+            const shouldRegisterPresenter = is_presenter;
+            const isPresenter = is_presenter || isPeerPresenter(socket.room_id, socket.id, peer_name, peer_uuid);
 
             // Security: admission checks must run BEFORE the peer is added to the room, otherwise a
             // rejected peer would keep access to the media plane and room broadcasts.
@@ -1653,10 +1193,7 @@ function startServer() {
                 is_configured_presenter: configuredPresenter,
             };
 
-            /**
-             * first we check if the username match the presenters username else if join_first enabled
-             * For breakout rooms, skip join_first rule - only presenters.list or token-based presenters are valid
-             */
+            // Register the admin as presenter of this room
             if (shouldRegisterPresenter) {
                 presenter.is_presenter = true;
                 presenters[socket.room_id][socket.id] = presenter;
@@ -2559,6 +2096,15 @@ function startServer() {
             if (assignments && Array.isArray(assignments)) {
                 for (const assignment of assignments) {
                     const { peerId, breakoutRoom, duration, roomName } = assignment;
+                    // Only breakout rooms of the presenter's own room, which guests may then create
+                    if (
+                        typeof breakoutRoom !== 'string' ||
+                        !breakoutRoom.startsWith(socket.room_id + '_breakout_') ||
+                        !Validator.isValidRoomName(breakoutRoom)
+                    ) {
+                        continue;
+                    }
+                    adminAuth.allowBreakout(breakoutRoom);
                     room.sendTo(peerId, 'breakoutRoom', {
                         action: 'assign',
                         breakoutRoom: breakoutRoom,
@@ -2683,6 +2229,13 @@ function startServer() {
             const data = checkXSS(dataObject);
 
             if (!Validator.isValidData(data)) return;
+
+            // Security: presenter and lobby states are server-managed. A client could otherwise
+            // leave the lobby on its own (media access) or advertise itself as presenter.
+            if (data?.type === 'presenter' || data?.type === 'lobby') {
+                log.warn('updatePeerInfo - blocked server-managed field', { type: data.type, peer_id: socket.id });
+                return;
+            }
 
             peer.updatePeerInfo(data);
 
@@ -3815,19 +3368,8 @@ function startServer() {
                 delete presenters[socket.room_id][socket.id];
             }
 
-            const fallbackPresenter = assignFallbackPresenter(
-                socket.room_id,
-                room,
-                presenters,
-                hostCfg?.presenters?.join_first
-            );
-            if (fallbackPresenter) {
-                log.info('[Disconnect] - assigned fallback presenter', {
-                    room_id: socket.room_id,
-                    peer_id: fallbackPresenter.id,
-                    peer_name: fallbackPresenter.peer_name,
-                });
-            }
+            // TLLM*meet: no automatic presenter hand-over. Only the admin, or a guest the admin
+            // promoted, is presenter; when they leave nobody inherits the role.
 
             if (room.getPeersCount() === 0) {
                 roomList.delete(socket.room_id);
@@ -3835,10 +3377,7 @@ function startServer() {
                 delete presenters[socket.room_id];
 
                 log.debug('[Disconnect] - Last peer - current presenters grouped by roomId', presenters);
-
             }
-
-            removeIP(socket);
 
             socket.room_id = null;
 
@@ -3870,19 +3409,8 @@ function startServer() {
                 delete presenters[socket.room_id][socket.id];
             }
 
-            const fallbackPresenter = assignFallbackPresenter(
-                socket.room_id,
-                room,
-                presenters,
-                hostCfg?.presenters?.join_first
-            );
-            if (fallbackPresenter) {
-                log.info('[REMOVE ME] - assigned fallback presenter', {
-                    room_id: socket.room_id,
-                    peer_id: fallbackPresenter.id,
-                    peer_name: fallbackPresenter.peer_name,
-                });
-            }
+            // TLLM*meet: no automatic presenter hand-over. Only the admin, or a guest the admin
+            // promoted, is presenter; when they leave nobody inherits the role.
 
             if (room.getPeersCount() === 0) {
                 roomList.delete(socket.room_id);
@@ -3890,10 +3418,7 @@ function startServer() {
                 delete presenters[socket.room_id];
 
                 log.debug('[REMOVE ME] - Last peer - current presenters grouped by roomId', presenters);
-
             }
-
-            removeIP(socket);
 
             socket.room_id = null;
 
@@ -4043,341 +3568,21 @@ function startServer() {
         }
     }
 
-    async function isAuthPeer(username, password) {
-        if (!Validator.isValidPassword(password)) {
-            return false;
-        }
-
-        if (hostCfg.users_from_db && hostCfg.users_api_endpoint) {
-            try {
-                // Using either email or username, as the username can also be an email here.
-                const response = await axios.post(
-                    hostCfg.users_api_endpoint,
-                    {
-                        email: username,
-                        username: username,
-                        password: password,
-                        api_secret_key: hostCfg.users_api_secret_key,
-                    },
-                    {
-                        timeout: 5000, // Timeout set to 5 seconds (5000 milliseconds)
-                    }
-                );
-                return response.data && response.data.message === true;
-            } catch (error) {
-                log.error('AXIOS isAuthPeer error', error.message);
-                return false;
-            }
-        } else {
-            return (
-                hostCfg.users && hostCfg.users.some((user) => user.username === username && user.password === password)
-            );
-        }
-    }
-
-    // A valid API/login join token carrying valid peer credentials may create the room it opens.
-    // Presenter tokens must also be allowed for that room, as in the HTTP direct join.
-    async function isJoinTokenAuthorized(token, room) {
-        try {
-            if (!token || !(await isValidToken(token))) return false;
-            const { username, password, presenter } = checkXSS(decodeToken(token));
-            if (!(await isAuthPeer(username, password))) return false;
-            const isPeerPresenter = presenter === '1' || presenter === 'true';
-            if (isPeerPresenter && !hostCfg.users_from_db) {
-                return await isRoomAllowedForUser('Create room with token', username, room);
-            }
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    async function isValidToken(token) {
-        return new Promise((resolve, reject) => {
-            jwt.verify(token, jwtKeys.auth, JWT_VERIFY_OPTIONS, (err, decoded) => {
-                if (err) {
-                    // Token is invalid
-                    resolve(false);
-                } else {
-                    // Token is valid
-                    resolve(true);
-                }
-            });
-        });
-    }
-
-    function encodeToken(token) {
-        if (!token) return '';
-
-        const { username = 'username', password = 'password', presenter = false, expire } = token;
-
-        const expireValue = expire || jwtCfg.JWT_EXP;
-
-        // Constructing payload
-        const payload = {
-            username: String(username),
-            password: String(password),
-            presenter: String(presenter),
-        };
-
-        // Encrypt payload using AES encryption
-        const payloadString = JSON.stringify(payload);
-        const encryptedPayload = CryptoJS.AES.encrypt(payloadString, jwtKeys.auth).toString();
-
-        // Constructing JWT token
-        const jwtToken = jwt.sign({ data: encryptedPayload }, jwtKeys.auth, { expiresIn: expireValue });
-
-        return jwtToken;
-    }
-
-    function isAllowedRoomAccess(logMessage, req, hostCfg, roomList, roomId) {
-        const OIDCUserAuthenticated = OIDC.enabled && req.oidc.isAuthenticated();
-        const hostUserAuthenticated = hostCfg.protected && hostCfg.authenticated;
-        const roomExist = roomList.has(roomId);
-        const roomCount = roomList.size;
-        const OIDCAllowRoomCreationForAuthUsers = OIDC.allow_rooms_creation_for_auth_users;
-
-        const allowRoomAccess =
-            (!hostCfg.protected && !OIDC.enabled) || // Default open access
-            (OIDCUserAuthenticated && roomExist) || // OIDC auth & room exists
-            (hostUserAuthenticated && roomExist) || // Host login auth & room exists
-            ((OIDCUserAuthenticated || hostUserAuthenticated) && roomCount === 0) || // First room creation
-            (OIDCUserAuthenticated && OIDCAllowRoomCreationForAuthUsers) || // Allow room creation if authenticated via OIDC
-            roomExist; // Fallback: allow anyone if room exists
-
-        log.debug(logMessage, {
-            OIDCUserAuthenticated,
-            hostUserAuthenticated,
-            roomExist,
-            roomCount,
-            extraInfo: {
-                roomId,
-                OIDCUserEnabled: OIDC.enabled,
-                hostProtected: hostCfg.protected,
-                hostAuthenticated: hostCfg.authenticated,
-                OIDCAllowRoomCreationForAuthUsers,
-            },
-            allowRoomAccess,
-        });
-
-        return allowRoomAccess;
-    }
-
-    // With OIDC enabled, the `name` query param is self-asserted and must never grant room access
-    function isDirectJoinAllowed(allowRoomAccess, roomAllowedForUser) {
-        return allowRoomAccess || (!OIDC.enabled && roomAllowedForUser);
-    }
-
-    async function roomExistsForUser(room) {
-        if (hostCfg.protected || hostCfg.user_auth) {
-            // Check if passed room exists
-            if (hostCfg.users_from_db && hostCfg.api_room_exists) {
-                try {
-                    const response = await axios.post(
-                        hostCfg.api_room_exists,
-                        {
-                            room: room,
-                            api_secret_key: hostCfg.users_api_secret_key,
-                        },
-                        {
-                            timeout: 5000, // Timeout set to 5 seconds (5000 milliseconds)
-                        }
-                    );
-                    log.debug('AXIOS roomExistsForUser', { room: room, exists: true });
-                    return response.data && response.data.message === true;
-                } catch (error) {
-                    log.error('AXIOS roomExistsForUser error', error.message);
-                    return false;
-                }
-            }
-        }
-    }
-
-    async function getUserAllowedRooms(username, password) {
-        // Gel user allowed rooms from db...
-        if (hostCfg.protected && hostCfg.users_from_db && hostCfg.users_api_rooms_allowed) {
-            try {
-                // Using either email or username, as the username can also be an email here.
-                const response = await axios.post(
-                    hostCfg.users_api_rooms_allowed,
-                    {
-                        email: username,
-                        username: username,
-                        password: password,
-                        api_secret_key: hostCfg.users_api_secret_key,
-                    },
-                    {
-                        timeout: 5000, // Timeout set to 5 seconds (5000 milliseconds)
-                    }
-                );
-                const allowedRooms = response.data ? response.data.message : {};
-                log.debug('AXIOS getUserAllowedRooms', allowedRooms);
-                return allowedRooms;
-            } catch (error) {
-                log.error('AXIOS getUserAllowedRooms error', error.message);
-                return {};
-            }
-        }
-
-        // Get allowed rooms for user from config.js file
-        if (hostCfg.protected && !hostCfg.users_from_db) {
-            const isOIDCEnabled = config?.security?.oidc?.enabled;
-
-            const user = hostCfg.users.find((user) => user.displayname === username || user.username === username);
-
-            if (!isOIDCEnabled && !user) {
-                log.debug('getUserAllowedRooms - user not found', username);
-                return false;
-            }
-            log.debug('CONFIG getUserAllowedRooms', user.allowed_rooms);
-            return user.allowed_rooms;
-        }
-
-        log.debug('getUserAllowedRooms *');
-        return ['*'];
-    }
-
-    async function isRoomAllowedForUser(message, username, room) {
-        if (!username || !room) {
-            log.debug('isRoomAllowedForUser - missing username or room', { username, room });
-            return false;
-        }
-
-        const logData = { message, username, room };
-        log.debug('isRoomAllowedForUser ------>', logData);
-
-        try {
-            const isOIDCEnabled = config?.security?.oidc?.enabled;
-
-            if (hostCfg.protected || hostCfg.user_auth) {
-                // Check API first if configured
-                if (hostCfg.users_from_db && hostCfg.users_api_room_allowed) {
-                    try {
-                        const response = await axios.post(
-                            hostCfg.users_api_room_allowed,
-                            {
-                                email: username,
-                                username: username,
-                                room: room,
-                                api_secret_key: hostCfg.users_api_secret_key,
-                            },
-                            {
-                                timeout: hostCfg.users_api_timeout || 5000,
-                            }
-                        );
-
-                        if (response.data && (response.data === true || response.data.message === true)) {
-                            log.debug('AXIOS isRoomAllowedForUser - allowed access', { room, username });
-                            return true;
-                        }
-                        log.debug('AXIOS isRoomAllowedForUser - denied access', { room, username });
-                        return false;
-                    } catch (error) {
-                        log.error('AXIOS isRoomAllowedForUser - check failed', error.message);
-                        // Fail closed (deny access) if API check fails
-                        return false;
-                    }
-                }
-
-                // Check presenter list
-                if (hostCfg?.presenters?.list?.includes(username)) {
-                    log.debug('isRoomAllowedForUser - User in presenters list', { username });
-                    return true;
-                }
-
-                // Find user in configuration
-                const user = hostCfg.users?.find((u) => u.displayname === username || u.username === username);
-
-                // For OIDC, we might want additional checks even when enabled
-                if (isOIDCEnabled) {
-                    log.debug('isRoomAllowedForUser - OIDC enabled, allowing access', { username });
-                    return true;
-                }
-
-                if (!user) {
-                    log.debug('isRoomAllowedForUser - User not found in configuration', { username });
-                    return false;
-                }
-
-                // Check allowed rooms
-                const isAllowed =
-                    !user.allowed_rooms || user.allowed_rooms.includes('*') || user.allowed_rooms.includes(room);
-
-                log.debug(
-                    isAllowed ? 'isRoomAllowedForUser - Room allowed' : 'isRoomAllowedForUser - Room not allowed',
-                    { room, username }
-                );
-                return isAllowed;
-            }
-
-            log.debug('isRoomAllowedForUser - No protection enabled, allowing access', { room, username });
-            return true;
-        } catch (error) {
-            log.error('isRoomAllowedForUser - Unexpected error', error);
-            return false; // Fail closed
-        }
-    }
-
     function getIP(req) {
-        // Security: only trust X-Forwarded-For when behind a trusted reverse proxy.
-        const forwarded = trustProxy ? req.headers['x-forwarded-for'] || req.headers['X-Forwarded-For'] : null;
-        if (forwarded) {
-            return forwarded.split(',')[0].trim();
-        }
-        return req.socket.remoteAddress || req.ip;
+        return ipFromRequest(req, trustProxy);
     }
 
     function getIpSocket(socket) {
-        // Security: only trust X-Forwarded-For when behind a trusted reverse proxy.
-        const forwarded = trustProxy
-            ? socket.handshake.headers['x-forwarded-for'] || socket.handshake.headers['X-Forwarded-For']
-            : null;
-        if (forwarded) {
-            return forwarded.split(',')[0].trim();
-        }
-        return socket.handshake.address;
+        return ipFromSocket(socket, trustProxy);
     }
 
-    function updateHostAuthenticatedFlag() {
-        hostCfg.authenticated = !hostCfg.protected || authHost.getAuthorizedIPs().length > 0;
+    // A breakout room may be created by a guest's browser only after a presenter assigned it,
+    // and only while its main room is running.
+    function isAuthorizedBreakout(roomId) {
+        if (!roomId || !String(roomId).includes('_breakout_')) return false;
+        const mainRoomId = String(roomId).split('_breakout_')[0];
+        return roomList.has(mainRoomId) && adminAuth.isBreakoutAllowed(roomId);
     }
-
-    function allowedIP(ip) {
-        const authorizedIPs = authHost.getAuthorizedIPs();
-        const authorizedIP = authHost.isAuthorizedIP(ip);
-        log.debug('Allowed IPs', {
-            ip: ip,
-            authorizedIP: authorizedIP,
-            authorizedIPs: authorizedIPs,
-        });
-        return authHost != null && authorizedIP;
-    }
-
-    function removeIP(socket) {
-        if (hostCfg.protected) {
-            const ip = getIpSocket(socket);
-            if (ip && allowedIP(ip)) {
-                authHost.deleteIP(ip);
-                hostCfg.authenticated = false;
-                log.debug('Remove IP from auth', {
-                    removedIp: ip,
-                    authorizedIps: authHost.getAuthorizedIPs(),
-                });
-            }
-        }
-    }
-}
-
-// ####################################################
-// AUTHENTICATION HELPERS
-// ####################################################
-
-function getBearerToken(req) {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return null;
-    }
-    return authHeader.split(' ')[1] || null;
 }
 
 // ####################################################

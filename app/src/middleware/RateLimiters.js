@@ -5,13 +5,10 @@ const config = require('../config');
 
 const MINUTE_MS = 60 * 1000;
 
-// Extract client IP (only trust X-Forwarded-For when behind a trusted reverse proxy)
-const ipKeyGenerator = (req) => {
-    const forwarded = Boolean(config?.server?.trustProxy)
-        ? req.headers['x-forwarded-for'] || req.headers['X-Forwarded-For']
-        : null;
-    return (forwarded || '').split(',')[0].trim() || req.socket?.remoteAddress || req.ip;
-};
+const { ipFromRequest } = require('../ClientIp');
+
+// Extract client IP (X-Forwarded-For is only trusted per TRUST_PROXY, see ClientIp.js)
+const ipKeyGenerator = (req) => ipFromRequest(req, config?.server?.trustProxy);
 
 // Pluralize "N minute(s)" consistently across limiter messages
 const minutesLabel = (n) => `${n} minute${n === 1 ? '' : 's'}`;
@@ -70,19 +67,43 @@ function createSlidingWindowLimiter({ windowMs, max }) {
 /**
  * Create all application rate limiters from the config.
  * @param {Object} deps
- * @param {(req) => string} deps.getRequesterKey - per-requester key (OIDC user > token user > IP)
+ * @param {(req) => string} deps.getRequesterKey - per-requester key (admin session > IP)
  */
 function createRateLimiters({ getRequesterKey }) {
-    // Login attempts
-    const maxAttempts = config?.security?.host?.maxAttempts || 5;
-    const minBlockTime = config?.security?.host?.minBlockTime || 15; // minutes
+    // Login attempts: failures only, per username+IP and, more loosely, per username
+    // (so one IP cannot brute-force, and many IPs together are still capped).
+    const maxAttempts = parseInt(config?.security?.host?.maxAttempts, 10) || 5;
+    const minBlockTime = parseInt(config?.security?.host?.minBlockTime, 10) || 15; // minutes
+    const loginMessage = {
+        message: `Too many login attempts. Please try again after ${minutesLabel(minBlockTime)}.`,
+    };
+    const loginUsername = (req) =>
+        typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase().slice(0, 64) : '';
     const loginLimiter = rateLimit({
         windowMs: minBlockTime * MINUTE_MS,
         max: maxAttempts,
-        message: {
-            message: `Too many login attempts. Please try again after ${minutesLabel(minBlockTime)}.`,
-        },
-        keyGenerator: (req) => req.body?.username || ipKeyGenerator(req),
+        skipSuccessfulRequests: true,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: loginMessage,
+        keyGenerator: (req) => `${loginUsername(req)}|${ipKeyGenerator(req)}`,
+    });
+    const loginUserLimiter = rateLimit({
+        windowMs: minBlockTime * MINUTE_MS,
+        max: maxAttempts * 6,
+        skipSuccessfulRequests: true,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: loginMessage,
+        keyGenerator: (req) => `user:${loginUsername(req)}`,
+    });
+
+    // Waiting page polls /isRoomActive every few seconds; cap probing of room names
+    const roomStatusLimiter = createIpLimiter({
+        windowMs: MINUTE_MS,
+        max: 120,
+        text: 'Too many requests.',
+        messageKey: 'message',
     });
 
     // createRoom (per IP), shared by Socket.IO `createRoom` and HTTP /createRoomToken.
@@ -105,6 +126,8 @@ function createRateLimiters({ getRequesterKey }) {
 
     return {
         loginLimiter,
+        loginUserLimiter,
+        roomStatusLimiter,
         createRoomTokenLimiter,
         checkCreateRoomLimit,
         createRoomLimiterMinutes,

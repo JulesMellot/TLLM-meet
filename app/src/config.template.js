@@ -125,11 +125,12 @@ module.exports = {
         /**
          * Security Settings
          * -----------------
-         * - trustProxy: Trust X-Forwarded-* headers
+         * - trustProxy: Trust X-Forwarded-For. 'true' trusts the left-most entry (spoofable);
+         *               a number N trusts exactly N proxies (Cloudflare + Coolify: TRUST_PROXY=2)
          * - ssl: SSL certificate paths
          * - cors: Cross-origin resource sharing
          */
-        trustProxy: process.env.TRUST_PROXY === 'true',
+        trustProxy: require('./ClientIp').parseTrustProxy(process.env.TRUST_PROXY),
         ssl: {
             cert: process.env.SERVER_SSL_CERT || '../ssl/cert.pem',
             key: process.env.SERVER_SSL_KEY || '../ssl/key.pem',
@@ -197,187 +198,36 @@ module.exports = {
         },
 
         /**
-         * OpenID Connect (OIDC) Authentication Configuration
-         * =================================================
-         * Configures authentication using OpenID Connect (OIDC), allowing integration with
-         * identity providers like Auth0, Okta, Keycloak, etc.
+         * Admin Accounts (TLLM*meet)
+         * ==========================
+         * Only an admin can create a meeting. Guests join an existing meeting by link, without account.
          *
-         * Structure:
-         * - enabled                                : Master switch for OIDC authentication
-         * - baseURLDynamic                         : Whether to dynamically resolve base URL
-         *   allow_rooms_creation_for_auth_users    : Allow all authenticated users via OIDC to create their own rooms
-         * - peer_name                              : Controls which user attributes to enforce/request
-         * - config                                 : Core OIDC provider settings
+         * - users        : Admin accounts, from HOST_USERS (required, the server refuses to start without one)
+         *                  HOST_USERS=username:password:displayname|username2:password2:displayname2
+         *                  (accounts separated by '|', fields by ':'; a 4th field is accepted and ignored)
+         *                  Publicly known credentials (admin/admin, guest/guest...) are refused.
+         * - sessionHours : Lifetime of the admin session cookie (default: 12)
+         * - maxAttempts  : Failed logins allowed per username and IP before a temporary block
+         * - minBlockTime : Block duration in minutes
          *
-         * Core Settings:
-         * - issuerBaseURL      : Provider's discovery endpoint (e.g., https://your-tenant.auth0.com)
-         * - baseURL            : Your application's base URL
-         * - clientID           : Client identifier issued by provider
-         * - clientSecret       : Client secret issued by provider
-         * - secret             : Application session secret
-         * - authRequired       : Whether all routes require authentication
-         * - auth0Logout        : Whether to use provider's logout endpoint
-         * - authorizationParams: OAuth/OIDC flow parameters including:
-         *   - response_type    : OAuth response type ('code' for Authorization Code Flow)
-         *   - scope            : Requested claims (openid, profile, email)
-         * - routes             : Endpoint path configuration for:
-         *   - callback         : OAuth callback handler path
-         *   - login            : Custom login path (false to disable)
-         *   - logout           : Custom logout path
-         *
-         */
-        oidc: {
-            enabled: process.env.OIDC_ENABLED === 'true',
-            baseURLDynamic: process.env.OIDC_BASE_URL_DYNAMIC === 'true', // Set true if your app has dynamic base URLs
-
-            /*
-             * When `baseURLDynamic` is true, the OIDC baseURL (and therefore the redirect_uri
-             * sent to the IdP) is derived from the incoming `Host` header. To prevent
-             * Host-header injection from redirecting authorization codes to an attacker,
-             * list every origin the server is allowed to serve here (full origin, no path).
-             * The static `config.baseURL` is always trusted and does not need to be repeated.
-             * Example: ['https://meet.example.com', 'https://meet.eu.example.com']
-             */
-            allowedDynamicBaseURLs: process.env.OIDC_ALLOWED_DYNAMIC_BASE_URLS
-                ? process.env.OIDC_ALLOWED_DYNAMIC_BASE_URLS.split(splitChar)
-                      .map((u) => u.trim())
-                      .filter(Boolean)
-                : [],
-
-            // ==================================================================================================
-            allow_rooms_creation_for_auth_users: process.env.OIDC_ALLOW_ROOMS_CREATION_FOR_AUTH_USERS !== 'false',
-            // ==================================================================================================
-
-            // User identity requirements
-            peer_name: {
-                force: process.env.OIDC_USERNAME_FORCE !== 'false', // Forces the username to match the OIDC email or name. If true, the user won't be able to change their name when joining a room
-                email: process.env.OIDC_USERNAME_AS_EMAIL !== 'false', // Uses the OIDC email as the username.
-                name: process.env.OIDC_USERNAME_AS_NAME === 'true', // Uses the OIDC name as the username
-            },
-
-            // Provider configuration
-            config: {
-                // Required provider settings
-                issuerBaseURL: process.env.OIDC_ISSUER || 'https://server.example.com',
-                baseURL: process.env.OIDC_BASE_URL || `http://localhost:${process.env.PORT || 3010}`,
-                clientID: process.env.OIDC_CLIENT_ID || 'clientID',
-                clientSecret: process.env.OIDC_CLIENT_SECRET || 'clientSecret',
-
-                // Session configuration
-                secret: process.env.OIDC_SECRET || 'mirotalksfu-oidc-secret',
-                authRequired: process.env.OIDC_AUTH_REQUIRED === 'true', // Whether all routes require authentication
-                auth0Logout: process.env.OIDC_AUTH_LOGOUT !== 'false', // Use provider's logout endpoint
-
-                // OAuth/OIDC flow parameters
-                authorizationParams: {
-                    response_type: 'code', // Use authorization code flow
-                    scope: 'openid profile email', // Request standard claims
-                },
-
-                // Route customization
-                routes: {
-                    callback: '/auth/callback', // OAuth callback path
-                    login: false, // Disable default login route
-                    logout: '/logout', // Custom logout path
-                },
-            },
-        },
-
-        /**
-         * Host Protection Configuration
-         * ============================
-         * Controls access to host-level functionality and room management.
-         *
-         * Authentication Methods:
-         * ----------------------
-         * - Local users (defined in config or via HOST_USERS env variable)
-         * - API/database validation (users_from_db=true)
-         *
-         * Core Settings:
-         * --------------
-         * - protected      : Enable/disable host protection globally
-         * - user_auth      : Require user authentication for host access
-         * - users_from_db  : Fetch users from API/database instead of local config
-         * - maxAttempts    : Maximum login attempts before temporary block
-         * - minBlockTime   : Block duration in minutes after max attempts exceeded
-         *
-         * API Integration:
-         * ---------------
-         * - users_api_secret_key    : Secret key for API authentication
-         * - users_api_endpoint      : Endpoint to validate user credentials
-         * - users_api_room_allowed  : Endpoint to check if user can access a room
-         * - users_api_rooms_allowed : Endpoint to get allowed rooms for a user
-         * - api_room_exists         : Endpoint to verify if a room exists
-         *
-         * Local User Configuration:
-         * ------------------------
-         * - users: Array of authorized users (used if users_from_db=false)
-         *   - Define via HOST_USERS env variable:
-         *     HOST_USERS=username:password:displayname:room1,room2|username2:password2:displayname2:*
-         *     (Each user separated by '|', fields by ':', allowed_rooms comma-separated or '*' for all)
-         *   - Empty by default. Required when protected or user_auth is enabled (unless OIDC or users_from_db is used).
-         *   - The server refuses to start with publicly known credentials (admin/admin, guest/guest, username/password...).
-         *   - Fields:
-         *     - username      : Login username
-         *     - password      : Login password
-         *     - displayname   : User's display name
-         *     - allowed_rooms : List of rooms user can access ('*' for all)
-         *
-         * Presenter Management:
-         * --------------------
-         * - list        : Array of usernames who can be presenters.
-         *                 WARNING: with no auth provider enabled (protected / user_auth / OIDC),
-         *                 the display name is unverified client input, so each entry acts as a
-         *                 shared secret. Use unique, non-guessable values (never a real name or
-         *                 email) or anyone who guesses it becomes presenter. Empty by default.
-         * - join_first  : First joiner becomes presenter; when the last presenter leaves,
-         *                 promote the first admitted participant (default: true)
-         *
-         * Documentation:
-         * -------------
-         * https://docs.mirotalk.com/mirotalk-sfu/host-protection/
+         * The admin is automatically presenter of every meeting they join. Guests never become
+         * presenter on their own: only a presenter can promote them during the meeting.
          */
         host: {
-            protected: process.env.HOST_PROTECTED === 'true',
-            user_auth: process.env.HOST_USER_AUTH === 'true',
-
+            sessionHours: parseInt(process.env.HOST_SESSION_HOURS, 10) || 12,
             maxAttempts: process.env.HOST_MAX_LOGIN_ATTEMPTS || 5,
             minBlockTime: process.env.HOST_MIN_LOGIN_BLOCK_TIME || 15, // in minutes
 
-            users_from_db: process.env.HOST_USERS_FROM_DB === 'true',
-            users_api_secret_key: process.env.USERS_API_SECRET || 'mirotalkweb_default_secret',
-            users_api_endpoint: process.env.USERS_API_ENDPOINT || 'http://localhost:9000/api/v1/user/isAuth', // 'https://webrtc.mirotalk.com/api/v1/user/isAuth'
-            users_api_room_allowed:
-                process.env.USERS_ROOM_ALLOWED_ENDPOINT || 'http://localhost:9000/api/v1/user/isRoomAllowed', // 'https://webrtc.mirotalk.com/api/v1/user/isRoomAllowed'
-            users_api_rooms_allowed:
-                process.env.USERS_ROOMS_ALLOWED_ENDPOINT || 'http://localhost:9000/api/v1/user/roomsAllowed', // 'https://webrtc.mirotalk.com/api/v1/user/roomsAllowed'
-            api_room_exists: process.env.ROOM_EXISTS_ENDPOINT || 'http://localhost:9000/api/v1/room/exists', // 'https://webrtc.mirotalk.com//api/v1/room/exists'
-
             users: process.env.HOST_USERS
                 ? process.env.HOST_USERS.split('|').map((userStr) => {
-                      const [username, password, displayname, allowedRoomsStr] = userStr.split(':');
+                      const [username, password, displayname] = userStr.split(':');
                       return {
-                          username: username || '',
+                          username: (username || '').trim(),
                           password: password || '',
-                          displayname: displayname || '',
-                          allowed_rooms: allowedRoomsStr
-                              ? allowedRoomsStr
-                                    .split(',')
-                                    .map((room) => room.trim())
-                                    .filter((room) => room !== '')
-                              : ['*'],
+                          displayname: (displayname || '').trim(),
                       };
                   })
                 : [], // Empty by default: a shipped username/password is a public credential, set your own.
-
-            presenters: {
-                list: process.env.PRESENTERS
-                    ? process.env.PRESENTERS.split(splitChar)
-                          .map((presenter) => presenter.trim())
-                          .filter((presenter) => presenter !== '')
-                    : [], // Empty by default: a shipped name is a public credential. Set PRESENTERS to unique, non-guessable values.
-                join_first: process.env.PRESENTER_JOIN_FIRST !== 'false',
-            },
         },
     },
 
@@ -496,9 +346,7 @@ module.exports = {
                 language: process.env.UI_LANGUAGE || 'en',
                 translationMode: process.env.UI_TRANSLATION_MODE || 'google', // auto (native else Google) | native (no Google) | google (default, always Google)
                 name: process.env.APP_NAME || 'TLLM*meet',
-                title:
-                    process.env.APP_TITLE ||
-                    '<h1>TLLM*meet</h1>',
+                title: process.env.APP_TITLE || '<h1>TLLM*meet</h1>',
                 description:
                     process.env.APP_DESCRIPTION ||
                     'Visioconférence privée. Les invités rejoignent par lien, sans compte.',
@@ -528,9 +376,7 @@ module.exports = {
              * Search engine optimization elements.
              */
             meta: {
-                description:
-                    process.env.META_DESCRIPTION ||
-                    'TLLM*meet, visioconférence privée.',
+                description: process.env.META_DESCRIPTION || 'TLLM*meet, visioconférence privée.',
                 keywords: process.env.META_KEYWORDS || 'visioconférence, réunion',
             },
 
@@ -543,10 +389,10 @@ module.exports = {
                 type: process.env.OG_TYPE || 'app-webrtc',
                 siteName: process.env.OG_SITE_NAME || 'TLLM*meet',
                 title: process.env.OG_TITLE || 'TLLM*meet',
-                description:
-                    process.env.OG_DESCRIPTION ||
-                    'Rejoindre la visio.',
-                image: process.env.OG_IMAGE_URL || `${process.env.SERVER_HOST_URL || 'https://localhost:3010'}/images/tllm-og.png`,
+                description: process.env.OG_DESCRIPTION || 'Rejoindre la visio.',
+                image:
+                    process.env.OG_IMAGE_URL ||
+                    `${process.env.SERVER_HOST_URL || 'https://localhost:3010'}/images/tllm-og.png`,
                 url: process.env.OG_URL || process.env.SERVER_HOST_URL || 'https://localhost:3010',
             },
 
@@ -577,19 +423,20 @@ module.exports = {
              */
             whoAreYou: {
                 title: process.env.WHO_ARE_YOU_TITLE || 'TLLM*meet',
-                waitingRoomHeading: process.env.WHO_ARE_YOU_WAITING_ROOM_HEADING || 'Waiting for host...',
+                waitingRoomHeading:
+                    process.env.WHO_ARE_YOU_WAITING_ROOM_HEADING || "Cette visio n'a pas encore commencé",
                 waitingRoomDescription:
                     process.env.WHO_ARE_YOU_WAITING_ROOM_DESCRIPTION ||
-                    "The meeting hasn't started yet.<br />You'll join automatically when the host opens the room.",
-                waitingRoomStatus: process.env.WHO_ARE_YOU_WAITING_ROOM_STATUS || 'Checking room status...',
-                waitingRoomReady: process.env.WHO_ARE_YOU_WAITING_ROOM_READY || 'Room is ready! Joining...',
-                waitingRoomWaiting:
-                    process.env.WHO_ARE_YOU_WAITING_ROOM_WAITING || 'Waiting for host to start the meeting...',
-                waitingRoomHostLink: process.env.WHO_ARE_YOU_WAITING_ROOM_HOST_LINK || 'Are you the host?',
-                waitingRoomLoginLink: process.env.WHO_ARE_YOU_WAITING_ROOM_LOGIN_LINK || 'Login here',
-                waitingRoomElapsedJust: process.env.WHO_ARE_YOU_WAITING_ROOM_ELAPSED_JUST || 'Just started waiting',
+                    "Gardez cette page ouverte : vous entrerez automatiquement dès que l'organisateur l'ouvrira.",
+                waitingRoomStatus: process.env.WHO_ARE_YOU_WAITING_ROOM_STATUS || 'Vérification…',
+                waitingRoomReady: process.env.WHO_ARE_YOU_WAITING_ROOM_READY || 'La visio commence, connexion…',
+                waitingRoomWaiting: process.env.WHO_ARE_YOU_WAITING_ROOM_WAITING || "En attente de l'organisateur…",
+                waitingRoomHostLink: process.env.WHO_ARE_YOU_WAITING_ROOM_HOST_LINK || 'Vous organisez cette visio ?',
+                waitingRoomLoginLink: process.env.WHO_ARE_YOU_WAITING_ROOM_LOGIN_LINK || 'Se connecter',
+                waitingRoomElapsedJust:
+                    process.env.WHO_ARE_YOU_WAITING_ROOM_ELAPSED_JUST || "Depuis moins d'une minute",
                 waitingRoomElapsedMinutes:
-                    process.env.WHO_ARE_YOU_WAITING_ROOM_ELAPSED_MINUTES || 'Waiting for {minutes}',
+                    process.env.WHO_ARE_YOU_WAITING_ROOM_ELAPSED_MINUTES || 'Attente : {minutes}',
                 waitingRoomSongUrl: process.env.WHO_ARE_YOU_WAITING_ROOM_SONG_URL || '../sounds/waiting-music.mp3',
             },
 
@@ -599,9 +446,9 @@ module.exports = {
              * Customizable heading, description, and button label for the login page.
              */
             login: {
-                heading: process.env.LOGIN_HEADING || 'Welcome back',
-                description: process.env.LOGIN_DESCRIPTION || 'Enter your credentials to continue.',
-                buttonLabel: process.env.LOGIN_BUTTON_LABEL || 'Login',
+                heading: process.env.LOGIN_HEADING || 'Espace organisateur',
+                description: process.env.LOGIN_DESCRIPTION || 'Connectez-vous pour créer une visio.',
+                buttonLabel: process.env.LOGIN_BUTTON_LABEL || 'Se connecter',
             },
 
             /**
