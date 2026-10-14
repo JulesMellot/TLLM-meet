@@ -342,13 +342,6 @@ const restApi = {
     allowed: config.api?.allowed || {},
 };
 
-// Stats
-const defaultStats = {
-    enabled: true,
-    src: 'https://stats.mirotalk.com/script.js',
-    id: '41d26670-f275-45bb-af82-3ce91fe57756',
-};
-
 // OpenAI/ChatGPT
 let chatGPT;
 if (config?.integrations?.chatGPT?.enabled) {
@@ -1166,13 +1159,6 @@ function startServer() {
         if (!allowed) return res.status(404).sendFile(views.notFound);
         res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
         res.type('html').send(renderSetupPage(setup, { appName: config?.app?.name }));
-    });
-
-    // Get stats endpoint
-    app.get('/stats', (req, res) => {
-        const stats = config?.features?.stats || defaultStats;
-        // log.debug('Send stats', stats);
-        res.send(stats);
     });
 
     // handle who are you: Presenter or Guest
@@ -2083,9 +2069,8 @@ function startServer() {
                 buttons: config.ui?.buttons,
             },
 
-            // Monitoring & Analytics
+            // Monitoring
             monitoring: {
-                stats: config.features?.stats?.enabled ? config.features.stats : false,
                 system_info: config.system?.info,
             },
 

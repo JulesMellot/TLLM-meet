@@ -1111,7 +1111,6 @@ module.exports = {
                         </p>
                         <a
                             class="about-primary-action"
-                            data-umami-event="About button"
                             href="${process.env.SUPPORT_URL || 'https://docs.mirotalk.com/sites/sfu'}"
                             target="_blank"
                             rel="noopener noreferrer"
@@ -1125,7 +1124,6 @@ module.exports = {
                                 <dd>
                                     <a
                                         id="linkedin-button"
-                                        data-umami-event="Linkedin button"
                                         href="${process.env.LINKEDIN_URL || 'https://www.linkedin.com/in/miroslav-pejic-976a07101/'}"
                                         target="_blank"
                                         rel="noopener noreferrer"
@@ -1137,7 +1135,6 @@ module.exports = {
                                 <dd>
                                     <a
                                         id="email-button"
-                                        data-umami-event="Email button"
                                         href="mailto:${process.env.CONTACT_EMAIL || 'miroslav.pejic.85@gmail.com'}?subject=${process.env.EMAIL_SUBJECT || 'MiroTalk SFU info'}"
                                     >${process.env.CONTACT_EMAIL || 'miroslav.pejic.85@gmail.com'}</a>
                                 </dd>
@@ -1489,38 +1486,6 @@ module.exports = {
         createRoomRateLimit: {
             windowMs: Math.max(parseInt(process.env.CREATE_ROOM_RATE_LIMIT_WINDOW_MINUTES, 10) || 1, 1) * 60 * 1000,
             max: Math.max(parseInt(process.env.CREATE_ROOM_RATE_LIMIT_MAX, 10) || 10, 1),
-        },
-
-        /**
-         * Usage Statistics Configuration (Umami)
-         * =====================================
-         * Privacy-focused analytics tracking for service improvement
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Self-host Umami or use cloud version:
-         *    - GitHub: https://github.com/umami-software/umami
-         *    - Official Docs: https://umami.is/docs
-         * 2. Create website entry in Umami dashboard
-         * 3. Obtain tracking script URL and website ID
-         *
-         * Privacy & Security:
-         * ------------------
-         * - No cookies used (GDPR compliant)
-         * - No persistent user tracking
-         * - All data aggregated and anonymized
-         * - Self-hosted option keeps data in your infrastructure
-         *
-         * Core Settings:
-         * -------------
-         * - enabled      : Enable/disable analytics [true/false] (default: true)
-         * - src          : Umami tracking script URL
-         * - id           : Your website ID from Umami
-         */
-        stats: {
-            enabled: process.env.STATS_ENABLED !== 'false',
-            src: process.env.STATS_SRC || 'https://stats.mirotalk.com/script.js',
-            id: process.env.STATS_ID || '41d26670-f275-45bb-af82-3ce91fe57756',
         },
     },
 

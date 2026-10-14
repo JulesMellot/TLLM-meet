@@ -109,7 +109,6 @@ let BRAND = {
                 </p>
                 <a
                     class="about-primary-action"
-                    data-umami-event="About button"
                     href="https://docs.mirotalk.com/sites/sfu"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -123,7 +122,6 @@ let BRAND = {
                         <dd>
                             <a
                                 id="linkedin-button"
-                                data-umami-event="Linkedin button"
                                 href="https://www.linkedin.com/in/miroslav-pejic-976a07101/"
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -135,7 +133,6 @@ let BRAND = {
                         <dd>
                             <a
                                 id="email-button"
-                                data-umami-event="Email button"
                                 href="mailto:miroslav.pejic.85@gmail.com?subject=MiroTalk SFU info"
                             >miroslav.pejic.85@gmail.com</a>
                         </dd>
