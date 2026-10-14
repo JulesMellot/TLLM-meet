@@ -620,13 +620,12 @@ module.exports = {
      * - meeting    : Enable/disable single meeting operations [true/false] (default: true)
      * - join       : Enable/disable meeting join endpoint [true/false] (default: true)
      * - token      : Enable/disable token generation endpoint [true/false] (default: false)
-     * - slack      : Enable/disable Slack webhook integration [true/false] (default: true)
      * - mattermost : Enable/disable Mattermost webhook integration [true/false] (default: true)
      *
      * API Documentation:
      * ------------------
      * - Complete API reference: https://docs.mirotalk.com/mirotalk-sfu/api/
-     * - Webhook setup: See integration guides for Slack/Mattermost
+     * - Webhook setup: See integration guides for Mattermost
      */
     api: {
         keySecret: process.env.API_KEY_SECRET,
@@ -637,7 +636,6 @@ module.exports = {
             meetingEnd: process.env.API_ALLOW_MEETING_END === 'true',
             join: process.env.API_ALLOW_JOIN !== 'false',
             token: process.env.API_ALLOW_TOKEN === 'true',
-            slack: process.env.API_ALLOW_SLACK !== 'false',
             mattermost: process.env.API_ALLOW_MATTERMOST !== 'false',
         },
     },
@@ -878,30 +876,6 @@ module.exports = {
             password: process.env.EMAIL_PASSWORD || 'test',
             from: process.env.EMAIL_FROM || process.env.EMAIL_USERNAME,
             sendTo: process.env.EMAIL_SEND_TO || 'test@mirotalk.com',
-        },
-
-        /**
-         * Slack Integration Configuration
-         * ==============================
-         * Settings for Slack slash commands and interactivity
-         *
-         * Setup Instructions:
-         * ------------------
-         * 1. Create a Slack app at https://api.slack.com/apps
-         * 2. Under "Basic Information" → "App Credentials":
-         *    - Copy the Signing Secret
-         * 3. Enable "Interactivity & Shortcuts" and "Slash Commands"
-         * 4. Set Request URL to: https://your-domain.com/slack/commands
-         *
-         * Core Settings:
-         * -------------
-         * - enabled         : Enable/disable Slack integration [true/false] (default: false)
-         * - signingSecret   : From Slack app credentials (store ONLY in .env)
-         *
-         */
-        slack: {
-            enabled: process.env.SLACK_ENABLED === 'true',
-            signingSecret: process.env.SLACK_SIGNING_SECRET || '',
         },
 
         /**

@@ -31,7 +31,6 @@ prod dependencies: {
     mediasoup-client        : https://www.npmjs.com/package/mediasoup-client
     nodemailer              : https://www.npmjs.com/package/nodemailer
     openai                  : https://www.npmjs.com/package/openai
-    qs                      : https://www.npmjs.com/package/qs
     sanitize-filename       : https://www.npmjs.com/package/sanitize-filename
     socket.io               : https://www.npmjs.com/package/socket.io
     swagger-ui-express      : https://www.npmjs.com/package/swagger-ui-express
@@ -190,11 +189,7 @@ const { SCHEDULE_MEETING_LIMITS } = nodemailer;
 // Whisper transcription helpers (pure, unit-testable)
 const { resolveAudioExtension, decodeAudioPayload, filterTranscript } = require('./lib/whisper');
 
-// Slack API
 const CryptoJS = require('crypto-js');
-const qS = require('qs');
-const slackEnabled = config?.integrations?.slack?.enabled || false;
-const slackSigningSecret = config?.integrations?.slack?.signingSecret || '';
 
 const app = express();
 
@@ -2032,43 +2027,6 @@ function startServer() {
     });
 
     // ####################################################
-    // SLACK API
-    // ####################################################
-
-    app.post('/slack', (req, res) => {
-        if (!slackEnabled) return res.end('`Under maintenance` - Please check back soon.');
-
-        if (restApi.allowed && !restApi.allowed.slack) {
-            return res.end(
-                '`This endpoint has been disabled`. Please contact the administrator for further information.'
-            );
-        }
-
-        log.debug('Slack', req.headers);
-
-        if (!slackSigningSecret) return res.end('`Slack Signing Secret is empty!`');
-
-        const slackSignature = req.headers['x-slack-signature'];
-        const requestBody = qS.stringify(req.body, { format: 'RFC1738' });
-        const timeStamp = req.headers['x-slack-request-timestamp'];
-        const time = Math.floor(new Date().getTime() / 1000);
-
-        if (Math.abs(time - timeStamp) > 300) return res.end('`Wrong timestamp` - Ignore this request.');
-
-        const sigBaseString = 'v0:' + timeStamp + ':' + requestBody;
-        const mySignature = 'v0=' + CryptoJS.HmacSHA256(sigBaseString, slackSigningSecret);
-
-        if (mySignature == slackSignature) {
-            const host = req.headers.host;
-            const api = new ServerApi(host);
-            const meetingURL = api.getMeetingURL();
-            log.debug('Slack', { meeting: meetingURL });
-            return res.end(meetingURL);
-        }
-        return res.end('`Wrong signature` - Verification failed!');
-    });
-
-    // ####################################################
     // AUTHORIZED API IF ALLOWED
     // ####################################################
 
@@ -2193,7 +2151,6 @@ function startServer() {
             integrations: {
                 discord: config.integrations?.discord?.enabled ? config.integrations.discord : false,
                 mattermost: config.integrations?.mattermost?.enabled ? config.integrations.mattermost : false,
-                slack: slackEnabled ? config.integrations?.slack : false,
                 chatGPT: config.integrations?.chatGPT?.enabled ? config.integrations.chatGPT : false,
                 deepSeek: config.integrations?.deepSeek?.enabled ? config.integrations.deepSeek : false,
                 email_alerts: config?.integrations?.email?.alert ? config.integrations.email : false,

@@ -15601,7 +15601,6 @@ class RoomClient {
             notifications: {
                 mode: {
                     email: notifyEmailInput.value,
-                    //slack...
                 },
                 events: {
                     join: switchNotifyUserJoin.checked,
