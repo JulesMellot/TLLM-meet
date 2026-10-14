@@ -150,3 +150,37 @@ describe('ClientIp (TRUST_PROXY)', () => {
         assert.equal(parseTrustProxy('abc'), false);
     });
 });
+
+describe('parseHostUsers (HOST_USERS)', () => {
+    const { parseHostUsers } = require('../app/src/AdminAuth');
+
+    it('parses accounts separated by |', () => {
+        assert.deepEqual(parseHostUsers('jules:secret1:Jules|alice:secret2:Alice M'), [
+            { username: 'jules', password: 'secret1', displayname: 'Jules' },
+            { username: 'alice', password: 'secret2', displayname: 'Alice M' },
+        ]);
+    });
+
+    it('ignores the quotes and spaces an admin panel may keep around the value', () => {
+        const expected = [{ username: 'jules', password: 'secret1', displayname: 'Jules' }];
+        assert.deepEqual(parseHostUsers('"jules:secret1:Jules"'), expected);
+        assert.deepEqual(parseHostUsers("'jules:secret1:Jules'"), expected);
+        assert.deepEqual(parseHostUsers('  jules:secret1:Jules \n'), expected);
+        assert.deepEqual(parseHostUsers(' jules : secret1 : Jules '), expected);
+    });
+
+    it('keeps a colon inside the password when the display name is given', () => {
+        assert.deepEqual(parseHostUsers('jules:pa:ss:Jules'), [
+            { username: 'jules', password: 'pa:ss', displayname: 'Jules' },
+        ]);
+    });
+
+    it('accepts a missing display name and skips empty entries', () => {
+        assert.deepEqual(parseHostUsers('jules:secret1|'), [
+            { username: 'jules', password: 'secret1', displayname: '' },
+        ]);
+        assert.deepEqual(parseHostUsers(''), []);
+        assert.deepEqual(parseHostUsers(undefined), []);
+        assert.deepEqual(parseHostUsers('""'), []);
+    });
+});

@@ -185,6 +185,30 @@ class AdminAuth {
  * Normalize a room name typed by the admin and append a random suffix,
  * e.g. "Point lundi" -> "point-lundi-k7f2ab".
  */
+/**
+ * Parse HOST_USERS: username:password:displayname, accounts separated by |.
+ * Tolerates what admin panels (Coolify...) often add: surrounding quotes and spaces.
+ * A ':' inside the password is kept when the display name is given (the last field is the name).
+ */
+function parseHostUsers(value) {
+    let raw = typeof value === 'string' ? value.trim() : '';
+    const quote = raw[0];
+    if (raw.length >= 2 && (quote === '"' || quote === "'") && raw[raw.length - 1] === quote) {
+        raw = raw.slice(1, -1).trim();
+    }
+    if (!raw) return [];
+    return raw
+        .split('|')
+        .filter((entry) => entry.trim())
+        .map((entry) => {
+            const parts = entry.split(':');
+            const username = parts[0] || '';
+            const password = parts.length > 3 ? parts.slice(1, -1).join(':') : parts[1] || '';
+            const displayname = parts.length > 2 ? parts[parts.length - 1] : '';
+            return { username: username.trim(), password: password.trim(), displayname: displayname.trim() };
+        });
+}
+
 function makeRoomId(name, suffixLength = 6) {
     const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789'; // no 0/o/1/l/i
     const base = String(name || '')
@@ -201,4 +225,4 @@ function makeRoomId(name, suffixLength = 6) {
     return base ? `${base}-${suffix}` : `visio-${suffix}`;
 }
 
-module.exports = { AdminAuth, makeRoomId, parseCookies, COOKIE_NAME };
+module.exports = { AdminAuth, makeRoomId, parseCookies, parseHostUsers, COOKIE_NAME };

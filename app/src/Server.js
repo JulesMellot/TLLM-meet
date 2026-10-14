@@ -566,7 +566,12 @@ function startServer() {
         const user = adminAuth.verifyCredentials(username, password);
 
         if (!user) {
-            log.warn('Admin login failed', { ip });
+            // Helps diagnose a mistyped HOST_USERS. An unknown username is not logged (it may be a password typed in the wrong field)
+            const known = hostCfg.users.some((u) => u.username === username);
+            log.warn(
+                'Admin login failed',
+                known ? { ip, username, reason: 'wrong password' } : { ip, reason: 'unknown username' }
+            );
             return res.status(401).json({ message: 'unauthorized' });
         }
 
@@ -843,7 +848,11 @@ function startServer() {
                     csp: embedCsp ? embedCsp.csp : 'not set (embedding allowed from any origin)',
                 },
                 jwtCfg: jwtCfg,
-                admins: { count: hostCfg.users.length, sessionHours: adminAuth.sessionHours }, // never log credentials
+                admins: {
+                    count: hostCfg.users.length,
+                    usernames: hostCfg.users.map((u) => u.username),
+                    sessionHours: adminAuth.sessionHours,
+                }, // never log passwords
                 middleware: {
                     IpWhitelist: config?.security?.middleware?.IpWhitelist?.enabled
                         ? config.security.middleware.IpWhitelist

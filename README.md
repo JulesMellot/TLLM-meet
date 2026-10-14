@@ -44,7 +44,8 @@ Le dépôt contient [`docker-compose.coolify.yml`](docker-compose.coolify.yml), 
    `https://meet.exemple.fr:3010`. Coolify envoie le trafic vers le port 3010 du conteneur ;
    l'adresse publique reste `https://meet.exemple.fr`.
 4. Dans les variables d'environnement, remplir `HOST_USERS` et `SERVER_HOST_URL`
-   (`https://meet.exemple.fr`, sans port), puis déployer.
+   (`https://meet.exemple.fr`, sans port), puis déployer. Pas besoin de guillemets.
+   Éviter le caractère `$` dans les mots de passe : Docker Compose le remplace par une variable.
 5. Pour `HOST_USERS` et `SERVICE_PASSWORD_64_JWT`, décocher l'option de variable de build
    (_Build Variable_ / _Available at Buildtime_) : ce sont des secrets utiles seulement à l'exécution,
    et une variable de build reste lisible dans l'historique de l'image.

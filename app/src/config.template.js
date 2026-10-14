@@ -218,16 +218,8 @@ module.exports = {
             maxAttempts: process.env.HOST_MAX_LOGIN_ATTEMPTS || 5,
             minBlockTime: process.env.HOST_MIN_LOGIN_BLOCK_TIME || 15, // in minutes
 
-            users: process.env.HOST_USERS
-                ? process.env.HOST_USERS.split('|').map((userStr) => {
-                      const [username, password, displayname] = userStr.split(':');
-                      return {
-                          username: (username || '').trim(),
-                          password: password || '',
-                          displayname: (displayname || '').trim(),
-                      };
-                  })
-                : [], // Empty by default: a shipped username/password is a public credential, set your own.
+            // Empty by default: a shipped username/password is a public credential, set your own.
+            users: require('./AdminAuth').parseHostUsers(process.env.HOST_USERS),
         },
     },
 
