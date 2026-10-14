@@ -36,17 +36,6 @@ function isValidRoomName(input) {
     return !hasPathTraversal(room);
 }
 
-function isValidRecFileNameFormat(input) {
-    if (!input || typeof input !== 'string') {
-        return false;
-    }
-    const validPattern = /^Rec_[a-zA-Z0-9_.-]+\.webm$/;
-    if (!validPattern.test(input)) {
-        return false;
-    }
-    return !hasPathTraversal(input);
-}
-
 function hasPathTraversal(input) {
     if (!input || typeof input !== 'string') {
         return false;
@@ -308,7 +297,6 @@ function sanitizeWbCanvasJson(payload, onDrop) {
 module.exports = {
     isValidPassword,
     isValidRoomName,
-    isValidRecFileNameFormat,
     hasPathTraversal,
     isValidEmail,
     parseEmailList,

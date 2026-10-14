@@ -591,7 +591,6 @@ async function initClient() {
             'right'
         );
         setTippy('refreshVideoFiles', 'Refresh', 'left');
-        setTippy('switchServerRecording', 'The recording will be stored on the server rather than locally', 'right');
         setTippy('whiteboardGhostButton', 'Toggle transparent background', 'bottom');
         setTippy('whiteboardGridBtn', 'Toggle whiteboard grid', 'bottom');
         setTippy('wbBackgroundColorEl', 'Background color', 'bottom');
@@ -2200,7 +2199,6 @@ function roomIsReady() {
     ) {
         show(openNetworkSettingsButton);
     }
-    if (rc.recording.recSyncServerRecording) show(roomRecordingServer);
     BUTTONS.main.aboutButton && show(aboutButton);
     if (!isMobileDevice) show(pinUnpinGridDiv);
     if (!isSpeechSynthesisSupported) hide(speechMsgDiv);
@@ -4067,13 +4065,6 @@ function handleSelects() {
         lS.setSettings(localStorageSettings);
         e.target.blur();
     };
-    switchServerRecording.onchange = (e) => {
-        rc.recording.recSyncServerRecording = e.currentTarget.checked;
-        rc.roomMessage('recSyncServer', rc.recording.recSyncServerRecording);
-        localStorageSettings.rec_server = rc.recording.recSyncServerRecording;
-        lS.setSettings(localStorageSettings);
-        e.target.blur();
-    };
     // styling
     keepCustomTheme.onchange = (e) => {
         themeCustom.keep = e.currentTarget.checked;
@@ -4878,8 +4869,6 @@ function loadSettingsFromLocalStorage() {
     switchShortcuts.checked = isShortcutsEnabled;
     switchBroadcasting.checked = isBroadcastingEnabled;
 
-    switchServerRecording.checked = localStorageSettings.rec_server;
-
     keepCustomTheme.checked = themeCustom.keep;
     selectTheme.disabled = themeCustom.keep;
     updateThemeCardsDisabled();
@@ -5121,7 +5110,6 @@ function handleRoomClientEvents() {
             hide(recordingTypeField);
             hide(roomHostOnlyRecording);
             hide(roomRecordingOptions);
-            hide(roomRecordingServer);
             show(recordingMessage);
             hostOnlyRecording = true;
         }

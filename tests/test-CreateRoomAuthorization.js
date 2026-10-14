@@ -65,7 +65,7 @@ describe('Room creation authorization (Socket.IO createRoom)', () => {
         const { handlers, context, roomList } = setupSocket({ oidcEnabled: true });
         const forged = jwt.sign({ scope: 'create-room', roomId: 'new-room' }, 'x'.repeat(32));
         const otherRoom = context.createCreateRoomToken('other-room');
-        const wrongScope = jwt.sign({ scope: 'rec-upload', roomId: 'new-room' }, jwtKeys.createRoom);
+        const wrongScope = jwt.sign({ scope: 'rtmp-stream', roomId: 'new-room' }, jwtKeys.createRoom);
         const expired = jwt.sign({ scope: 'create-room', roomId: 'new-room' }, jwtKeys.createRoom, { expiresIn: -10 });
         for (const token of [forged, otherRoom, wrongScope, expired, undefined, {}]) {
             const cb = sinon.spy();

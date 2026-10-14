@@ -84,8 +84,6 @@ describe('Socket.IO join authorization', () => {
             widget: { alert: { enabled: false }, enabled: false },
             nodemailer: { sendEmailAlert() {} },
             handleJoinWebHook: sinon.spy(),
-            serverRecordingEnabled: true,
-            createRecUploadToken: sinon.stub().returns('recording-token'),
             rtmpEnabled: true,
             rtmpCfg: { fromStream: true },
             createRtmpStreamToken: sinon.stub().returns('stream-token'),
@@ -121,7 +119,6 @@ describe('Socket.IO join authorization', () => {
         assert.equal(state.room.removePeer.callCount, 0);
         assert.equal(Object.keys(state.presenters).length, 0);
         assert.equal(state.room.toJson.callCount, 0);
-        assert.equal(state.context.createRecUploadToken.callCount, 0);
         assert.equal(state.context.createRtmpStreamToken.callCount, 0);
         assert.equal(state.context.handleJoinWebHook.callCount, 0);
     }
@@ -156,7 +153,6 @@ describe('Socket.IO join authorization', () => {
         state.data.peer_info.peer_name = 'Custom display name';
         const result = await joinExistingRoom(state);
         assert.equal(result.id, 'room-a');
-        assert.equal(result.recUploadToken, 'recording-token');
         assert.equal(result.rtmpStreamToken, 'stream-token');
         assert.equal(state.room.addPeer.callCount, 1);
     });

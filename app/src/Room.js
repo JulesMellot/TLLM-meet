@@ -14,7 +14,7 @@ module.exports = class Room {
         // Unique, one-time-use identifier for this specific room/conference instance.
         // Generated when the room is created (first peer joins) and destroyed with the room
         // (last peer leaves). Reusing the same room name later yields a brand-new sessionId,
-        // so webhook events and recordings can be reliably grouped per meeting instance.
+        // so webhook events can be reliably grouped per meeting instance.
         this.sessionId = uuidv4();
         this.worker = worker;
         this.webRtcServer = worker.appData.webRtcServer;
@@ -38,12 +38,6 @@ module.exports = class Room {
         // clicking the lock button. Used to drop non-presenter whiteboard writes when set.
         this._wbIsLock = false;
         this._wbShowParticipantNames = false;
-        // ##########################
-        this.recording = {
-            recSyncServerToS3: (config?.integrations?.s3?.enabled && config?.media?.recording?.uploadToS3) || false,
-            recSyncServerRecording: config?.media?.recording?.enabled || false,
-            recSyncServerEndpoint: config?.media?.recording?.endpoint || '',
-        };
         // ##########################
 
         this.notifications = {
@@ -119,7 +113,6 @@ module.exports = class Room {
             id: this.id,
             sessionId: this.sessionId,
             broadcasting: this._isBroadcasting,
-            recording: this.recording,
             config: {
                 isLocked: this._isLocked,
                 isLobbyEnabled: this._isLobbyEnabled,

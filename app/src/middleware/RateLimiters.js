@@ -106,16 +106,6 @@ function createRateLimiters({ getRequesterKey }) {
         text: 'Too many requests.',
     });
 
-    // Server recording chunk upload (per IP). The /recSync* endpoints accept binary
-    // writes to disk, so cap request volume to mitigate flooding and disk exhaustion
-    // even from an authenticated/joined peer.
-    const recSyncCfg = config.media?.recording?.rateLimit || {};
-    const recSyncLimiter = createIpLimiter({
-        windowMs: recSyncCfg.windowMs || MINUTE_MS,
-        max: recSyncCfg.max || 300,
-        text: 'Too many recording upload requests.',
-    });
-
     // createRoom (per IP), shared by Socket.IO `createRoom` and HTTP /createRoomToken.
     // Prevents unauthenticated sockets from spamming arbitrary room entries
     // into the in-memory roomList (which feeds /api/v1/activeRooms).
@@ -138,7 +128,6 @@ function createRateLimiters({ getRequesterKey }) {
         loginLimiter,
         scheduleMeetingLimiter,
         activeRoomsLimiter,
-        recSyncLimiter,
         createRoomTokenLimiter,
         checkCreateRoomLimit,
         createRoomLimiterMinutes,

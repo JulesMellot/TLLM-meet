@@ -30,7 +30,7 @@ async function tick() {
     await new Promise((resolve) => setImmediate(resolve));
 }
 
-function createHarness({ server = false, s3 = false, state = 'recording' } = {}) {
+function createHarness({ state = 'recording' } = {}) {
     const events = [];
     const timers = [];
     const listeners = {};
@@ -48,7 +48,6 @@ function createHarness({ server = false, s3 = false, state = 'recording' } = {})
         bytesToSize: (size) => `${size} bytes`,
         userLog: (...args) => events.push(['toast', ...args]),
         recordingTypeSelect: controls,
-        switchServerRecording: controls,
         switchHostOnlyRecording: controls,
         setTimeout: (callback) => timers.push(callback),
         document: {
@@ -120,22 +119,12 @@ function createHarness({ server = false, s3 = false, state = 'recording' } = {})
         mediaRecorder: recorder,
         audioRecorder: { stopMixedAudioStream() {} },
         recScreenAudioTracks: [],
-        recSyncTime: 4000,
-        recSyncChunkSize: 2,
-        recUploadToken: 'test-token',
-        recording: {
-            recSyncServerRecording: server,
-            recSyncServerToS3: s3,
-            recSyncServerEndpoint: 'https://record.example',
-        },
         toggleVideoAudioTabs() {},
         event() {},
         recordingAction() {},
         sound() {},
-        getServerRecFileName: () => 'test.webm',
         saveLastRecordingInfo() {},
         showRecordingInfo() {},
-        handleServerRecordingStop: () => events.push('server-info'),
         handleRecordingError: (error) => events.push(['error', error]),
         userLog: (...args) => events.push(['toast', ...args]),
         popupRecordingOnLeaveRoom: () => events.push('progress'),
@@ -239,70 +228,6 @@ describe('recording finalization before room exit', () => {
         assert.equal(h.events.includes('stop'), false);
         assert.equal(h.client.hasActiveRecorder(), false);
         assert.equal(h.client.hasPendingRecordingSave(), false);
-    });
-
-    for (const s3 of [false, true]) {
-        it(`serializes server blobs and final chunks before ${s3 ? 'S3 finalization' : 'duration repair'}`, async () => {
-            const h = createHarness({ server: true, s3 });
-            const firstUpload = deferred();
-            const finalize = deferred();
-            const uploads = [];
-            h.context.axios.post = async (url, chunk, options) => {
-                if (url.includes('/recSync?')) {
-                    uploads.push(Array.from(new Uint8Array(chunk)));
-                    if (uploads.length === 1) await firstUpload.promise;
-                } else {
-                    assert.deepEqual(uploads, [[1, 2], [3], [4, 5], [6]]);
-                    assert.equal(options.params.durationMs, 1000);
-                    assert.ok(url.endsWith(s3 ? '/recSyncFinalize' : '/recSyncFixWebm'));
-                    await finalize.promise;
-                }
-                return { data: 'ok' };
-            };
-            h.data(new Blob([new Uint8Array([1, 2, 3])]));
-            const exit = h.context.completeRoomExit();
-            h.data(new Blob([new Uint8Array([4, 5, 6])]));
-            h.stopEvent();
-            await tick();
-            assert.equal(uploads.length, 1);
-            assert.equal(h.events.includes('exit-room'), false);
-            firstUpload.resolve();
-            await tick();
-            assert.equal(h.events.includes('server-info'), false);
-            assert.equal(h.events.includes('exit-room'), false);
-            finalize.resolve();
-            await exit;
-            assert.ok(h.events.indexOf('server-info') < h.events.indexOf('exit-room'));
-        });
-    }
-
-    it('propagates upload failures and does not finalize an incomplete server recording', async () => {
-        const h = createHarness({ server: true });
-        let requests = 0;
-        h.context.axios.post = async () => {
-            requests++;
-            throw new Error('upload failed');
-        };
-        h.data(new Blob(['data']));
-        await tick();
-        h.data(new Blob(['last-data']));
-        h.stopEvent();
-        await assert.rejects(h.client.saveRecording('failed upload'), /upload failed/);
-        assert.equal(requests, 1);
-        assert.equal(h.events.includes('server-info'), false);
-        assert.equal(h.client.hasPendingRecordingSave(), false);
-        assert.equal(h.controls.disabled, false);
-    });
-
-    it('propagates server finalization failures', async () => {
-        const h = createHarness({ server: true, s3: true });
-        h.context.axios.post = async () => {
-            throw new Error('finalization failed');
-        };
-        h.client.stopRecording();
-        h.stopEvent();
-        await assert.rejects(h.client.saveRecording('finalization'), /finalization failed/);
-        assert.equal(h.events.includes('server-info'), false);
     });
 
     for (const discard of [false, true]) {

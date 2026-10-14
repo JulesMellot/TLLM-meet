@@ -179,52 +179,6 @@ module.exports = {
 
     media: {
         /**
-         * Recording Configuration
-         * =======================
-         * Server side recording functionality.
-         *
-         * Core Settings:
-         * ------------------------
-         * - enabled        : Enable recording functionality
-         * - uploadToS3     : Upload recording to AWS S3 bucket [true/false]
-         * - endpoint       : Leave empty ('') to store recordings locally OR
-         *   - Set to a valid URL (e.g., 'http://localhost:8080/') to:
-         *      - Push recordings to a remote server
-         *      - Store in cloud storage services
-         *      - Send to processing pipelines
-         * - dir            : Storage directory for recordings (Relative to app/src/ default: app/rec)
-         * - maxFileSize    : Maximum recording size (1GB default)
-         *
-         * Upload Security:
-         * ------------------------
-         * - uploadTokenExp : Lifetime of the per-session upload token issued on join and
-         *                    required by the /recSync* endpoints (default '24h'). Must be
-         *                    long enough to outlast the longest expected recording.
-         * - rateLimit      : Per-IP rate limit for /recSync* upload requests
-         *                    (default: 300 requests / 60s) to mitigate flooding.
-         *
-         * Docker Note:
-         * ------------
-         * - When running in Docker, ensure the recording directory exists and is properly mounted:
-         *   1. Create the directory (e.g., 'app/rec')
-         *   2. Configure as volume in docker-compose.yml
-         *   3. Set appropriate permissions
-         *   4. Restart container after changes
-         */
-        recording: {
-            enabled: process.env.RECORDING_ENABLED === 'true',
-            uploadToS3: process.env.RECORDING_UPLOAD_TO_S3 === 'true',
-            endpoint: process.env.RECORDING_ENDPOINT || '',
-            dir: process.env.RECORDING_DIR || '../rec',
-            maxFileSize: process.env.RECORDING_MAX_FILE_SIZE || 1 * 1024 * 1024 * 1024, // 1GB
-            uploadTokenExp: process.env.RECORDING_UPLOAD_TOKEN_EXP || '24h',
-            rateLimit: {
-                windowMs: parseInt(process.env.RECORDING_RATE_LIMIT_WINDOW_MS) || 60 * 1000,
-                max: parseInt(process.env.RECORDING_RATE_LIMIT_MAX) || 300,
-            },
-        },
-
-        /**
          * RTMP Configuration
          * =================
          * Configures Real-Time Messaging Protocol (RTMP) for audio/video/data streaming.
@@ -1099,68 +1053,6 @@ module.exports = {
             getEndpoint(ip) {
                 return `https://get.geojs.io/v1/ip/geo/${ip}.json`;
             },
-        },
-
-        /**
-         * Example for AWS S3 Storage Configuration
-         * ===========================
-         * Enables cloud file storage using Amazon Simple Storage Service (S3).
-         *
-         * Core Settings:
-         * --------------
-         * - enabled: Enable/disable AWS S3 integration [true/false]
-         * - accessKeyId: AWS access key ID (store in .env)
-         * - secretAccessKey: AWS secret access key (store in .env)
-         * - region: AWS region where the S3 bucket is located
-         * - bucket: Name of the S3 bucket to use for storage
-         *
-         * Advanced Settings:
-         * --------------
-         * - endpoint: Custom S3 endpoint URL (if empty to auto-resolve from region). Useful for S3-compatible services like MinIO, Wasabi, DigitalOcean Spaces, etc.
-         * - forcePathStyle: Set to true for S3-compatible services like MinIO, Wasabi, etc.
-         *
-         * Service Setup:
-         * -------------
-         * 1. Create an S3 Bucket:
-         *    - Sign in to AWS Management Console
-         *    - Navigate to S3 service
-         *    - Click "Create bucket"
-         *    - Choose unique name (e.g., 'mirotalk')
-         *    - Select region (must match AWS_REGION in config)
-         *    - Enable desired settings (versioning, logging, etc.)
-         *
-         * 2. Get Security Credentials:
-         *    - Create IAM user with programmatic access
-         *    - Attach 'AmazonS3FullAccess' policy (or custom minimal policy)
-         *    - Save Access Key ID and Secret Access Key
-         *
-         * 3. Configure CORS (for direct uploads):
-         *    [
-         *      {
-         *        "AllowedHeaders": ["*"],
-         *        "AllowedMethods": ["PUT", "POST"],
-         *        "AllowedOrigins": ["*"],
-         *        "ExposeHeaders": []
-         *      }
-         *    ]
-         *
-         * Technical Details:
-         * -----------------
-         * - Default region: us-east-2 (Ohio)
-         * - Direct upload uses presigned URLs (expire after 1 hour by default)
-         * - Recommended permissions for direct upload:
-         *   - s3:PutObject
-         *   - s3:GetObject
-         *   - s3:DeleteObject
-         */
-        s3: {
-            enabled: process.env.S3_ENABLED === 'true',
-            accessKeyId: process.env.S3_ACCESS_KEY_ID || 'your-access-key-id',
-            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || 'your-secret-access-key',
-            bucket: process.env.S3_BUCKET || 'mirotalk',
-            region: process.env.S3_REGION || 'us-east-2',
-            endpoint: process.env.S3_ENDPOINT || '',
-            forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
         },
     },
 

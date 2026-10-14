@@ -99,7 +99,6 @@ const icons = {
     broadcaster: '<i class="fa-solid fa-wifi"></i>',
     codecs: '<i class="fa-solid fa-film"></i>',
     theme: '<i class="fas fa-fill-drip"></i>',
-    recSync: '<i class="fa-solid fa-cloud-arrow-up"></i>',
     refresh: '<i class="fas fa-rotate"></i>',
     editor: '<i class="fas fa-pen-to-square"></i>',
     up: '<i class="fas fa-chevron-up"></i>',
@@ -499,16 +498,7 @@ class RoomClient {
         this.screenAudioRecorder = null; // mixes participant audio with system/tab audio
         this.recScreenStream = null;
         this.recScreenAudioTracks = []; // raw system/tab audio tracks to stop on recording end
-        this.recording = {
-            recSyncServerRecording: false,
-            recSyncServerToS3: false,
-            recSyncServerEndpoint: '',
-        };
-        this.recSyncTime = 4000; // 4 sec
-        this.recSyncChunkSize = 1000000; // 1MB
-        this.recUploadToken = ''; // Per-session token authorizing /recSync* uploads (issued on join)
         this.rtmpStreamToken = ''; // Per-session token authorizing the /rtmp streamer page (issued on join)
-        this.sessionId = ''; // Server-side unique conference-instance ID (issued on join)
 
         // Encodings
         // Opt-in RTP header extensions (mediasoup-client 3.23.0+), currently honored only by Chrome.
@@ -754,14 +744,8 @@ class RoomClient {
                 this.peers = new Map(JSON.parse(room.peers));
                 // ##########################################
 
-                // Store the per-session token used to authorize server recording uploads
-                if (room.recUploadToken) this.recUploadToken = room.recUploadToken;
-
                 // Store the per-session token used to authorize the RTMP streamer page
                 if (room.rtmpStreamToken) this.rtmpStreamToken = room.rtmpStreamToken;
-
-                // Store the server-side unique conference-instance ID for this room instance
-                if (room.sessionId) this.sessionId = room.sessionId;
 
                 await this.joinAllowed(room);
             })
@@ -874,19 +858,6 @@ class RoomClient {
             }
 
             this.event(room.config.isJoinLocked ? _EVENTS.joinLockOn : _EVENTS.joinLockOff);
-
-            // ###################################################################################################
-            if (room.recording) this.recording = room.recording;
-            if (room.recording && room.recording.recSyncServerRecording) {
-                console.log('07.1 WARNING ----> SERVER SYNC RECORDING ENABLED!', this.recording);
-                this.recording.recSyncServerRecording = localStorageSettings.rec_server;
-                if (BUTTONS.settings.tabRecording && !room.config.hostOnlyRecording) {
-                    show(roomRecordingServer);
-                }
-                switchServerRecording.checked = this.recording.recSyncServerRecording;
-            }
-            console.log('07.1 ----> SERVER SYNC RECORDING', this.recording);
-            // ###################################################################################################
 
             // Handle Room moderator rules
             if (room.moderator && (!isRulesActive || !isPresenter)) {
@@ -9231,25 +9202,6 @@ class RoomClient {
         });
     }
 
-    showRecServerSideAdvice() {
-        Swal.fire({
-            background: swalBackground,
-            position: 'center',
-            imageUrl: image.recording,
-            title: 'Server Sync Recording Enabled',
-            html: renderRoomTemplate('popupRecordingServerAdviceTemplate'),
-            showDenyButton: true,
-            confirmButtonText: 'OK',
-            denyButtonText: 'Switch Off',
-            showClass: { popup: 'animate__animated animate__fadeInDown' },
-            hideClass: { popup: 'animate__animated animate__fadeOutUp' },
-        }).then((result) => {
-            if (result.isDenied) {
-                switchServerRecording.checked = false;
-            }
-        });
-    }
-
     toggleVideoAudioTabs(disabled = false) {
         tabAudioDevicesBtn.disabled = disabled;
         tabVideoDevicesBtn.disabled = disabled;
@@ -9458,8 +9410,6 @@ class RoomClient {
         if (this.mediaRecorder) {
             const session = {
                 pending: true,
-                uploadQueue: Promise.resolve(),
-                uploadError: null,
             };
             session.promise = new Promise((resolve, reject) => {
                 session.resolve = resolve;
@@ -9469,18 +9419,13 @@ class RoomClient {
                 this.handleRecordingError('Recording save failed: ' + error.message);
             });
             this._recordingSave = session;
-            this.recServerFileName = this.getServerRecFileName();
             this.mediaRecorder.addEventListener('start', this.handleMediaRecorderStart);
-            this.mediaRecorder.addEventListener('dataavailable', (evt) => this.handleMediaRecorderData(evt, session));
+            this.mediaRecorder.addEventListener('dataavailable', (evt) => this.handleMediaRecorderData(evt));
             this.mediaRecorder.addEventListener('stop', (evt) => this.handleMediaRecorderStop(evt, session));
             // Always pass a timeslice so the browser flushes encoded chunks periodically
             // instead of buffering the entire recording in renderer memory.
-            // - Server sync: 4 s chunks → fewer HTTP POSTs to /recSync.
-            // - Local blob: 1 s chunks → faster internal flush, lighter recorder buffer.
             try {
-                this.recording.recSyncServerRecording
-                    ? this.mediaRecorder.start(this.recSyncTime)
-                    : this.mediaRecorder.start(1000);
+                this.mediaRecorder.start(1000);
             } catch (error) {
                 session.pending = false;
                 session.reject(error);
@@ -9491,21 +9436,6 @@ class RoomClient {
         }
     }
 
-    generateUUIDv4() {
-        return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
-            (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
-        );
-    }
-
-    getServerRecFileName() {
-        const roomName = this.room_id.trim();
-        const dateTime = getDataTimeStringFormat();
-        // Prefer the server-side session ID so recordings correlate with join/exit webhook
-        // events for the same conference instance; fall back to a client UUID if unavailable.
-        const uuid = this.sessionId || this.generateUUIDv4();
-        return `Rec_${roomName}_${dateTime}_${uuid}.webm`;
-    }
-
     handleMediaRecorderStart(evt) {
         console.log('MediaRecorder started: ', evt);
         rc.cleanLastRecordingInfo();
@@ -9513,63 +9443,9 @@ class RoomClient {
         rc._recStartTs = performance.now();
     }
 
-    handleMediaRecorderData(evt, session = this._recordingSave) {
-        // console.log('MediaRecorder data: ', evt);
+    handleMediaRecorderData(evt) {
         if (evt.data && evt.data.size > 0) {
-            if (this.recording.recSyncServerRecording) {
-                // Serialize complete blobs as well as their chunks to preserve the encoded byte order.
-                session.uploadQueue = session.uploadQueue
-                    .then(() => {
-                        if (!session.uploadError) return this.syncRecordingInCloud(evt.data);
-                    })
-                    .catch((error) => {
-                        session.uploadError = error;
-                        console.error('Recording upload failed:', error);
-                        this.stopRecording();
-                    });
-            } else {
-                recordedBlobs.push(evt.data);
-            }
-        }
-    }
-
-    async syncRecordingInCloud(data) {
-        const arrayBuffer = await data.arrayBuffer();
-        const chunkSize = this.recSyncChunkSize;
-        const totalChunks = Math.ceil(arrayBuffer.byteLength / chunkSize);
-        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-            const chunk = arrayBuffer.slice(chunkIndex * chunkSize, (chunkIndex + 1) * chunkSize);
-            try {
-                const response = await axios.post(
-                    `${this.recording.recSyncServerEndpoint}/recSync?fileName=` + this.recServerFileName,
-                    chunk,
-                    {
-                        headers: {
-                            'Content-Type': 'application/octet-stream',
-                            Authorization: `Bearer ${this.recUploadToken}`,
-                        },
-                    }
-                );
-                console.log('Chunk synced successfully:', response.data);
-            } catch (error) {
-                let errorMessage = 'Recording stopped! ';
-                if (error.response) {
-                    errorMessage += error.response.data.message;
-                    console.error('Error syncing chunk', {
-                        status_code: error.response.status,
-                        response_data: error.response.data,
-                        response_headers: error.response.headers,
-                    });
-                } else if (error.request) {
-                    console.error('Error syncing chunk: No response received', { request_details: error.request });
-                } else {
-                    errorMessage += error.message;
-                    console.error('Error syncing chunk:', error.message);
-                }
-                userLog('warning', errorMessage, 'top-end', 3000);
-                this.saveLastRecordingInfo('<br/><span class="red">' + errorMessage + '.</span>');
-                throw error;
-            }
+            recordedBlobs.push(evt.data);
         }
     }
 
@@ -9577,33 +9453,7 @@ class RoomClient {
         try {
             console.log('MediaRecorder stopped: ', evt);
             this.stopRecording();
-            await session.uploadQueue;
-            if (session.uploadError) throw session.uploadError;
-
-            // If cloud sync is enabled, patch duration on the server
-            if (this.recording.recSyncServerRecording) {
-                const durationMs = this._lastRecDurationMs;
-
-                // Option S3: pass duration to your existing finalize endpoint (preferred if it uploads to S3)
-                if (this.recording.recSyncServerToS3) {
-                    await axios.post(`${this.recording.recSyncServerEndpoint}/recSyncFinalize`, null, {
-                        params: { fileName: this.recServerFileName, durationMs },
-                        headers: { Authorization: `Bearer ${this.recUploadToken}` },
-                    });
-                    console.log('Finalized (with duration fix) and uploaded to S3');
-                    if (recShowInfo) userLog('success', 'Recording successfully uploaded to S3.', 'top-end', 3000);
-                } else {
-                    // Option Disk: if you don’t use S3 finalize, call a dedicated “fix” endpoint
-                    await axios.post(`${this.recording.recSyncServerEndpoint}/recSyncFixWebm`, null, {
-                        params: { fileName: this.recServerFileName, durationMs },
-                        headers: { Authorization: `Bearer ${this.recUploadToken}` },
-                    });
-                    console.log('Server-side WEBM duration fixed for', this.recServerFileName);
-                }
-                this.handleServerRecordingStop();
-            } else {
-                await this.handleLocalRecordingStop();
-            }
+            await this.handleLocalRecordingStop();
             session.resolve();
         } catch (err) {
             session.reject(err);
@@ -9614,43 +9464,8 @@ class RoomClient {
         }
     }
 
-    async handleMediaRecorderStopOLD(evt) {
-        try {
-            console.log('MediaRecorder stopped: ', evt);
-            rc.recording.recSyncServerRecording ? rc.handleServerRecordingStop() : rc.handleLocalRecordingStop();
-            rc.disableRecordingOptions(false);
-
-            // Only do this if cloud sync was enabled and upload to s3
-            if (rc.recording.recSyncServerRecording && rc.recording.recSyncServerToS3) {
-                try {
-                    const response = await axios.post(
-                        `${rc.recording.recSyncServerEndpoint}/recSyncFinalize?fileName=` + rc.recServerFileName
-                    );
-                    console.log('Finalized and uploaded to S3:', response.data);
-                    userLog('success', 'Recording successfully uploaded to S3.', 'top-end', 3000);
-                } catch (error) {
-                    let errorMessage = 'Finalization failed! ';
-                    if (error.response) {
-                        errorMessage += error.response.data?.message || 'Server error';
-                        console.error('Finalization error response:', error.response);
-                    } else if (error.request) {
-                        errorMessage += 'No response from server';
-                        console.error('Finalization error: No response', error.request);
-                    } else {
-                        errorMessage += error.message;
-                        console.error('Finalization error:', error.message);
-                    }
-                    userLog('warning', errorMessage, 'top-end', 3000);
-                }
-            }
-        } catch (err) {
-            console.error('Recording save failed', err);
-        }
-    }
-
     disableRecordingOptions(disabled = true) {
         recordingTypeSelect.disabled = disabled;
-        switchServerRecording.disabled = disabled;
         switchHostOnlyRecording.disabled = disabled;
     }
 
@@ -9705,24 +9520,6 @@ class RoomClient {
 
         const finalBlob = await fixWebmDuration(rawBlob);
         await this.saveRecordingInLocalDevice(finalBlob, recFileName);
-    }
-
-    handleServerRecordingStop() {
-        console.log('MediaRecorder Stop');
-        const recTimeText = this._lastRecTimeText || '0s';
-        const recType = 'Server';
-        const recordingInfo = `
-        <br/><br/>
-        <ul>
-            <li>Stored: ${recType}</li>
-            <li>Time: ${recTimeText}</li>
-            <li>File: ${this.recServerFileName}</li>
-            <li>Codecs: ${recCodecs}</li>
-        </ul>
-        <br/>
-        `;
-        this.saveLastRecordingInfo(recordingInfo);
-        this.showRecordingInfo(recType, recordingInfo);
     }
 
     saveLastRecordingInfo(recordingInfo) {
@@ -11087,11 +10884,6 @@ class RoomClient {
                 break;
             case 'everyone_follows_me':
                 notifySwitch(`${icons.moderator} Moderator: everyone follows me ${status}`);
-                break;
-            case 'recSyncServer':
-                active
-                    ? this.showRecServerSideAdvice()
-                    : notifySwitch(`${icons.recording} Server sync recording ${status}`);
                 break;
             case 'customThemeKeep':
                 notifySwitch(`${icons.theme} Custom theme keep ${status}`);
