@@ -550,7 +550,7 @@ module.exports = {
                 participantsButton: process.env.SHOW_PARTICIPANTS_BUTTON !== 'false',
                 pollButton: process.env.SHOW_POLL_BUTTON !== 'false',
                 speechRecButton: process.env.SHOW_SPEECH_REC_BUTTON === 'true', // TLLM*meet: off by default (shorter "Plus" menu)
-                breakoutRoomButton: process.env.SHOW_BREAKOUT_ROOM_BUTTON !== 'false',
+                breakoutRoomButton: process.env.SHOW_BREAKOUT_ROOM_BUTTON === 'true', // TLLM*meet: opt-in
                 editorButton: process.env.SHOW_EDITOR_BUTTON !== 'false',
                 raiseHandButton: process.env.SHOW_RAISE_HAND !== 'false',
                 transcriptionButton: process.env.SHOW_TRANSCRIPTION !== 'false',
