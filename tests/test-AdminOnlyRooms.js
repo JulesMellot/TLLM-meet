@@ -420,11 +420,14 @@ describe('Only the admin can create a meeting (integration)', function () {
             const seenByBob = pollsOf(bob)[0];
             assert.deepEqual(seenByBob.counts, [2, 0]);
             assert.equal(seenByBob.total, 2);
-            assert.equal(seenByBob.myVote, 'Pizza');
-            assert.deepEqual(seenByBob.voters, {}, 'guests do not see who voted what');
+            assert.deepEqual(seenByBob.myVotes, ['Pizza']);
+            assert.equal(seenByBob.voters, null, 'guests do not see who voted what');
             const seenByAdmin = pollsOf(admin)[0];
-            assert.deepEqual(seenByAdmin.voters, { Bob: 'Pizza', Carol: 'Pizza' });
-            assert.equal(seenByAdmin.myVote, null);
+            assert.deepEqual(seenByAdmin.voters.map((v) => `${v.name}:${v.choices}`).sort(), [
+                'Bob:Pizza',
+                'Carol:Pizza',
+            ]);
+            assert.deepEqual(seenByAdmin.myVotes, []);
         });
 
         it('ignores edit and delete attempts by guests, even with forged names', async () => {
@@ -436,14 +439,14 @@ describe('Only the admin can create a meeting (integration)', function () {
             assert.equal(pollsOf(admin).length, 1);
         });
 
-        it('keeps the votes when the admin edits a poll (they used to vanish)', async () => {
+        it('refuses to change a poll once people voted', async () => {
             const { id } = pollsOf(admin)[0];
             admin.emit('editPoll', { pollId: id, question: 'On mange où ce midi ?', options: ['Pizza', 'Crêpes'] });
             await wait(300);
             const poll = pollsOf(bob)[0];
-            assert.equal(poll.question, 'On mange où ce midi ?');
+            assert.equal(poll.question, 'On mange où ?');
             assert.deepEqual(poll.counts, [2, 0]);
-            assert.equal(poll.myVote, 'Pizza');
+            assert.equal(poll.editable, false);
         });
 
         it('lets only a presenter close a poll, and refuses votes once it is closed', async () => {
@@ -454,9 +457,44 @@ describe('Only the admin can create a meeting (integration)', function () {
             admin.emit('closePoll', { pollId: id });
             await wait(300);
             assert.equal(pollsOf(bob)[0].closed, true);
-            bob2.emit('vote', { pollId: id, option: 'Crêpes' });
+            bob2.emit('vote', { pollId: id, option: 'Sushi' });
             await wait(300);
             assert.deepEqual(pollsOf(admin)[0].counts, [2, 0]);
+        });
+
+        it('applies the settings chosen at creation (several answers, anonymous, hidden results)', async () => {
+            admin.emit('createPoll', {
+                question: 'Quels jours ?',
+                options: ['Lundi', 'Mardi', 'Jeudi'],
+                multiple: true,
+                anonymous: true,
+                hideResults: true,
+            });
+            await wait(300);
+            const id = pollsOf(bob).at(-1).id;
+            bob.emit('vote', { pollId: id, options: ['Lundi', 'Jeudi'] });
+            bob2.emit('vote', { pollId: id, options: ['Jeudi'] });
+            await wait(300);
+            const seenByBob = pollsOf(bob).at(-1);
+            assert.equal(seenByBob.counts, null, 'hidden until closed');
+            assert.equal(seenByBob.total, 2);
+            assert.deepEqual(seenByBob.myVotes, ['Lundi', 'Jeudi']);
+            const seenByAdmin = pollsOf(admin).at(-1);
+            assert.deepEqual(seenByAdmin.counts, [1, 0, 2]);
+            assert.equal(seenByAdmin.voters, null, 'anonymous, even for the admin');
+            admin.emit('closePoll', { pollId: id });
+            await wait(300);
+            assert.deepEqual(pollsOf(bob).at(-1).counts, [1, 0, 2]);
+            admin.emit('deletePoll', { pollId: id });
+            await wait(300);
+        });
+
+        it('rejects a poll with a duration that makes no sense', async () => {
+            const before = pollsOf(admin).length;
+            admin.emit('createPoll', { question: 'Q?', options: ['a', 'b'], duration: 5 });
+            admin.emit('createPoll', { question: 'Q?', options: ['a', 'b'], duration: 'soon' });
+            await wait(300);
+            assert.equal(pollsOf(admin).length, before);
         });
 
         it('lets the admin delete a poll by id', async () => {

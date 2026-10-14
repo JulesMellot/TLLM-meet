@@ -1075,6 +1075,8 @@
 
     T.onPolls = function (polls) {
         T.polls = Array.isArray(polls) ? polls : [];
+        const now = Date.now();
+        T.polls.forEach((p) => (p.endsAt = p.remainingMs != null ? now + p.remainingMs : null));
         rc.knownPollIds = rc.knownPollIds || new Set();
         const fresh = T.polls.filter((p) => !rc.knownPollIds.has(p.id));
         T.polls.forEach((p) => rc.knownPollIds.add(p.id));
@@ -1089,60 +1091,182 @@
                 onClick: () => T.panel !== 'polls' && T.togglePanel('polls'),
             });
         }
+        // The poll being edited got a vote meanwhile: it can no longer change
+        if (T.editingPollId && !T.polls.some((p) => p.id === T.editingPollId && p.editable)) {
+            T.editingPollId = null;
+            T.newPollOpen = false;
+            if (T.panel === 'polls') renderPolls();
+        }
         T.renderBar();
-        if (T.panel === 'polls') renderPolls();
+        if (T.panel === 'polls') renderPollList();
     };
 
+    const DURATIONS = [
+        [0, 'Non'],
+        [60, 'Après 1 min'],
+        [120, 'Après 2 min'],
+        [300, 'Après 5 min'],
+        [600, 'Après 10 min'],
+        [1800, 'Après 30 min'],
+    ];
+
+    const timeLeft = (ms) => {
+        const total = Math.max(0, Math.ceil(ms / 1000));
+        const m = Math.floor(total / 60);
+        const sec = String(total % 60).padStart(2, '0');
+        return `${m}:${sec}`;
+    };
+
+    // The form and the list are separate, so a vote coming in does not wipe what the
+    // presenter is typing
     function renderPolls() {
         const body = $('tllmPanelBody');
+        body.innerHTML = `<div id="tllmPollFormBox"></div><div id="tllmPollList"></div>`;
+        $('tllmPanelFoot').innerHTML = '';
+        renderPollForm();
+        renderPollList();
+    }
+
+    function renderPollForm() {
+        const box = $('tllmPollFormBox');
+        if (!box) return;
+        if (!amPresenter()) {
+            box.innerHTML = '';
+            return;
+        }
+        if (!T.newPollOpen) {
+            box.innerHTML = `<button type="button" class="tllm-primary tllm-block" id="tllmNewPoll">${icon('fas fa-plus')} Nouveau sondage</button>`;
+            $('tllmNewPoll').onclick = () => {
+                T.newPollOpen = true;
+                T.editingPollId = null;
+                renderPollForm();
+                $('tllmPollQ').focus();
+            };
+            return;
+        }
+        const editing = T.polls.find((p) => p.id === T.editingPollId);
+        const options = editing ? editing.options : ['', ''];
+        const optInput = (value, i) =>
+            `<input required maxlength="200" placeholder="Réponse ${i + 1}" aria-label="Réponse ${i + 1}" value="${esc(value)}">`;
+        box.innerHTML = `<form class="tllm-poll-form" id="tllmPollForm">
+            <label for="tllmPollQ">Question</label>
+            <input id="tllmPollQ" required maxlength="300" placeholder="Que voulez-vous demander ?" value="${esc(editing?.question || '')}">
+            <label>Réponses</label>
+            <div class="tllm-poll-opts" id="tllmPollOpts">${options.map(optInput).join('')}</div>
+            <button type="button" class="tllm-link" id="tllmAddOpt">+ Ajouter une réponse</button>
+            ${
+                editing
+                    ? ''
+                    : `<fieldset class="tllm-poll-settings">
+                <legend>Réglages</legend>
+                <label class="tllm-check"><input type="checkbox" id="tllmPollMulti"> Plusieurs réponses possibles</label>
+                <label class="tllm-check"><input type="checkbox" id="tllmPollAnon"> Vote anonyme <span>personne ne voit qui a voté quoi, même l'admin</span></label>
+                <label class="tllm-check"><input type="checkbox" id="tllmPollHide"> Résultats cachés jusqu'à la clôture</label>
+                <label class="tllm-select">Clôture automatique
+                    <select id="tllmPollDuration">${DURATIONS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+                </label>
+              </fieldset>`
+            }
+            <p class="tllm-form-error" id="tllmPollError" hidden></p>
+            <div class="tllm-row">
+                <button type="submit" class="tllm-primary">${editing ? 'Enregistrer' : 'Lancer le sondage'}</button>
+                <button type="button" class="tllm-secondary" id="tllmPollCancel">Annuler</button>
+            </div>
+          </form>`;
+        $('tllmPollCancel').onclick = () => {
+            T.newPollOpen = false;
+            T.editingPollId = null;
+            renderPollForm();
+        };
+        $('tllmAddOpt').onclick = () => {
+            const opts = $('tllmPollOpts');
+            if (opts.children.length >= 10) return;
+            opts.insertAdjacentHTML('beforeend', optInput('', opts.children.length));
+            opts.lastElementChild.removeAttribute('required');
+            opts.lastElementChild.focus();
+        };
+        $('tllmPollForm').onsubmit = (e) => {
+            e.preventDefault();
+            const question = $('tllmPollQ').value.trim();
+            const answers = [...$('tllmPollOpts').querySelectorAll('input')].map((i) => i.value.trim()).filter(Boolean);
+            const error = $('tllmPollError');
+            const fail = (text) => {
+                error.textContent = text;
+                error.hidden = false;
+            };
+            if (!question || answers.length < 2) return fail('Il faut une question et au moins deux réponses.');
+            if (new Set(answers).size !== answers.length) return fail('Deux réponses sont identiques.');
+            if (editing) {
+                rc.socket.emit('editPoll', { pollId: editing.id, question, options: answers });
+            } else {
+                rc.socket.emit('createPoll', {
+                    question,
+                    options: answers,
+                    multiple: $('tllmPollMulti').checked,
+                    anonymous: $('tllmPollAnon').checked,
+                    hideResults: $('tllmPollHide').checked,
+                    duration: Number($('tllmPollDuration').value) || 0,
+                });
+            }
+            T.newPollOpen = false;
+            T.editingPollId = null;
+            renderPollForm();
+        };
+    }
+
+    function pollMeta(poll) {
+        const total = poll.total || 0;
+        const parts = [poll.closed ? 'Terminé' : 'En cours', `${total} votant${total > 1 ? 's' : ''}`];
+        if (poll.multiple) parts.push('plusieurs réponses');
+        parts.push(poll.anonymous ? 'anonyme' : 'nominatif');
+        if (!poll.closed && poll.endsAt)
+            parts.push(`fin dans <span data-countdown="${esc(poll.id)}">${timeLeft(poll.endsAt - Date.now())}</span>`);
+        return parts.join(' · ');
+    }
+
+    function renderPollList() {
+        const list = $('tllmPollList');
+        if (!list) return;
         const presenter = amPresenter();
         let html = '';
-        if (presenter) {
-            html += T.newPollOpen
-                ? `<form class="tllm-poll-form" id="tllmPollForm">
-                    <label for="tllmPollQ">Question</label>
-                    <input id="tllmPollQ" required maxlength="300" placeholder="Que voulez-vous demander ?">
-                    <label>Réponses</label>
-                    <div class="tllm-poll-opts" id="tllmPollOpts">
-                        <input required maxlength="200" placeholder="Réponse 1" aria-label="Réponse 1">
-                        <input required maxlength="200" placeholder="Réponse 2" aria-label="Réponse 2">
-                    </div>
-                    <button type="button" class="tllm-link" id="tllmAddOpt">+ Ajouter une réponse</button>
-                    <p class="tllm-form-error" id="tllmPollError" hidden></p>
-                    <div class="tllm-row">
-                        <button type="submit" class="tllm-primary">Lancer le sondage</button>
-                        <button type="button" class="tllm-secondary" id="tllmPollCancel">Annuler</button>
-                    </div>
-                  </form>`
-                : `<button type="button" class="tllm-primary tllm-block" id="tllmNewPoll">${icon('fas fa-plus')} Nouveau sondage</button>`;
-        }
         if (!T.polls.length) html += `<p class="tllm-empty">Aucun sondage pour l'instant.</p>`;
         [...T.polls].reverse().forEach((poll) => {
             const total = poll.total || 0;
-            html += `<div class="tllm-poll">
+            const shown = Array.isArray(poll.counts);
+            const mineAll = poll.myVotes || [];
+            html += `<div class="tllm-poll${poll.multiple ? ' tllm-poll-multi' : ''}" data-poll-card="${esc(poll.id)}">
                 <p class="tllm-poll-q">${esc(poll.question)}</p>
-                <div class="tllm-poll-state">${poll.closed ? 'Terminé' : 'En cours'} · ${total} vote${total > 1 ? 's' : ''}</div>
+                <div class="tllm-poll-state">${pollMeta(poll)}</div>
+                ${
+                    !poll.closed && !poll.anonymous && !presenter
+                        ? `<p class="tllm-poll-hint">Les présentateurs voient votre choix.</p>`
+                        : ''
+                }
                 ${poll.options
                     .map((option, i) => {
-                        const count = poll.counts?.[i] || 0;
-                        const pct = total ? Math.round((count / total) * 100) : 0;
-                        const mine = poll.myVote === option;
+                        const count = shown ? poll.counts[i] || 0 : 0;
+                        const pct = shown && total ? Math.round((count / total) * 100) : 0;
+                        const mine = mineAll.includes(option);
                         return `<button type="button" class="tllm-opt${mine ? ' tllm-mine' : ''}" data-poll="${esc(poll.id)}" data-opt="${i}" style="--pct:${pct}%" ${poll.closed ? 'disabled' : ''} aria-pressed="${mine}">
-                            <span class="tllm-radio"></span><span class="tllm-opt-lb">${esc(option)}</span><span class="tllm-opt-res">${count} · ${pct} %</span></button>`;
+                            <span class="tllm-radio"></span><span class="tllm-opt-lb">${esc(option)}</span>${shown ? `<span class="tllm-opt-res">${count} · ${pct} %</span>` : ''}</button>`;
                     })
                     .join('')}
+                ${!shown ? `<p class="tllm-poll-hint">Résultats affichés à la clôture.</p>` : ''}
+                ${!poll.closed && mineAll.length ? `<p class="tllm-poll-hint">${poll.multiple ? 'Touchez une réponse pour la retirer.' : 'Touchez votre réponse pour retirer votre vote.'}</p>` : ''}
                 ${
                     presenter
                         ? `<div class="tllm-poll-actions">
-                            <button type="button" class="tllm-link" data-voters="${esc(poll.id)}">${T.showVoters[poll.id] ? 'Masquer les votes' : 'Voir qui a voté'}</button>
+                            ${poll.voters ? `<button type="button" class="tllm-link" data-voters="${esc(poll.id)}">${T.showVoters[poll.id] ? 'Masquer les votes' : 'Voir qui a voté'}</button>` : ''}
+                            ${poll.editable ? `<button type="button" class="tllm-link" data-edit="${esc(poll.id)}">Modifier</button>` : ''}
                             ${poll.closed ? '' : `<button type="button" class="tllm-link" data-close="${esc(poll.id)}">Clôturer</button>`}
+                            <button type="button" class="tllm-link" data-csv="${esc(poll.id)}">Exporter (tableur)</button>
                             <button type="button" class="tllm-link tllm-link-danger" data-del="${esc(poll.id)}">Supprimer</button>
                           </div>
                           ${
-                              T.showVoters[poll.id]
+                              poll.voters && T.showVoters[poll.id]
                                   ? `<ul class="tllm-voters">${
-                                        Object.entries(poll.voters || {})
-                                            .map(([name, option]) => `<li>${esc(name)} : ${esc(option)}</li>`)
+                                        poll.voters
+                                            .map((v) => `<li>${esc(v.name)} : ${esc(v.choices.join(', '))}</li>`)
                                             .join('') || '<li>Personne n’a encore voté.</li>'
                                     }</ul>`
                                   : ''
@@ -1151,77 +1275,104 @@
                 }
             </div>`;
         });
-        body.innerHTML = html;
-        $('tllmPanelFoot').innerHTML = presenter
-            ? ''
-            : `<p class="tllm-foot-note">L'admin et les présentateurs voient qui a voté quoi.</p>`;
+        list.innerHTML = html;
 
-        if ($('tllmNewPoll'))
-            $('tllmNewPoll').onclick = () => {
-                T.newPollOpen = true;
-                renderPolls();
-                $('tllmPollQ').focus();
-            };
-        if ($('tllmPollCancel'))
-            $('tllmPollCancel').onclick = () => {
-                T.newPollOpen = false;
-                renderPolls();
-            };
-        if ($('tllmAddOpt'))
-            $('tllmAddOpt').onclick = () => {
-                const box = $('tllmPollOpts');
-                if (box.children.length >= 10) return;
-                const input = document.createElement('input');
-                input.maxLength = 200;
-                input.placeholder = `Réponse ${box.children.length + 1}`;
-                input.setAttribute('aria-label', input.placeholder);
-                box.appendChild(input);
-                input.focus();
-            };
-        if ($('tllmPollForm'))
-            $('tllmPollForm').onsubmit = (e) => {
-                e.preventDefault();
-                const question = $('tllmPollQ').value.trim();
-                const options = [...$('tllmPollOpts').querySelectorAll('input')]
-                    .map((i) => i.value.trim())
-                    .filter(Boolean);
-                const error = $('tllmPollError');
-                if (!question || options.length < 2) {
-                    error.textContent = 'Il faut une question et au moins deux réponses.';
-                    error.hidden = false;
-                    return;
-                }
-                if (new Set(options).size !== options.length) {
-                    error.textContent = 'Deux réponses sont identiques.';
-                    error.hidden = false;
-                    return;
-                }
-                rc.socket.emit('createPoll', { question, options });
-                T.newPollOpen = false;
-                renderPolls();
-            };
-        body.querySelectorAll('.tllm-opt').forEach((btn) => {
+        list.querySelectorAll('.tllm-opt').forEach((btn) => {
             btn.onclick = () => {
                 const poll = T.polls.find((p) => p.id === btn.dataset.poll);
                 if (!poll || poll.closed) return;
-                rc.socket.emit('vote', { pollId: poll.id, option: poll.options[Number(btn.dataset.opt)] });
+                const option = poll.options[Number(btn.dataset.opt)];
+                const mine = poll.myVotes || [];
+                let next;
+                if (mine.includes(option)) next = mine.filter((o) => o !== option);
+                else next = poll.multiple ? [...mine, option] : [option];
+                rc.socket.emit('vote', { pollId: poll.id, options: next });
             };
         });
-        body.querySelectorAll('[data-voters]').forEach((btn) => {
+        list.querySelectorAll('[data-voters]').forEach((btn) => {
             btn.onclick = () => {
                 T.showVoters[btn.dataset.voters] = !T.showVoters[btn.dataset.voters];
-                renderPolls();
+                renderPollList();
             };
         });
-        body.querySelectorAll('[data-close]').forEach((btn) => {
+        list.querySelectorAll('[data-edit]').forEach((btn) => {
+            btn.onclick = () => {
+                T.newPollOpen = true;
+                T.editingPollId = btn.dataset.edit;
+                renderPollForm();
+                $('tllmPollQ')?.focus();
+            };
+        });
+        list.querySelectorAll('[data-close]').forEach((btn) => {
             btn.onclick = () => rc.socket.emit('closePoll', { pollId: btn.dataset.close });
         });
-        body.querySelectorAll('[data-del]').forEach((btn) => {
+        list.querySelectorAll('[data-csv]').forEach((btn) => {
+            btn.onclick = () => exportPollCsv(T.polls.find((p) => p.id === btn.dataset.csv));
+        });
+        list.querySelectorAll('[data-del]').forEach((btn) => {
             btn.onclick = () =>
                 confirmBox('Supprimer ce sondage ?', 'Les votes seront perdus.', 'Supprimer', () =>
                     rc.socket.emit('deletePoll', { pollId: btn.dataset.del })
                 );
         });
+        tickPolls();
+    }
+
+    // Countdown of the polls that close on their own (the server closes them)
+    function tickPolls() {
+        clearTimeout(T.pollTimer);
+        const running = T.polls.some((p) => !p.closed && p.endsAt);
+        if (!running || T.panel !== 'polls') return;
+        T.pollTimer = setTimeout(() => {
+            document.querySelectorAll('[data-countdown]').forEach((el) => {
+                const poll = T.polls.find((p) => p.id === el.dataset.countdown);
+                if (poll?.endsAt) el.textContent = timeLeft(poll.endsAt - Date.now());
+            });
+            tickPolls();
+        }, 1000);
+    }
+
+    // Spreadsheet export: semicolons and a BOM, so Excel in French opens it as columns
+    function exportPollCsv(poll) {
+        if (!poll) return;
+        const cell = (value) => {
+            let text = String(value ?? '');
+            if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`; // never run as a formula
+            return /[";\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+        };
+        const row = (...cells) => cells.map(cell).join(';');
+        const total = poll.total || 0;
+        const lines = [
+            row('Question', poll.question),
+            row('État', poll.closed ? 'Terminé' : 'En cours'),
+            row('Type', poll.multiple ? 'Plusieurs réponses' : 'Une réponse', poll.anonymous ? 'Anonyme' : 'Nominatif'),
+            row('Votants', total),
+            '',
+            row('Réponse', 'Voix', '% des votants'),
+            ...poll.options.map((option, i) => {
+                const count = poll.counts?.[i] || 0;
+                return row(option, count, total ? Math.round((count / total) * 100) : 0);
+            }),
+        ];
+        if (poll.voters?.length) {
+            lines.push('', row('Participant', 'Réponses'));
+            poll.voters.forEach((v) => lines.push(row(v.name, v.choices.join(', '))));
+        }
+        const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        const slug = poll.question
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[̀-ͯ]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .slice(0, 40)
+            .replace(/^-|-$/g, '');
+        a.download = `sondage-${slug || 'resultats'}.csv`;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     }
 
     // ####################################################

@@ -3209,21 +3209,24 @@ function startServer() {
             const input = parsePollInput(checkXSS(dataObject));
             if (!input) return log.debug('[Poll] createPoll invalid data');
 
-            room.createPoll(input.question, input.options);
+            room.createPoll(input.question, input.options, input.settings, () => sendPolls(room));
             sendPolls(room);
         });
 
         socket.on('vote', (dataObject) => {
             if (!roomExists(socket)) return;
             const data = checkXSS(dataObject);
-            if (!Validator.isValidData(data) || typeof data.option !== 'string') return;
+            if (!Validator.isValidData(data)) return;
+            // { options: [...] } (several answers, or [] to withdraw), or { option } (one answer)
+            const choices = Array.isArray(data.options) ? data.options : data.option;
+            if (Array.isArray(choices) ? choices.length > 10 : typeof choices !== 'string') return;
 
             const { room, peer } = getRoomAndPeer(socket);
             if (!peer) return;
 
             const ref = typeof data.pollId === 'string' ? data.pollId : data.pollIndex;
             const name = peer.peer_info?.peer_name || peer.peer_name;
-            if (room.votePoll(ref, socket.id, name, data.option)) sendPolls(room);
+            if (room.votePoll(ref, socket.id, name, choices)) sendPolls(room);
         });
 
         socket.on('updatePoll', () => {
@@ -3561,17 +3564,18 @@ function startServer() {
     function sendPolls(room, onlyPeerId = null) {
         for (const [peerId, peer] of room.peers) {
             if (onlyPeerId && peerId !== onlyPeerId) continue;
-            const withVoters = isPeerPresenter(
+            const presenter = isPeerPresenter(
                 room.id,
                 peerId,
                 peer.peer_info?.peer_name ?? peer.peer_name,
                 peer.peer_info?.peer_uuid ?? peer.peer_uuid
             );
-            room.sendTo(peerId, 'updatePolls', room.pollsView(peerId, withVoters));
+            room.sendTo(peerId, 'updatePolls', room.pollsView(peerId, presenter));
         }
     }
 
     // Question: 1-300 characters. Options: 2-10 distinct, non-empty, up to 200 characters each.
+    // Settings: multiple, anonymous, hideResults (booleans), duration in seconds (0, or 30 s to 1 day).
     function parsePollInput(data) {
         if (!data || typeof data !== 'object') return null;
         const question = typeof data.question === 'string' ? data.question.trim() : '';
@@ -3580,7 +3584,15 @@ function startServer() {
         if (options.length < 2 || options.length > 10) return null;
         if (options.some((option) => !option || option.length > 200)) return null;
         if (new Set(options).size !== options.length) return null;
-        return { question, options };
+        const duration = data.duration ?? 0;
+        if (typeof duration !== 'number' || (duration !== 0 && !(duration >= 30 && duration <= 86400))) return null;
+        const settings = {
+            multiple: data.multiple === true,
+            anonymous: data.anonymous === true,
+            hideResults: data.hideResults === true,
+            durationMs: Math.round(duration) * 1000,
+        };
+        return { question, options, settings };
     }
 
     function isPeerPresenter(room_id, peer_id, peer_name, peer_uuid) {

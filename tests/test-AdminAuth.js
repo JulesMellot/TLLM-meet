@@ -220,31 +220,91 @@ describe('Room polls (model)', () => {
         const room = fakeRoom();
         const { id } = room.createPoll('Q?', ['A', 'B']);
         assert.ok(room.votePoll(id, 'sock-1', 'Jean', 'A'));
-        assert.ok(room.votePoll(id, 'sock-2', 'Jean', 'B'));
+        assert.ok(room.votePoll(id, 'sock-2', 'Jean', ['B']));
         const [view] = room.pollsView('sock-1', true);
         assert.deepEqual(view.counts, [1, 1]);
-        assert.deepEqual(view.voters, { Jean: 'A', 'Jean (2)': 'B' });
-        assert.equal(view.myVote, 'A');
+        assert.deepEqual(view.voters, [
+            { name: 'Jean', choices: ['A'] },
+            { name: 'Jean', choices: ['B'] },
+        ]);
+        assert.deepEqual(view.myVotes, ['A']);
     });
 
     it('hides voters from non-presenters and refuses unknown options or closed polls', () => {
         const room = fakeRoom();
         const poll = room.createPoll('Q?', ['A', 'B']);
         assert.equal(room.votePoll(poll.id, 's', 'X', 'C'), false);
+        assert.equal(room.votePoll(poll.id, 's', 'X', ['A', 'C']), false);
         room.votePoll(poll.id, 's', 'X', 'A');
-        assert.deepEqual(room.pollsView('other', false)[0].voters, {});
-        poll.closed = true;
+        assert.equal(room.pollsView('other', false)[0].voters, null);
+        room.closePoll(poll.id);
         assert.equal(room.votePoll(poll.id, 's2', 'Y', 'B'), false);
     });
 
-    it('drops only the votes of removed options when a poll is edited', () => {
+    it('takes one answer, or several when the poll allows it, and lets a vote be withdrawn', () => {
+        const room = fakeRoom();
+        const single = room.createPoll('Q?', ['A', 'B', 'C']);
+        assert.equal(room.votePoll(single.id, 's', 'X', ['A', 'B']), false);
+        const multi = room.createPoll('Q2?', ['A', 'B', 'C'], { multiple: true });
+        assert.ok(room.votePoll(multi.id, 's1', 'X', ['A', 'C']));
+        assert.ok(room.votePoll(multi.id, 's2', 'Y', ['C']));
+        assert.equal(room.votePoll(multi.id, 's2', 'Y', ['C', 'C']), false, 'no double vote');
+        let view = room.pollsView('s1')[1];
+        assert.deepEqual(view.counts, [1, 0, 2]);
+        assert.equal(view.total, 2, 'people, not answers');
+        assert.ok(room.votePoll(multi.id, 's1', 'X', []));
+        view = room.pollsView('s1')[1];
+        assert.deepEqual(view.counts, [0, 0, 1]);
+        assert.deepEqual(view.myVotes, []);
+    });
+
+    it('never keeps names in an anonymous poll, even for presenters', () => {
+        const room = fakeRoom();
+        const poll = room.createPoll('Q?', ['A', 'B'], { anonymous: true });
+        room.votePoll(poll.id, 's1', 'Jean', 'A');
+        assert.equal(poll.voters.get('s1').name, null);
+        const [view] = room.pollsView('admin', true);
+        assert.equal(view.voters, null);
+        assert.deepEqual(view.counts, [1, 0]);
+    });
+
+    it('hides the results from participants until the poll is closed', () => {
+        const room = fakeRoom();
+        const poll = room.createPoll('Q?', ['A', 'B'], { hideResults: true });
+        room.votePoll(poll.id, 's1', 'Jean', 'A');
+        let view = room.pollsView('s1', false)[0];
+        assert.equal(view.counts, null);
+        assert.equal(view.total, 1);
+        assert.deepEqual(view.myVotes, ['A']);
+        assert.deepEqual(room.pollsView('admin', true)[0].counts, [1, 0]);
+        room.closePoll(poll.id);
+        view = room.pollsView('s1', false)[0];
+        assert.deepEqual(view.counts, [1, 0]);
+    });
+
+    it('can be edited until the first vote only', () => {
         const room = fakeRoom();
         const { id } = room.createPoll('Q?', ['A', 'B']);
+        assert.ok(room.editPoll(id, 'Q2?', ['A', 'C']));
+        assert.equal(room.pollsView('s1')[0].editable, true);
         room.votePoll(id, 's1', 'X', 'A');
-        room.votePoll(id, 's2', 'Y', 'B');
-        room.editPoll(id, 'Q2?', ['A', 'C']);
+        assert.equal(room.editPoll(id, 'Q3?', ['A', 'D']), false);
         const [view] = room.pollsView('s1');
-        assert.deepEqual(view.counts, [1, 0]);
-        assert.equal(view.total, 1);
+        assert.equal(view.question, 'Q2?');
+        assert.equal(view.editable, false);
+    });
+
+    it('closes on its own after the chosen delay', async () => {
+        const room = fakeRoom();
+        let closedBy = null;
+        const poll = room.createPoll('Q?', ['A', 'B'], { durationMs: 40 }, (p) => (closedBy = p.id));
+        assert.ok(poll.closesAt > Date.now());
+        await new Promise((r) => setTimeout(r, 80));
+        assert.equal(poll.closed, true);
+        assert.equal(closedBy, poll.id);
+        const other = room.createPoll('Q2?', ['A', 'B'], { durationMs: 40 }, () => (closedBy = 'other'));
+        room.deletePoll(other.id);
+        await new Promise((r) => setTimeout(r, 80));
+        assert.equal(closedBy, poll.id, 'a deleted poll does not fire');
     });
 });

@@ -140,8 +140,31 @@ module.exports = class Room {
 
     // TLLM*meet: polls have a stable id and votes are keyed by participant (socket id), not by
     // display name, so two participants with the same name cannot overwrite each other.
-    createPoll(question, options) {
-        const poll = { id: uuidv4(), question, options, voters: new Map(), closed: false };
+    // Settings, chosen when the poll is created:
+    //   multiple     several answers allowed
+    //   anonymous    nobody sees who voted what, presenters included (names are not kept)
+    //   hideResults  participants see the results only once the poll is closed
+    //   durationMs   the poll closes on its own after this delay (onAutoClose is then called)
+    createPoll(question, options, settings = {}, onAutoClose = null) {
+        const poll = {
+            id: uuidv4(),
+            question,
+            options,
+            multiple: !!settings.multiple,
+            anonymous: !!settings.anonymous,
+            hideResults: !!settings.hideResults,
+            closesAt: null,
+            voters: new Map(), // peer id -> { name, choices }
+            closed: false,
+            createdAt: Date.now(),
+        };
+        if (settings.durationMs > 0) {
+            poll.closesAt = poll.createdAt + settings.durationMs;
+            poll.timer = setTimeout(() => {
+                if (this.closePoll(poll.id) && onAutoClose) onAutoClose(poll);
+            }, settings.durationMs);
+            poll.timer.unref?.();
+        }
         this.polls.push(poll);
         return poll;
     }
@@ -151,22 +174,28 @@ module.exports = class Room {
         return Number.isInteger(ref) ? this.polls[ref] || null : null;
     }
 
-    votePoll(ref, peerId, peerName, option) {
+    // choices: the options picked (one at most unless the poll allows several). An empty list
+    // withdraws the vote.
+    votePoll(ref, peerId, peerName, choices) {
         const poll = this.findPoll(ref);
-        if (!poll || poll.closed || !poll.options.includes(option)) return false;
-        poll.voters.set(peerId, { name: peerName, option });
+        if (!poll || poll.closed) return false;
+        if (typeof choices === 'string') choices = [choices];
+        if (!Array.isArray(choices)) return false;
+        const picked = poll.options.filter((option) => choices.includes(option));
+        if (picked.length !== choices.length) return false; // unknown or repeated option
+        if (!poll.multiple && picked.length > 1) return false;
+        if (picked.length === 0) poll.voters.delete(peerId);
+        else poll.voters.set(peerId, { name: poll.anonymous ? null : peerName, choices: picked });
         return true;
     }
 
+    // A poll can be changed until someone votes: after that, the votes would no longer
+    // answer the same question
     editPoll(ref, question, options) {
         const poll = this.findPoll(ref);
-        if (!poll) return false;
+        if (!poll || poll.closed || poll.voters.size > 0) return false;
         poll.question = question;
         poll.options = options;
-        // Votes for an option that no longer exists are dropped
-        for (const [peerId, vote] of poll.voters) {
-            if (!options.includes(vote.option)) poll.voters.delete(peerId);
-        }
         return true;
     }
 
@@ -174,41 +203,49 @@ module.exports = class Room {
         const poll = this.findPoll(ref);
         if (!poll || poll.closed) return false;
         poll.closed = true;
+        clearTimeout(poll.timer);
         return true;
     }
 
     deletePoll(ref) {
         const poll = this.findPoll(ref);
         if (!poll) return false;
+        clearTimeout(poll.timer);
         this.polls.splice(this.polls.indexOf(poll), 1);
         return true;
     }
 
-    // What one participant sees: totals for everyone, who voted what only for presenters
-    pollsView(peerId, withVoters = false) {
+    // What one participant sees. Presenters always see the results, and who voted what unless
+    // the poll is anonymous. The others see the results unless they are hidden until the close.
+    pollsView(peerId, isPresenter = false) {
         return this.polls.map((poll) => {
             const counts = poll.options.map(() => 0);
-            const voters = {};
-            let myVote = null;
-            for (const [voterId, { name, option }] of poll.voters) {
-                const index = poll.options.indexOf(option);
-                if (index >= 0) counts[index]++;
-                if (voterId === peerId) myVote = option;
-                if (withVoters) {
-                    let label = name || '?';
-                    for (let n = 2; Object.prototype.hasOwnProperty.call(voters, label); n++) label = `${name} (${n})`;
-                    voters[label] = option;
+            const voters = [];
+            let myVotes = [];
+            for (const [voterId, { name, choices }] of poll.voters) {
+                for (const choice of choices) {
+                    const index = poll.options.indexOf(choice);
+                    if (index >= 0) counts[index]++;
                 }
+                if (voterId === peerId) myVotes = [...choices];
+                if (isPresenter && !poll.anonymous) voters.push({ name: name || '?', choices: [...choices] });
             }
+            const showResults = isPresenter || poll.closed || !poll.hideResults;
             return {
                 id: poll.id,
                 question: poll.question,
                 options: [...poll.options],
-                counts,
-                total: counts.reduce((sum, count) => sum + count, 0),
-                myVote,
+                multiple: poll.multiple,
+                anonymous: poll.anonymous,
+                hideResults: poll.hideResults,
+                // Time left, so the countdown does not depend on the participant's clock
+                remainingMs: poll.closesAt && !poll.closed ? Math.max(0, poll.closesAt - Date.now()) : null,
                 closed: poll.closed,
-                voters,
+                editable: !poll.closed && poll.voters.size === 0,
+                total: poll.voters.size, // people who voted
+                counts: showResults ? counts : null,
+                myVotes,
+                voters: isPresenter && !poll.anonymous ? voters : null,
             };
         });
     }
