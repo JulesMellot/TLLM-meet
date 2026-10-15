@@ -11,9 +11,11 @@
         <script defer src="../js/Brand.js"></script>
     </head>
     <body class="tllm-page">
+        <header class="tllm-bar">
+            <a class="tllm-mark" href="/">TLLM<span class="tllm-ast">*</span>meet</a>
+        </header>
         <main class="tllm-main">
-            <div class="tllm-card tllm-wide">
-                <a class="tllm-brand" href="/"><img src="../images/logo.svg" alt="" /><span>TLLM*meet</span></a>
+            <div class="tllm-solo is-wide tllm-prose">
                 <h1>Confidentialité</h1>
                 <p>TLLM*meet est un service de visioconférence privé, basé sur le logiciel libre MiroTalk SFU.</p>
 
@@ -24,6 +26,20 @@
                     <li>Les fichiers partagés transitent par le serveur sans y être stockés.</li>
                     <li>Le serveur tient un journal technique (heure de connexion, adresse IP, navigateur) pour son fonctionnement et sa sécurité.</li>
                 </ul>
+
+                <h2>Notes partagées et tableau blanc</h2>
+                <p>
+                    Leur contenu est gardé dans la mémoire du serveur pendant la visio, puis six heures après le départ du
+                    dernier participant, pour qu'un retour rapide le retrouve. Il disparaît ensuite, ou au redémarrage du
+                    serveur.
+                </p>
+
+                <h2>Sondages de dates</h2>
+                <p>
+                    Le nom et les réponses que vous donnez sont enregistrés sur le serveur jusqu'à ce que l'organisateur
+                    supprime le sondage. Votre navigateur garde un code qui vous permet de modifier votre réponse ; le serveur
+                    n'en garde qu'une empreinte.
+                </p>
 
                 <h2>Enregistrement</h2>
                 <p>Un enregistrement ne peut être fait que par un participant, sur son propre appareil. Le serveur n'enregistre rien.</p>
@@ -44,8 +60,9 @@
 
                 <h2>Services tiers</h2>
                 <p>
-                    Certaines bibliothèques sont chargées depuis des CDN publics (jsDelivr, cdnjs, unpkg). Ces services voient
-                    votre adresse IP au moment du chargement de la page.
+                    Dans la visio, certaines bibliothèques sont chargées depuis des CDN publics (jsDelivr, cdnjs, unpkg). Ces
+                    services voient votre adresse IP au moment du chargement de la page. Les polices de caractères sont
+                    servies par ce serveur.
                 </p>
 
                 <h2>Contact</h2>

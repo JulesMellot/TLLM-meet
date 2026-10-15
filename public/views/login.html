@@ -22,26 +22,32 @@
         <script defer src="../js/Login.js"></script>
     </head>
     <body class="tllm-page">
+        <header class="tllm-bar">
+            <a class="tllm-mark" href="/">TLLM<span class="tllm-ast">*</span>meet</a>
+        </header>
         <main class="tllm-main">
-            <div class="tllm-card">
-                <a class="tllm-brand" href="/"><img src="../images/logo.svg" alt="" /><span>TLLM*meet</span></a>
+            <div class="tllm-solo" style="max-width: 440px">
                 <h1 id="loginHeading">Espace organisateur</h1>
-                <p id="loginDescription">Connectez-vous pour créer une visio.</p>
+                <p id="loginDescription" class="tllm-lead">Connectez-vous pour ouvrir une salle ou proposer des dates.</p>
                 <form id="loginForm" class="tllm-form">
-                    <label for="username">Identifiant</label>
-                    <input id="username" class="tllm-input" type="text" autocomplete="username" maxlength="254" required />
-                    <label for="password">Mot de passe</label>
-                    <input
-                        id="password"
-                        class="tllm-input"
-                        type="password"
-                        autocomplete="current-password"
-                        maxlength="36"
-                        required
-                    />
+                    <label class="tllm-field" for="username"
+                        >Identifiant
+                        <input id="username" class="tllm-input" type="text" autocomplete="username" maxlength="254" required
+                    /></label>
+                    <label class="tllm-field" for="password"
+                        >Mot de passe
+                        <input
+                            id="password"
+                            class="tllm-input"
+                            type="password"
+                            autocomplete="current-password"
+                            maxlength="36"
+                            required
+                    /></label>
                     <button id="loginButton" class="tllm-button" type="submit">Se connecter</button>
                     <p id="loginError" class="tllm-error" role="alert"></p>
                 </form>
+                <p class="tllm-hint">Vous êtes invité ? Il vous suffit du lien envoyé par l'organisateur.</p>
             </div>
         </main>
         <footer class="tllm-footer">

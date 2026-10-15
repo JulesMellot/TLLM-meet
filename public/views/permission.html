@@ -11,17 +11,21 @@
         <script defer src="../js/Brand.js"></script>
     </head>
     <body class="tllm-page">
+        <header class="tllm-bar">
+            <a class="tllm-mark" href="/">TLLM<span class="tllm-ast">*</span>meet</a>
+        </header>
         <main class="tllm-main">
-            <div class="tllm-card">
-                <a class="tllm-brand" href="/"><img src="../images/logo.svg" alt="" /><span>TLLM*meet</span></a>
-                <h1>Micro ou caméra bloqués</h1>
-                <p>Le navigateur n'a pas donné accès au micro ou à la caméra.</p>
+            <div class="tllm-solo">
+                <h1>Micro et caméra bloqués</h1>
+                <p class="tllm-lead">Le navigateur refuse l'accès au micro et à la caméra. Sans l'un des deux, vous ne pouvez pas entrer dans la salle.</p>
                 <ul>
                     <li>Cliquez sur l'icône à gauche de l'adresse du site et autorisez le micro et la caméra.</li>
-                    <li>Vérifiez qu'aucune autre application n'utilise déjà la caméra.</li>
-                    <li>Puis rechargez la page.</li>
+                    <li>Fermez les autres applications qui utilisent la caméra (Zoom, Teams, FaceTime).</li>
+                    <li>Rechargez ensuite la page de la visio.</li>
                 </ul>
-                <button class="tllm-button" type="button" onclick="history.back()">Revenir à la visio</button>
+                <div class="tllm-row">
+                    <button class="tllm-button" type="button" onclick="history.back()">Revenir à la visio</button>
+                </div>
             </div>
         </main>
         <footer class="tllm-footer">
