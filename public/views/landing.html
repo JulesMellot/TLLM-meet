@@ -22,37 +22,73 @@
         <script defer src="../js/TllmHome.js"></script>
     </head>
     <body class="tllm-page">
-        <main class="tllm-main">
-            <div class="tllm-card">
-                <a class="tllm-brand" href="/"><img src="../images/logo.svg" alt="" /><span>TLLM*meet</span></a>
-                <section id="guestView">
-                    <h1>Rejoindre une visio</h1>
-                    <p>Pour participer, ouvrez le lien que l'organisateur vous a envoyé.</p>
-                    <p class="tllm-muted"><a id="loginLink" href="/login">Espace organisateur</a></p>
-                </section>
-                <section id="adminView" hidden>
-                    <h1>Nouvelle visio</h1>
-                    <form id="newRoomForm" class="tllm-form">
-                        <label for="roomName">Nom de la visio</label>
-                        <input
-                            id="roomName"
-                            class="tllm-input"
-                            type="text"
-                            maxlength="40"
-                            autocomplete="off"
-                            placeholder="Point du lundi"
-                        />
-                        <button id="createRoomButton" class="tllm-button" type="submit">Créer la visio</button>
-                        <p id="createRoomError" class="tllm-error" role="alert"></p>
-                    </form>
-                    <h2>Caler une réunion</h2>
-                    <p>Proposez plusieurs dates. Chacun répond avec le lien, sans compte.</p>
-                    <p><a class="tllm-button" href="/rdv">Proposer des dates</a></p>
-                    <p class="tllm-muted">
-                        Connecté : <span id="adminName"></span> · <a href="/logout">Se déconnecter</a>
-                    </p>
-                </section>
+        <header class="tllm-bar">
+            <a class="tllm-mark" href="/">TLLM<span class="tllm-ast">*</span>meet</a>
+            <div class="tllm-bar-end">
+                <span id="adminWho" class="tllm-who" hidden>Connecté en tant que <span id="adminName"></span></span>
+                <a id="logoutLink" href="/logout" hidden>Se déconnecter</a>
+                <a id="loginLink" href="/login">Espace organisateur</a>
             </div>
+        </header>
+        <main class="tllm-main">
+            <section id="guestView" class="tllm-solo">
+                <h1>Il vous faut le lien de la visio</h1>
+                <p class="tllm-lead">
+                    L'organisateur vous l'a envoyé par message. Collez-le ici, ou tapez le nom de la salle s'il vous l'a
+                    dicté.
+                </p>
+                <form id="goForm" class="tllm-form" novalidate>
+                    <input
+                        id="goInput"
+                        class="tllm-input"
+                        type="text"
+                        autocomplete="off"
+                        spellcheck="false"
+                        placeholder="meet.tllm.fr/join/point-hebdo-k7m2xq"
+                        aria-label="Lien ou nom de la salle"
+                    />
+                    <button class="tllm-button" type="submit">Aller à la salle</button>
+                    <p id="goError" class="tllm-error" role="alert"></p>
+                </form>
+            </section>
+
+            <section id="adminView" hidden>
+                <div class="tllm-hall-head">
+                    <h1 id="today"></h1>
+                    <span class="tllm-hall-clock" id="clock" aria-hidden="true"></span>
+                </div>
+                <div class="tllm-hall">
+                    <div class="tllm-block">
+                        <h2>Salles</h2>
+                        <form id="newRoomForm" class="tllm-new-room">
+                            <input
+                                id="roomName"
+                                class="tllm-input"
+                                type="text"
+                                maxlength="40"
+                                autocomplete="off"
+                                placeholder="Nom d'une nouvelle salle, par exemple Point du lundi"
+                                aria-label="Nom de la nouvelle salle"
+                            />
+                            <button id="createRoomButton" class="tllm-button" type="submit">Ouvrir la salle</button>
+                        </form>
+                        <p class="tllm-new-room-note" id="roomPreview"></p>
+                        <p id="createRoomError" class="tllm-error tllm-block-pad" role="alert"></p>
+                        <ul class="tllm-rooms" id="rooms"></ul>
+                    </div>
+                    <div class="tllm-side">
+                        <div class="tllm-block">
+                            <h2>Agenda</h2>
+                            <ul class="tllm-agenda" id="agenda"></ul>
+                        </div>
+                        <div class="tllm-block">
+                            <h2>Sondages de dates</h2>
+                            <ul class="tllm-polls" id="polls"></ul>
+                            <div class="tllm-block-foot"><a href="/rdv">Proposer des dates</a></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
         <footer class="tllm-footer">
             <a href="/privacy">Confidentialité</a>
@@ -60,5 +96,6 @@
                 >Basé sur MiroTalk SFU</a
             >
         </footer>
+        <div class="tllm-toast" id="toast" role="status" hidden></div>
     </body>
 </html>

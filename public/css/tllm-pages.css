@@ -711,3 +711,289 @@ select.tllm-input {
         transition: none;
     }
 }
+
+/* ---------- The corridor: organiser home ---------- */
+
+.tllm-hall-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px 28px;
+    padding: 10px 0 24px;
+}
+
+.tllm-hall-head h1 {
+    font: 700 clamp(2.4rem, 5vw, 3.6rem)/0.95 var(--cond);
+}
+
+.tllm-hall-clock {
+    font: 600 clamp(2.4rem, 5vw, 3.6rem)/0.95 var(--cond);
+    color: var(--ink-3);
+}
+
+.tllm-hall {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+}
+
+.tllm-side {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    min-width: 0;
+}
+
+.tllm-block {
+    min-width: 0;
+    overflow: hidden;
+    background: var(--panel);
+    border-radius: var(--r);
+}
+
+.tllm-block > h2 {
+    padding: 16px 22px 10px;
+    font-size: 1.1rem;
+}
+
+.tllm-block-pad {
+    padding: 0 22px 12px;
+}
+
+.tllm-block-foot {
+    padding: 12px 22px 18px;
+    border-top: 1px solid var(--rule);
+}
+
+.tllm-block-foot a {
+    font-weight: 600;
+    color: var(--act);
+    text-decoration: none;
+}
+
+.tllm-block-foot a:hover {
+    text-decoration: underline;
+}
+
+.tllm-empty {
+    padding: 4px 22px 18px;
+    color: var(--ink-2);
+}
+
+.tllm-new-room {
+    display: flex;
+    gap: 10px;
+    padding: 0 22px 14px;
+}
+
+.tllm-new-room .tllm-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.tllm-new-room-note {
+    padding: 0 22px 16px;
+    font-size: 0.92rem;
+    color: var(--ink-2);
+    overflow-wrap: anywhere;
+}
+
+.tllm-new-room-note b {
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.tllm-rooms,
+.tllm-agenda,
+.tllm-polls {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.tllm-room {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    gap: 0 18px;
+    align-items: center;
+    padding: 14px 22px 14px 0;
+    border-top: 1px solid var(--rule);
+}
+
+.tllm-room-tab {
+    align-self: stretch;
+    margin: -14px 0;
+    background: var(--rule);
+}
+
+.tllm-room.is-live .tllm-room-tab {
+    background: var(--live);
+}
+
+.tllm-room.is-soon .tllm-room-tab {
+    background: var(--soon);
+}
+
+.tllm-room-name-row {
+    font: 600 1.6rem/1.05 var(--cond);
+    overflow-wrap: anywhere;
+}
+
+.tllm-room-state {
+    font-size: 0.95rem;
+    color: var(--ink-2);
+}
+
+.tllm-room-state strong {
+    font-weight: 600;
+}
+
+.tllm-room.is-live .tllm-room-state strong {
+    color: var(--live);
+}
+
+.tllm-room.is-soon .tllm-room-state strong {
+    color: var(--soon-text);
+}
+
+.tllm-room-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.tllm-agenda {
+    padding: 0 22px 12px;
+}
+
+.tllm-agenda-day {
+    padding: 12px 0 4px;
+    font-size: 0.95rem;
+    color: var(--ink-3);
+}
+
+.tllm-agenda-day:first-child {
+    padding-top: 0;
+}
+
+.tllm-agenda-item a {
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 2px 14px;
+    padding: 8px 0;
+    color: inherit;
+    text-decoration: none;
+}
+
+.tllm-agenda-item a:hover .tllm-agenda-what {
+    text-decoration: underline;
+}
+
+.tllm-agenda-time {
+    font: 600 1.3rem/1.1 var(--cond);
+}
+
+.tllm-agenda-what {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.tllm-agenda-how {
+    grid-column: 2;
+    font-size: 0.92rem;
+    color: var(--ink-2);
+}
+
+.tllm-polls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 0 22px 16px;
+}
+
+.tllm-poll a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.tllm-poll-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-weight: 600;
+}
+
+.tllm-poll a:hover .tllm-poll-title {
+    text-decoration: underline;
+}
+
+.tllm-poll-count {
+    font: 600 1.2rem/1 var(--cond);
+    white-space: nowrap;
+}
+
+.tllm-poll-count span {
+    color: var(--ink-3);
+}
+
+.tllm-ticks {
+    display: flex;
+    gap: 4px;
+    margin: 8px 0 4px;
+}
+
+.tllm-ticks i {
+    flex: 1;
+    height: 8px;
+    background: var(--panel-2);
+    border-radius: 2px;
+}
+
+.tllm-ticks i.is-on {
+    background: var(--soon);
+}
+
+.tllm-poll p {
+    font-size: 0.92rem;
+    color: var(--ink-2);
+}
+
+.tllm-toast {
+    position: fixed;
+    z-index: 40;
+    left: 50%;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100% - 32px);
+    padding: 12px 16px;
+    color: var(--wall);
+    background: var(--ink);
+    border-radius: var(--r);
+    transform: translateX(-50%);
+}
+
+@media (max-width: 960px) {
+    .tllm-hall {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    .tllm-new-room {
+        flex-direction: column;
+    }
+    .tllm-room {
+        grid-template-columns: 8px minmax(0, 1fr);
+        gap: 8px 14px;
+        padding-right: 16px;
+    }
+    .tllm-room-actions {
+        grid-column: 2;
+        justify-content: flex-start;
+    }
+    .tllm-who {
+        display: none;
+    }
+}
