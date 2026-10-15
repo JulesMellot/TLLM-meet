@@ -31,8 +31,12 @@ de Miroslav Pejic, sous licence [AGPL-3.0](LICENSE).
 2. Il donne un nom à la visio. Un suffixe aléatoire est ajouté, par exemple `point-hebdo-k7m2xq`.
 3. Il partage le lien. Les invités entrent avec leur nom, sans compte.
 
-Si un invité ouvre le lien avant l'admin, il voit « Cette visio n'a pas encore commencé ».
-La page entre d'elle-même dès que l'admin ouvre la visio.
+Le lien ouvre la porte de la salle : son nom, un bandeau d'état, l'heure prévue, qui est déjà là.
+Si un invité arrive avant l'admin, le bandeau indique « Pas encore commencée ». Il règle sa caméra et
+son micro en attendant, puis entre tout seul dès que l'admin ouvre la salle.
+
+Connecté, l'admin voit à l'accueil toutes ses salles avec leur état (en cours, réservée, fermée),
+l'agenda des dates fixées et les sondages de dates en attente.
 
 L'admin est présentateur de ses visios. Un invité ne le devient que si l'admin le promeut.
 
@@ -74,7 +78,7 @@ Le dépôt contient [`docker-compose.coolify.yml`](docker-compose.coolify.yml), 
    (_Build Variable_ / _Available at Buildtime_) : ce sont des secrets utiles seulement à l'exécution,
    et une variable de build reste lisible dans l'historique de l'image.
 6. Le fichier déclare un volume `tllm-data`, monté sur `/src/data`. Coolify le crée tout seul
-   (onglet _Persistent Storage_) : les sondages de dates y sont gardés entre deux déploiements.
+   (onglet _Persistent Storage_) : les sondages de dates et la liste des salles y sont gardés entre deux déploiements.
    Ne pas le supprimer.
 
 Coolify lit le fichier et affiche les variables dans son interface :
@@ -132,9 +136,13 @@ Le code propre au fork est rangé dans des fichiers séparés, pour limiter les 
 | Fichier                                                                    | Rôle                                                             |
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `public/css/tllm.css`                                                      | apparence de la visio                                            |
-| `public/css/tllm-pages.css`                                                | accueil, connexion, attente, erreurs                             |
+| `public/css/tllm-pages.css`                                                | pages hors visio : accueil, porte, connexion, erreurs            |
 | `public/js/tllm.js`                                                        | menu « Plus », chargement à la demande des bibliothèques         |
-| `public/js/TllmHome.js`                                                    | page d'accueil                                                   |
+| `public/js/TllmHome.js`                                                    | accueil : salles, agenda, sondages ; invité sans lien            |
+| `public/js/TllmDoor.js`                                                    | porte d'une salle pas encore ouverte, réglages, entrée auto      |
+| `public/js/TllmAfter.js`                                                   | page après la visio                                              |
+| `app/src/RoomRegistry.js`                                                  | salles de l'admin (`DATA_DIR/salles.json`)                       |
+| `public/fonts/`                                                            | Barlow et Barlow Condensed, licence OFL                          |
 | `app/src/AdminAuth.js`                                                     | session admin, noms de visio                                     |
 | `app/src/ClientIp.js`                                                      | IP du client derrière les proxys                                 |
 | `public/js/TllmRoom.js`, `public/css/tllm-room.css`                        | écran de la visio (barre, panneau, discussion, sondages)         |
