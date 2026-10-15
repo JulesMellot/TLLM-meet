@@ -161,6 +161,14 @@ describe('test-DatePolls (caler une réunion)', () => {
         assert.equal(s.get(poll.id), null);
     });
 
+    it('tells the server when a date is set, so the room carries the poll title', () => {
+        const fixed = [];
+        const s = store({ onFix: (poll) => fixed.push([poll.fixed.room, poll.title]) });
+        const poll = s.create('jules', 'Jules', input({ expected: 1 }));
+        s.answer(poll.id, { name: 'A', answers: ['no', 'yes', 'no'] });
+        assert.deepEqual(fixed, [[poll.fixed.room, 'Point mensuel']]);
+    });
+
     it('never shows answer tokens in the public view', () => {
         const s = store();
         const poll = s.create('jules', 'Jules', input());

@@ -133,6 +133,7 @@ describe('Only the admin can create a meeting (integration)', function () {
                 HOST_MAX_LOGIN_ATTEMPTS: '5',
                 TRUST_PROXY: 'false',
                 CREATE_ROOM_RATE_LIMIT_MAX: '200',
+                DATA_DIR: fs.mkdtempSync(path.join(require('os').tmpdir(), 'tllm-test-data-')),
             },
         });
         server.stdout.on('data', (d) => (logs += d));
@@ -566,6 +567,55 @@ describe('Only the admin can create a meeting (integration)', function () {
             admin.emit('editorChange', { text: 'admin' });
             await wait(300);
             assert.equal(received.length, 2);
+        });
+    });
+
+    describe('Room sign and organiser overview', () => {
+        let cookie;
+        let roomId;
+
+        before(async () => {
+            cookie = await login(ADMIN);
+            const res = await request('POST', '/admin/rooms', { cookie, body: { name: "Réunion d'équipe" } });
+            roomId = res.json.room;
+        });
+
+        it('shows the name typed by the organiser on the door, before the room opens', async () => {
+            const res = await request('GET', `/api/room/${roomId}`);
+            assert.equal(res.status, 200);
+            assert.equal(res.json.name, "Réunion d'équipe");
+            assert.equal(res.json.active, false);
+            assert.equal(res.json.organizer, 'Jules');
+            assert.deepEqual(res.json.people, []);
+        });
+
+        it('shows who is inside once the room is open, first names only', async () => {
+            const admin = await connect(cookie);
+            const guest = await connect();
+            sockets.push(admin, guest);
+            await joinRoom(admin, roomId, peerInfo('Jules'), (await createToken(roomId, cookie)).json.token);
+            await joinRoom(guest, roomId, peerInfo('Marie Dupont'));
+            const res = await request('GET', `/api/room/${roomId}`);
+            assert.equal(res.json.active, true);
+            assert.equal(res.json.count, 2);
+            assert.deepEqual(res.json.people.sort(), ['Jules', 'Marie']);
+            assert.ok(res.json.since > 0);
+        });
+
+        it('rejects odd room names', async () => {
+            const res = await request('GET', `/api/room/${encodeURIComponent('../etc')}`);
+            assert.ok([400, 404].includes(res.status));
+        });
+
+        it('gives the overview to the organiser only', async () => {
+            assert.equal((await request('GET', '/api/admin/overview')).status, 401);
+            const res = await request('GET', '/api/admin/overview', { cookie });
+            assert.equal(res.status, 200);
+            const room = res.json.rooms.find((r) => r.id === roomId);
+            assert.ok(room, 'the room is listed');
+            assert.equal(room.active, true);
+            assert.equal(res.json.rooms[0].active, true, 'live rooms first');
+            assert.ok(Array.isArray(res.json.agenda) && Array.isArray(res.json.polls));
         });
     });
 

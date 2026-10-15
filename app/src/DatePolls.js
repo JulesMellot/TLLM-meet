@@ -96,8 +96,16 @@ function icsFold(line) {
 }
 
 class DatePolls {
-    constructor({ file, timeZone = 'Europe/Paris', now = () => Date.now(), makeRoomId, log = console } = {}) {
+    constructor({
+        file,
+        timeZone = 'Europe/Paris',
+        now = () => Date.now(),
+        makeRoomId,
+        onFix = null,
+        log = console,
+    } = {}) {
         this.file = file;
+        this.onFix = onFix; // called with the poll each time its date is set
         this.timeZone = timeZone;
         this.now = now;
         this.makeRoomId = makeRoomId;
@@ -334,6 +342,7 @@ class DatePolls {
         poll.status = 'fixed';
         poll.sequence = (poll.sequence || 0) + 1;
         this.touch(poll);
+        this.onFix?.(poll);
     }
 
     close(id, owner) {

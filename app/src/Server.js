@@ -85,6 +85,7 @@ const RoomPassword = require('./RoomPassword');
 const HtmlInjector = require('./HtmlInjector');
 const { CollabStore } = require('./Collab');
 const { DatePolls, DatePollError } = require('./DatePolls');
+const { RoomRegistry } = require('./RoomRegistry');
 const log = new Logger('Server');
 const yaml = require('js-yaml');
 const swaggerUi = require('swagger-ui-express');
@@ -269,10 +270,14 @@ const meetingTimeZone = (() => {
         return 'Europe/Paris';
     }
 })();
+// The rooms the organiser opened (name typed at creation, last use), for the home and the door page
+const roomRegistry = new RoomRegistry({ file: path.join(dataDir, 'salles.json'), log });
 const datePolls = new DatePolls({
     file: path.join(dataDir, 'rendez-vous.json'),
     timeZone: meetingTimeZone,
     makeRoomId,
+    // The room reserved for a fixed date carries the poll title
+    onFix: (poll) => roomRegistry.remember(poll.fixed.room, { name: poll.title, owner: poll.owner }),
     log,
 });
 setInterval(() => datePolls.checkDeadlines(), 60 * 1000).unref();
@@ -448,8 +453,109 @@ function startServer() {
         }
         const name = typeof req.body?.name === 'string' ? req.body.name : '';
         const room = makeRoomId(name);
+        const admin = adminAuth.fromRequest(req);
+        roomRegistry.remember(room, { name: name.trim() || null, owner: admin.username });
         res.set('Cache-Control', 'no-store');
         return res.json({ room, url: '/join/' + encodeURIComponent(room) });
+    });
+
+    // ---------- TLLM*meet: state of the rooms (door page and organiser home) ----------
+    const firstName = (peer) =>
+        String(peer?.peer_info?.peer_name ?? peer?.peer_name ?? '')
+            .trim()
+            .split(/\s+/)[0]
+            .slice(0, 30);
+    const organizerName = (owner) => {
+        const user = hostCfg.users.find((u) => u.username === owner);
+        return user ? user.displayname || user.username : null;
+    };
+
+    // The fixed meeting reserved for this room that is coming or under way
+    function roomBooking(roomId) {
+        const now = Date.now();
+        let found = null;
+        for (const poll of datePolls.polls.values()) {
+            if (poll.status !== 'fixed' || poll.fixed?.room !== roomId || poll.fixed.end < now) continue;
+            if (!found || poll.fixed.start < found.fixed.start) found = poll;
+        }
+        return found;
+    }
+
+    function roomState(roomId) {
+        const room = roomList.get(roomId);
+        const peers = room ? Array.from(room.peers.values()) : [];
+        const known = roomRegistry.get(roomId);
+        const booking = roomBooking(roomId);
+        return {
+            id: roomId,
+            name: roomRegistry.name(roomId),
+            active: !!room,
+            since: room ? roomRegistry.since(roomId) : null,
+            count: peers.length,
+            people: peers.map(firstName).filter(Boolean).slice(0, 6),
+            organizer: organizerName(known?.owner || booking?.owner),
+            booking: booking && { title: booking.title, start: booking.fixed.start, end: booking.fixed.end },
+            lastUsedAt: known ? Math.max(known.lastClosedAt || 0, known.lastOpenedAt || 0) || null : null,
+        };
+    }
+
+    // Door page: anyone holding the link sees the room's sign (name, open or not, first names inside)
+    app.get('/api/room/:id', roomStatusLimiter, (req, res) => {
+        const id = req.params.id;
+        if (!Validator.isValidRoomName(id) || id.length > 80) return res.status(400).json({ error: 'invalid room' });
+        res.set('Cache-Control', 'no-store');
+        const state = roomState(id);
+        delete state.lastUsedAt;
+        return res.json(state);
+    });
+
+    // Organiser home: rooms (live, booked, recent), agenda of fixed meetings, polls waiting for answers
+    app.get('/api/admin/overview', (req, res) => {
+        const admin = adminAuth.fromRequest(req);
+        if (!admin) return res.status(401).json({ error: 'unauthorized' });
+        res.set('Cache-Control', 'no-store');
+        const now = Date.now();
+        const polls = datePolls.list(admin.username);
+        const ids = new Set();
+        for (const id of roomList.keys()) if (!id.includes('_breakout_')) ids.add(id);
+        for (const p of polls) if (p.status === 'fixed' && p.fixed.end > now) ids.add(p.fixed.room);
+        for (const r of roomRegistry.recent(admin.username, 12)) ids.add(r.id);
+
+        const rank = (r) => (r.active ? 0 : r.booking && r.booking.start - now < 24 * 3600 * 1000 ? 1 : 2);
+        const rooms = Array.from(ids)
+            .map(roomState)
+            .sort(
+                (a, b) =>
+                    rank(a) - rank(b) ||
+                    (a.active ? b.count - a.count : 0) ||
+                    (a.booking && b.booking ? a.booking.start - b.booking.start : 0) ||
+                    (b.lastUsedAt || 0) - (a.lastUsedAt || 0)
+            );
+        const agenda = polls
+            .filter((p) => p.status === 'fixed' && p.fixed.end > now)
+            .sort((a, b) => a.fixed.start - b.fixed.start)
+            .slice(0, 12)
+            .map((p) => ({
+                id: p.id,
+                title: p.title,
+                start: p.fixed.start,
+                end: p.fixed.end,
+                room: p.fixed.room,
+                auto: p.fixed.auto,
+                available: p.participants.filter((x) => x.answers[p.fixed.slot] !== 'no').length,
+                answers: p.participants.length,
+            }));
+        const waiting = polls
+            .filter((p) => p.status === 'open')
+            .map((p) => ({
+                id: p.id,
+                title: p.title,
+                answers: p.participants.length,
+                expected: p.expected,
+                deadline: p.deadline,
+                slots: p.slots.length,
+            }));
+        return res.json({ now, timeZone: meetingTimeZone, name: admin.displayname, rooms, agenda, polls: waiting });
     });
 
     // ---------- TLLM*meet: date polls (see DatePolls.js) ----------
@@ -1244,6 +1350,7 @@ function startServer() {
                 const worker = await getMediasoupWorker();
                 const room = await new Room(socket.room_id, worker, io).ready();
                 roomList.set(socket.room_id, room);
+                roomRegistry.opened(socket.room_id);
                 log.debug('Created room', { room_id: socket.room_id });
                 callback({ room_id: socket.room_id });
             } catch (error) {
@@ -3515,6 +3622,7 @@ function startServer() {
             if (room.getPeersCount() === 0) {
                 roomList.delete(socket.room_id);
                 collab.release(socket.room_id);
+                roomRegistry.closed(socket.room_id);
 
                 delete presenters[socket.room_id];
 
@@ -3558,6 +3666,7 @@ function startServer() {
             if (room.getPeersCount() === 0) {
                 roomList.delete(socket.room_id);
                 collab.release(socket.room_id);
+                roomRegistry.closed(socket.room_id);
 
                 delete presenters[socket.room_id];
 
@@ -3797,7 +3906,8 @@ async function gracefulShutdown(signal) {
 
     isShuttingDown = true;
     log.info(`${signal} received, starting graceful shutdown...`);
-    datePolls.saveNow(); // TLLM*meet: date polls written before leaving
+    datePolls.saveNow(); // TLLM*meet: date polls and rooms written before leaving
+    roomRegistry.saveNow();
 
     try {
         // 1. Stop accepting new connections
