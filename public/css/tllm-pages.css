@@ -266,6 +266,13 @@ a:focus-visible {
     text-decoration: underline;
 }
 
+/* A link styled as a button keeps the button colours */
+.tllm-card a.tllm-button,
+.tllm-card a.tllm-button:hover {
+    color: var(--tllm-accent-ink);
+    text-decoration: none;
+}
+
 [hidden] {
     display: none !important;
 }
