@@ -1284,19 +1284,98 @@ body.tllm-room #videoPinMediaContainer {
     background: transparent !important;
 }
 
-/* ---------- Join screen (see public/js/TllmJoin.js) ---------- */
+/* ---------- Join screen: the door of the room (see public/js/TllmJoin.js) ----------
+ * Same look as the pages outside the call (tllm-pages.css): the sign on the left, the visitor's
+ * set-up on the right, light or dark following the system, over a plain background. */
+@font-face {
+    font-family: 'Barlow';
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/barlow-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Barlow';
+    font-weight: 500;
+    font-display: swap;
+    src: url('../fonts/barlow-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Barlow';
+    font-weight: 600;
+    font-display: swap;
+    src: url('../fonts/barlow-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Barlow Condensed';
+    font-weight: 600;
+    font-display: swap;
+    src: url('../fonts/barlow-condensed-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Barlow Condensed';
+    font-weight: 700;
+    font-display: swap;
+    src: url('../fonts/barlow-condensed-latin-700-normal.woff2') format('woff2');
+}
+.swal2-container.tllm-join-wrap {
+    --j-wall: #e8ebee;
+    --j-panel: #ffffff;
+    --j-panel-2: #f3f5f7;
+    --j-ink: #111518;
+    --j-ink-2: #4a545d;
+    --j-ink-3: #737d86;
+    --j-rule: #d5dadf;
+    --j-act: #2450d8;
+    --j-act-ink: #ffffff;
+    --j-live: #d7372b;
+    --j-free: #127c62;
+    --j-danger: #c62d22;
+    --j-cond: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --j-text: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    align-items: flex-start !important;
+    overflow-y: auto !important;
+    padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 24px
+        max(16px, env(safe-area-inset-left, 0px)) !important;
+    background: var(--j-wall) !important;
+}
+@media (prefers-color-scheme: dark) {
+    .swal2-container.tllm-join-wrap {
+        --j-wall: #121619;
+        --j-panel: #1b2025;
+        --j-panel-2: #232930;
+        --j-ink: #eef1f3;
+        --j-ink-2: #aeb7bf;
+        --j-ink-3: #87919a;
+        --j-rule: #2d343b;
+        --j-act: #5f86ff;
+        --j-act-ink: #0a1022;
+        --j-danger: #ff6b62;
+    }
+}
+.tllm-join-brand {
+    display: block;
+    margin: 4px 0 18px;
+    font: 700 1.45rem/1 var(--j-cond);
+    color: var(--j-ink);
+    text-decoration: none;
+}
+.tllm-join-brand span {
+    color: var(--j-live);
+}
 .swal2-popup.tllm-join {
     display: block !important;
-    width: min(940px, calc(100vw - 32px)) !important;
+    width: min(1200px, 100%) !important;
     max-width: none !important;
-    padding: 24px !important;
-    border: 1px solid var(--tllm-border) !important;
-    border-radius: var(--tllm-radius) !important;
-    background: var(--tllm-surface) !important;
-    color: var(--tllm-text) !important;
-    font-family: var(--tllm-font) !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: var(--j-ink) !important;
+    font: 400 17px/1.5 var(--j-text) !important;
     text-align: left !important;
     box-shadow: none !important;
+    /* Keep SweetAlert's closing animation: MiroTalk stops the preview while it runs */
 }
 .tllm-join .swal2-title,
 .tllm-join .swal2-html-container,
@@ -1315,29 +1394,87 @@ body.tllm-room #videoPinMediaContainer {
 }
 .tllm-join-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-    gap: 24px;
-    align-items: start;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    overflow: hidden;
+    border-radius: 6px;
+    background: var(--j-panel);
 }
-.tllm-join-left,
-.tllm-join-right {
-    min-width: 0;
+.tllm-join-sign {
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    border-right: 1px solid var(--j-rule);
+}
+.tllm-join-band {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 12px;
+    padding: 14px 28px;
+    font: 600 1.25rem/1.2 var(--j-cond);
+    letter-spacing: 0.02em;
+    color: #fff;
+    background: var(--j-live);
+}
+.tllm-join-band.is-free {
+    background: var(--j-free);
+}
+.tllm-join-band b {
+    font: 700 1.5rem/1 var(--j-cond);
+}
+.tllm-join-sign-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 22px;
+    padding: 26px 28px 30px;
+}
+.tllm-join-name-big {
+    margin: 0;
+    font: 700 clamp(3rem, 7vw, 5.4rem)/0.92 var(--j-cond);
+    letter-spacing: -0.01em;
+    color: var(--j-ink);
+    overflow-wrap: anywhere;
+}
+.tllm-join-facts {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 8px 22px;
+    margin: 0;
+}
+.tllm-join-facts dt {
+    font-size: 0.95rem;
+    color: var(--j-ink-3);
+}
+.tllm-join-facts dd {
+    margin: 0;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+.tllm-join-foot {
+    margin: auto 0 0;
+    font-size: 0.95rem;
+    color: var(--j-ink-2);
+}
+.tllm-join-right {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    padding: 22px;
 }
 .tllm-join #initVideoContainer {
     position: relative !important;
     width: 100% !important;
     max-width: none !important;
     height: auto !important;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 16 / 10;
     margin: 0 !important;
     padding: 0 !important;
     border: 0 !important;
-    border-radius: var(--tllm-radius) !important;
+    border-radius: 6px !important;
     overflow: hidden;
-    background: #0b0d10 !important;
+    background: #0a0d10 !important;
     box-shadow: none !important;
 }
 .tllm-join #initVideo {
@@ -1358,15 +1495,15 @@ body.tllm-room #videoPinMediaContainer {
     gap: 10px;
 }
 .tllm-join-controls button {
+    display: grid !important;
+    place-items: center;
     width: 46px !important;
     height: 46px !important;
     margin: 0 !important;
     padding: 0 !important;
-    display: grid !important;
-    place-items: center;
     border: 0 !important;
     border-radius: 50% !important;
-    background: rgba(20, 24, 28, 0.78) !important;
+    background: rgba(255, 255, 255, 0.16) !important;
     color: #fff !important;
     font-size: 17px !important;
     box-shadow: none !important;
@@ -1376,18 +1513,18 @@ body.tllm-room #videoPinMediaContainer {
     display: none !important;
 }
 .tllm-join-controls button:hover {
-    background: rgba(40, 46, 54, 0.9) !important;
+    background: rgba(255, 255, 255, 0.26) !important;
 }
 .tllm-join-controls button.fa-microphone-slash,
 .tllm-join-controls button.fa-video-slash {
-    background: var(--tllm-danger) !important;
+    background: var(--j-live) !important;
 }
 .tllm-join-meter {
     display: flex;
     align-items: center;
     gap: 10px;
-    color: var(--tllm-text-2);
-    font-size: 13px;
+    font-size: 0.9rem;
+    color: var(--j-ink-2);
 }
 .tllm-join-meter[hidden] {
     display: none;
@@ -1395,28 +1532,16 @@ body.tllm-room #videoPinMediaContainer {
 .tllm-join-meter-track {
     flex: 1;
     height: 6px;
-    border-radius: 3px;
-    background: var(--tllm-surface-3);
     overflow: hidden;
+    border-radius: 99px;
+    background: var(--j-panel-2);
 }
 .tllm-join-meter-fill {
     display: block;
     width: 0;
     height: 100%;
-    background: #3fbf7f;
+    background: var(--j-free);
     transition: width 0.08s linear;
-}
-.tllm-join-title {
-    margin: 0;
-    color: var(--tllm-text);
-    font-size: 22px;
-    font-weight: 600;
-}
-.tllm-join-room {
-    margin: -6px 0 4px;
-    color: var(--tllm-text-2);
-    font-size: 13px;
-    overflow-wrap: anywhere;
 }
 .tllm-join-field {
     display: flex;
@@ -1425,21 +1550,21 @@ body.tllm-room #videoPinMediaContainer {
     margin: 0;
 }
 .tllm-join-label {
-    color: var(--tllm-text-2);
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--j-ink);
 }
 .tllm-join .tllm-join-name,
 .tllm-join-field select {
     width: 100% !important;
-    height: 40px !important;
+    height: 46px !important;
     margin: 0 !important;
-    padding: 0 12px !important;
-    border: 1px solid var(--tllm-border) !important;
-    border-radius: var(--tllm-radius-sm) !important;
-    background-color: var(--tllm-surface-2) !important;
-    color: var(--tllm-text) !important;
-    font: 14px var(--tllm-font) !important;
+    padding: 0 14px !important;
+    border: 1px solid var(--j-rule) !important;
+    border-radius: 6px !important;
+    background-color: var(--j-panel) !important;
+    color: var(--j-ink) !important;
+    font: 400 17px var(--j-text) !important;
     text-align: left !important;
     box-shadow: none !important;
 }
@@ -1448,100 +1573,107 @@ body.tllm-room #videoPinMediaContainer {
 }
 .tllm-join .tllm-join-name:focus,
 .tllm-join-field select:focus {
-    border-color: var(--tllm-accent) !important;
-    outline: 2px solid var(--tllm-accent-soft) !important;
+    outline: 3px solid var(--j-act) !important;
+    outline-offset: 2px;
 }
 .tllm-join .swal2-validation-message {
     margin: 0 !important;
-    padding: 8px 10px !important;
+    padding: 0 !important;
     justify-content: flex-start !important;
-    border-radius: var(--tllm-radius-sm);
-    background: rgba(229, 72, 77, 0.12) !important;
-    color: #ff8a8d !important;
-    font-size: 13px !important;
+    background: none !important;
+    color: var(--j-danger) !important;
+    font: 500 15px var(--j-text) !important;
+}
+.tllm-join .swal2-validation-message::before {
+    display: none !important;
 }
 .tllm-join-notice {
-    padding: 12px;
-    border: 1px solid rgba(245, 184, 61, 0.4);
-    border-radius: var(--tllm-radius-sm);
-    background: rgba(245, 184, 61, 0.08);
-    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.95rem;
     line-height: 1.45;
+    color: var(--j-ink-2);
 }
 .tllm-join-notice[hidden] {
     display: none;
 }
 .tllm-join-notice p {
-    margin: 0 0 6px;
-    color: var(--tllm-text);
+    margin: 0;
 }
 .tllm-join-notice-title {
     font-weight: 600;
+    color: var(--j-danger);
 }
 .tllm-join-notice-title i {
-    color: var(--tllm-hand);
-    margin-right: 4px;
+    display: none;
 }
 .tllm-join-notice-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
-    margin-top: 8px;
 }
 .tllm-join-retry {
-    height: 32px;
-    padding: 0 12px;
-    border: 1px solid var(--tllm-border);
-    border-radius: var(--tllm-radius-sm);
-    background: var(--tllm-surface-2);
-    color: var(--tllm-text);
-    font: 600 13px var(--tllm-font);
+    min-height: 38px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--j-panel-2);
+    color: var(--j-ink);
+    font: 600 15px var(--j-text);
     cursor: pointer;
 }
 .tllm-join-hint {
-    color: var(--tllm-text-2);
-    font-size: 12px;
+    font-size: 0.9rem;
+    color: var(--j-ink-2);
 }
 .tllm-join .swal2-actions {
     width: 100% !important;
-    margin: 4px 0 0 !important;
+    margin: auto 0 0 !important;
     padding: 0 !important;
     justify-content: stretch !important;
 }
 .tllm-join .swal2-confirm {
     width: 100% !important;
-    height: 44px !important;
+    min-height: 48px !important;
     margin: 0 !important;
     border: 0 !important;
-    border-radius: var(--tllm-radius-sm) !important;
-    background: var(--tllm-accent) !important;
-    color: var(--tllm-accent-ink) !important;
-    font: 600 15px var(--tllm-font) !important;
+    border-radius: 6px !important;
+    background: var(--j-act) !important;
+    color: var(--j-act-ink) !important;
+    font: 600 17px var(--j-text) !important;
     box-shadow: none !important;
 }
 .tllm-join-cancel {
-    align-self: center;
-    padding: 4px 8px;
+    align-self: flex-start;
+    padding: 0;
     border: 0;
     background: none;
-    color: var(--tllm-text-2);
-    font: 13px var(--tllm-font);
+    color: var(--j-ink-2);
+    font: 15px var(--j-text);
+    text-decoration: underline;
     cursor: pointer;
 }
 .tllm-join-cancel:hover {
-    color: var(--tllm-text);
+    color: var(--j-ink);
 }
-@media (max-width: 720px) {
-    .swal2-popup.tllm-join {
-        padding: 16px !important;
-    }
+@media (max-width: 760px) {
     .tllm-join-grid {
         grid-template-columns: minmax(0, 1fr);
-        gap: 16px;
     }
-    .tllm-join #initVideoContainer {
-        aspect-ratio: 4 / 3;
+    .tllm-join-sign {
+        border-right: 0;
+        border-bottom: 1px solid var(--j-rule);
+    }
+    .tllm-join-band {
+        padding: 12px 18px;
+    }
+    .tllm-join-sign-body {
+        padding: 20px 18px 22px;
+    }
+    .tllm-join-right {
+        padding: 18px;
     }
 }
 
@@ -1911,4 +2043,24 @@ body.tllm-panel-open .tllm-board {
     .tllm-board-style {
         bottom: 6px;
     }
+}
+
+/* MiroTalk sets a font on every element: the door keeps its own */
+.tllm-join-wrap .tllm-join-band,
+.tllm-join-wrap .tllm-join-band *,
+.tllm-join-wrap .tllm-join-name-big,
+.tllm-join-wrap .tllm-join-brand,
+.tllm-join-wrap .tllm-join-brand * {
+    font-family: var(--j-cond) !important;
+}
+.tllm-join-wrap .tllm-join-facts *,
+.tllm-join-wrap .tllm-join-foot,
+.tllm-join-wrap .tllm-join-label,
+.tllm-join-wrap .tllm-join-meter *,
+.tllm-join-wrap .tllm-join-notice *,
+.tllm-join-wrap .tllm-join-cancel {
+    font-family: var(--j-text) !important;
+}
+.tllm-join-wrap .tllm-join-facts dt {
+    font-weight: 400 !important;
 }

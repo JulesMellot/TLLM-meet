@@ -19,27 +19,71 @@
         <meta name="twitter:image" content="{{OG_IMAGE}}" />
         <link rel="stylesheet" href="../css/tllm-pages.css" />
         <script defer src="../js/Brand.js"></script>
-        <script defer src="../js/WhoAreYou.js"></script>
+        <script defer src="../js/TllmDoor.js"></script>
     </head>
     <body class="tllm-page">
+        <header class="tllm-bar">
+            <a class="tllm-mark" href="/">TLLM<span class="tllm-ast">*</span>meet</a>
+        </header>
         <main class="tllm-main">
-            <div class="tllm-card">
-                <a class="tllm-brand" href="/"><img src="../images/logo.svg" alt="" /><span>TLLM*meet</span></a>
-                <h1 id="waitingRoomHeading">Cette visio n'a pas encore commencé</h1>
-                <p id="waitingRoomDescription">
-                    Gardez cette page ouverte : vous entrerez automatiquement dès que l'organisateur l'ouvrira.
-                </p>
-                <span id="waitingRoomName" class="tllm-chip" hidden></span>
-                <div id="waitingState" class="tllm-status" aria-live="polite">
-                    <span class="tllm-dot" aria-hidden="true"></span>
-                    <span id="waitingStatus">En attente de l'organisateur…</span>
-                </div>
-                <p id="waitingElapsed" class="tllm-muted"></p>
-                <p class="tllm-muted">
-                    <span id="waitingRoomHostLink">Vous organisez cette visio ?</span>
-                    <a id="waitingRoomLoginLink" href="/login">Se connecter</a>
-                </p>
+            <div class="tllm-door">
+                <section class="tllm-sign" aria-labelledby="doorName">
+                    <div class="tllm-band is-soon" id="doorBand" aria-live="polite">
+                        <span id="doorState">Pas encore commencée</span>
+                        <span class="tllm-band-clock" id="doorClock" aria-hidden="true"></span>
+                    </div>
+                    <div class="tllm-sign-body">
+                        <h1 class="tllm-room-name" id="doorName">Visio</h1>
+                        <dl class="tllm-facts" id="doorFacts"></dl>
+                        <p class="tllm-sign-foot" id="doorFoot">Chargement…</p>
+                    </div>
+                </section>
+                <section class="tllm-setup" aria-label="Vos réglages">
+                    <div class="tllm-cam">
+                        <video id="doorVideo" autoplay muted playsinline hidden></video>
+                        <div class="tllm-cam-face" id="doorFace" aria-hidden="true">?</div>
+                        <div class="tllm-cam-tools">
+                            <button class="tllm-round" type="button" id="doorMic" aria-pressed="true"></button>
+                            <button class="tllm-round" type="button" id="doorCam" aria-pressed="true"></button>
+                        </div>
+                    </div>
+                    <label class="tllm-field" for="doorNameInput"
+                        >Votre nom
+                        <input
+                            id="doorNameInput"
+                            class="tllm-input"
+                            type="text"
+                            maxlength="60"
+                            autocomplete="name"
+                            placeholder="Votre prénom et nom"
+                    /></label>
+                    <label class="tllm-field" for="doorCamSelect" id="doorCamField" hidden
+                        >Caméra
+                        <select id="doorCamSelect" class="tllm-input"></select
+                    ></label>
+                    <label class="tllm-field" for="doorMicSelect" id="doorMicField" hidden
+                        >Micro
+                        <select id="doorMicSelect" class="tllm-input"></select
+                    ></label>
+                    <div class="tllm-level" aria-hidden="true">
+                        <span>Micro</span>
+                        <span class="tllm-level-track"><span class="tllm-level-fill" id="doorLevel"></span></span>
+                    </div>
+                    <div class="tllm-checks" id="doorChecks" aria-live="polite"></div>
+                    <div class="tllm-enter">
+                        <label class="tllm-check" id="doorAutoWrap"
+                            ><input type="checkbox" id="doorAuto" checked /><span
+                                >Entrer tout seul quand la salle ouvre</span
+                            ></label
+                        >
+                        <button class="tllm-button" type="button" id="doorEnter" disabled>Entrer dans la salle</button>
+                        <p class="tllm-error" id="doorError" role="alert"></p>
+                    </div>
+                </section>
             </div>
+            <p class="tllm-hint" style="margin-top: 16px">
+                Vous organisez cette visio ? <a id="doorLogin" href="/login">Se connecter</a>
+            </p>
         </main>
         <footer class="tllm-footer">
             <a href="/privacy">Confidentialité</a>

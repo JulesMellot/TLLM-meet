@@ -143,10 +143,71 @@
         return wrap;
     }
 
+    // The sign of the room: name, who is inside, planned time (GET /api/room/<id>)
+    function buildSign() {
+        const roomName = typeof room_id !== 'undefined' ? room_id : '';
+        const sign = el('section', 'tllm-join-sign');
+        const band = el('div', 'tllm-join-band');
+        const stateText = el('span', '', 'Salle ouverte');
+        const clock = el('b');
+        const tick = () =>
+            (clock.textContent = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(
+                new Date()
+            ));
+        tick();
+        setInterval(tick, 15000);
+        band.append(stateText, clock);
+        const body = el('div', 'tllm-join-sign-body');
+        const name = el('h1', 'tllm-join-name-big', roomName);
+        const facts = el('dl', 'tllm-join-facts');
+        const foot = el('p', 'tllm-join-foot', 'Réglez votre caméra et votre micro, puis entrez.');
+        body.append(name, facts, foot);
+        sign.append(band, body);
+
+        const fact = (term, value) => {
+            const dt = el('dt', '', term);
+            const dd = el('dd', '', value);
+            facts.append(dt, dd);
+        };
+        const hour = (ms) =>
+            new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(new Date(ms));
+        fetch(`/api/room/${encodeURIComponent(roomName)}`, { cache: 'no-store' })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((info) => {
+                if (!info) return;
+                name.textContent = info.name;
+                facts.textContent = '';
+                if (info.booking) fact('Prévue', `de ${hour(info.booking.start)} à ${hour(info.booking.end)}`);
+                if (info.organizer) fact('Organisée par', info.organizer);
+                if (info.active) {
+                    band.classList.remove('is-free');
+                    stateText.textContent = 'En cours';
+                    const shown = info.people.slice(0, 3);
+                    const rest = info.count - shown.length;
+                    fact(
+                        'Déjà là',
+                        info.count
+                            ? rest > 0
+                                ? `${shown.join(', ')} et ${rest} autre${rest > 1 ? 's' : ''}`
+                                : shown.join(' et ')
+                            : "personne pour l'instant"
+                    );
+                } else {
+                    // Only the organiser gets here while the room is closed: they open it
+                    band.classList.add('is-free');
+                    stateText.textContent = 'Vous ouvrez la salle';
+                    foot.textContent = 'Les invités qui attendent devant la porte entreront dès que vous serez dedans.';
+                }
+            })
+            .catch(() => {});
+        return sign;
+    }
+
     function buildJoinScreen() {
         const popup = document.querySelector('.swal2-popup.init-modal-size');
         if (!popup || popup.classList.contains('tllm-join')) return;
         popup.classList.add('tllm-join');
+        popup.parentElement?.classList.add('tllm-join-wrap');
 
         const videoContainer = $('initVideoContainer');
         const input = popup.querySelector('.swal2-input');
@@ -155,13 +216,17 @@
         const confirm = popup.querySelector('.swal2-confirm');
         if (!videoContainer || !input || !actions) return;
 
-        const grid = el('div', 'tllm-join-grid');
-        const left = el('div', 'tllm-join-left');
-        const right = el('div', 'tllm-join-right');
-        grid.append(left, right);
+        const brand = el('a', 'tllm-join-brand');
+        brand.href = '/';
+        brand.innerHTML = 'TLLM<span>*</span>meet';
 
-        // Left: preview with the microphone / camera / background buttons on it, level meter below
-        left.append(videoContainer);
+        const grid = el('div', 'tllm-join-grid');
+        const right = el('section', 'tllm-join-right');
+        right.setAttribute('aria-label', 'Vos réglages');
+        grid.append(buildSign(), right);
+
+        // Right: preview with the microphone / camera / background buttons on it, then name and devices
+        right.append(videoContainer);
         const controls = el('div', 'tllm-join-controls');
         ['initAudioButton', 'initVideoButton', 'initVirtualBackgroundButton'].forEach((id) => {
             const button = $(id);
@@ -169,16 +234,6 @@
         });
         if (media.video !== 'ok') $('initVirtualBackgroundButton')?.classList.add('hidden');
         videoContainer.append(controls);
-        const meter = el('div', 'tllm-join-meter');
-        meter.innerHTML =
-            '<i class="fas fa-microphone" aria-hidden="true"></i><span class="tllm-join-meter-track"><span class="tllm-join-meter-fill" id="tllmJoinMeter"></span></span>';
-        meter.setAttribute('aria-label', 'Niveau du micro');
-        left.append(meter);
-
-        // Right: title, name, devices, problems, join
-        const roomName = typeof room_id !== 'undefined' ? room_id : '';
-        right.append(el('h2', 'tllm-join-title', 'Prêt à rejoindre ?'));
-        if (roomName) right.append(el('p', 'tllm-join-room', roomName));
 
         // SweetAlert only reads its input when it stays a direct child of the popup: keep it there, hidden,
         // and show a copy that writes into it
@@ -186,7 +241,7 @@
         name.type = 'text';
         name.id = 'tllmJoinName';
         name.maxLength = 254;
-        name.placeholder = 'Votre nom';
+        name.placeholder = 'Votre prénom et nom';
         name.autocomplete = 'name';
         name.value = input.value;
         name.disabled = input.disabled;
@@ -222,19 +277,26 @@
             right.append(field(label, select));
         });
 
+        const meter = el('div', 'tllm-join-meter');
+        meter.innerHTML =
+            '<span>Micro</span><span class="tllm-join-meter-track"><span class="tllm-join-meter-fill" id="tllmJoinMeter"></span></span>';
+        meter.setAttribute('aria-hidden', 'true');
+        right.append(meter);
+
         const notice = el('div', 'tllm-join-notice');
         notice.id = 'tllmJoinNotice';
         right.append(notice);
 
-        if (confirm) confirm.textContent = 'Rejoindre';
+        if (confirm) confirm.textContent = 'Entrer dans la salle';
         right.append(actions);
-        const cancel = el('button', 'tllm-join-cancel', 'Annuler');
+        const cancel = el('button', 'tllm-join-cancel', 'Repartir sans entrer');
         cancel.type = 'button';
         cancel.onclick = () => $('initExitButton')?.click();
         right.append(cancel);
 
         const title = popup.querySelector('.swal2-title');
         popup.insertBefore(grid, title ? title.nextSibling : popup.firstChild);
+        popup.insertBefore(brand, grid);
         renderNotice();
         name.focus();
         name.setSelectionRange(name.value.length, name.value.length);
