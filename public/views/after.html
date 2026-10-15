@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title id="title">Après la visio · TLLM*meet</title>
+        <link id="icon" rel="icon" href="../images/logo.svg" />
+        <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
+        <meta id="description" name="description" content="TLLM*meet, visioconférence privée." />
+        <meta property="og:type" content="{{OG_TYPE}}" />
+        <meta property="og:site_name" content="{{OG_SITE_NAME}}" />
+        <meta property="og:title" content="{{OG_TITLE}}" />
+        <meta property="og:description" content="{{OG_DESCRIPTION}}" />
+        <meta property="og:image" content="{{OG_IMAGE}}" />
+        <meta property="og:url" content="{{OG_URL}}" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="{{OG_TITLE}}" />
+        <meta name="twitter:description" content="{{OG_DESCRIPTION}}" />
+        <meta name="twitter:image" content="{{OG_IMAGE}}" />
+        <link rel="stylesheet" href="../css/tllm-pages.css" />
+        <script defer src="../js/Brand.js"></script>
+        <script defer src="../js/TllmAfter.js"></script>
+    </head>
+    <body class="tllm-page">
+        <header class="tllm-bar">
+            <a class="tllm-mark" href="/">TLLM<span class="tllm-ast">*</span>meet</a>
+        </header>
+        <main class="tllm-main">
+            <div class="tllm-solo is-wide">
+                <h1 id="afterTitle">Vous êtes sorti de la salle</h1>
+                <p class="tllm-lead" id="afterLead"></p>
+                <div class="tllm-spent" id="afterSpent" hidden>
+                    <div><b id="afterDuration"></b><span>passées dans la salle</span></div>
+                    <div><b id="afterArrived"></b><span>heure d'arrivée</span></div>
+                    <div><b id="afterPeak"></b><span>personnes au plus fort</span></div>
+                </div>
+                <div class="tllm-row">
+                    <a class="tllm-button" id="afterBack" href="/">Revenir dans la salle</a>
+                    <a class="tllm-button is-quiet" href="/">Fermer</a>
+                </div>
+                <p class="tllm-hint" id="afterNote"></p>
+            </div>
+        </main>
+        <footer class="tllm-footer">
+            <a href="/privacy">Confidentialité</a>
+            <a href="https://github.com/miroslavpejic85/mirotalksfu" target="_blank" rel="noopener noreferrer"
+                >Basé sur MiroTalk SFU</a
+            >
+        </footer>
+    </body>
+</html>

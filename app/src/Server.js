@@ -241,6 +241,7 @@ const views = {
     whoAreYou: path.join(__dirname, '../../', 'public/views/whoAreYou.html'),
     rdv: path.join(__dirname, '../../', 'public/views/rdv.html'),
     rdvAdmin: path.join(__dirname, '../../', 'public/views/rdvAdmin.html'),
+    after: path.join(__dirname, '../../', 'public/views/after.html'),
 };
 
 const filesPath = [
@@ -251,6 +252,7 @@ const filesPath = [
     views.customizeRoom,
     views.rdv,
     views.rdvAdmin,
+    views.after,
 ];
 
 const htmlInjector = new HtmlInjector(filesPath, config.ui.brand);
@@ -576,6 +578,12 @@ function startServer() {
         if (!admin) return res.status(401).json({ error: 'unauthorized' });
         return rdvReply(res, () => handler(req, admin));
     };
+
+    // After leaving a call (see TllmRoom.js)
+    app.get('/apres/:id', (req, res) => {
+        if (!Validator.isValidRoomName(req.params.id)) return res.status(404).sendFile(views.notFound);
+        return htmlInjector.injectHtml(views.after, res);
+    });
 
     app.get('/rdv', (req, res) => htmlInjector.injectHtml(views.rdvAdmin, res));
     app.get('/rdv/:id', (req, res) => {

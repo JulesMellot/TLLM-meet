@@ -154,6 +154,37 @@
         };
     }
 
+    // After the call: a page with the room name, the time spent and a way back in (/apres/<room>)
+    T.joinedAt = Date.now();
+    T.maxPeers = 1;
+    if (typeof redirectOnLeave === 'function') {
+        const origRedirectOnLeave = redirectOnLeave;
+        // eslint-disable-next-line no-global-assign
+        redirectOnLeave = function (disconnectAll = false) {
+            if (typeof redirect !== 'undefined' && redirect?.enabled && redirect.url) {
+                return origRedirectOnLeave(disconnectAll);
+            }
+            try {
+                sessionStorage.setItem(
+                    'tllm-after',
+                    JSON.stringify({
+                        room: room_id,
+                        joinedAt: T.joinedAt,
+                        leftAt: Date.now(),
+                        maxPeers: T.maxPeers,
+                        endedForAll: !!disconnectAll,
+                    })
+                );
+            } catch {
+                /* the page still works without it */
+            }
+            isExiting = true;
+            endRoomSession();
+            rc.exitRoom(disconnectAll);
+            openURL(new URL(`/apres/${encodeURIComponent(room_id)}`, window.location.href).href);
+        };
+    }
+
     T.start = function () {
         if (T.started || typeof rc === 'undefined' || !rc) return;
         T.started = true;
@@ -957,6 +988,7 @@
                 you: id === rc.peer_id,
             };
         });
+        T.maxPeers = Math.max(T.maxPeers, T.peers.length);
         // Remote hand raised: discreet bubble and sound, for presenters only
         T.peers.forEach((p) => {
             const before = previous.get(p.id);

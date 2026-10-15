@@ -157,19 +157,31 @@
         const best = v.status === 'fixed' ? v.fixed.slot : bestIndex(sc);
         let html = '';
 
-        html += `<div class="rdv-head">
-            <span class="rdv-eyebrow">${{ open: 'Sondage de dates', fixed: 'Date fixée', closed: 'Sondage fermé' }[v.status]}</span>
-            <h1>${esc(v.title)}</h1>
-            <div class="rdv-meta"><span>Proposé par ${esc(v.organizer)}</span><span>Durée : ${durationLabel(v.duration)}</span><span>Horaires en ${zoneLabel()}</span><span>En visio sur TLLM*meet</span></div>
-            ${v.description ? `<p class="rdv-lead">${esc(v.description)}</p>` : ''}
-        </div>`;
+        // The sign of the poll: band with its state and progress, title, facts, the rule
+        const n = v.participants.length;
+        const band = { open: 'is-soon', fixed: 'is-free', closed: 'is-done' }[v.status];
+        const bandText = { open: 'Date à trouver', fixed: 'Date fixée', closed: 'Sondage fermé' }[v.status];
+        const progress = v.expected ? `${n} sur ${v.expected}` : `${n} réponse${n > 1 ? 's' : ''}`;
+        html += `<section class="rdv-sign">
+            <div class="tllm-band ${band}"><span>${bandText}</span><span class="tllm-band-clock">${progress}</span></div>
+            <div class="rdv-sign-body">
+                <h1 class="tllm-room-name">${esc(v.title)}</h1>
+                <dl class="tllm-facts">
+                    <dt>Durée</dt><dd>${durationLabel(v.duration)}, en visio</dd>
+                    <dt>Proposé par</dt><dd>${esc(v.organizer)}</dd>
+                    <dt>Horaires</dt><dd>${zoneLabel()}</dd>
+                    ${v.deadline && open ? `<dt>Réponses</dt><dd>jusqu’au ${esc(fmt(v.deadline, { weekday: 'long', day: 'numeric', month: 'long' }))}</dd>` : ''}
+                </dl>
+                ${v.description ? `<p class="rdv-lead">${esc(v.description)}</p>` : ''}
+                ${open ? progressLine(v) : ''}
+            </div>
+        </section>`;
 
         if (v.admin) html += adminCard(v);
         if (v.status === 'fixed') html += fixedCard(v);
         if (v.status === 'closed') {
             html += `<div class="rdv-callout"><h2>Ce sondage est fermé</h2><p>Aucune date n’a été retenue.</p></div>`;
         }
-        if (open) html += progressLine(v);
 
         if (state.confirm) {
             html += `<div class="rdv-callout is-accent" id="confirmBox"><h2>${esc(state.confirm.title)}</h2><p>${esc(state.confirm.text)}</p>
@@ -177,7 +189,7 @@
                 <button type="button" class="tllm-button rdv-secondary" data-act="confirm-no">Annuler</button></div></div>`;
         }
 
-        if (open) {
+        if (open && v.admin) {
             html += `<div class="rdv-legend">
                 <span>${answerMark('yes')} Oui</span>
                 ${v.allowMaybe ? `<span>${answerMark('maybe')} Si besoin</span>` : ''}
@@ -199,17 +211,18 @@
         }
 
         $('poll').innerHTML = html;
+        document.body.classList.toggle('is-admin', !!v.admin);
     }
 
     function progressLine(v) {
         const n = v.participants.length;
-        let text = `${n} réponse${n > 1 ? 's' : ''}`;
+        let text;
         if (v.expected) {
-            text += ` sur ${v.expected} attendue${v.expected > 1 ? 's' : ''}. La date se fixe toute seule à la ${v.expected}${v.expected === 1 ? 're' : 'e'} réponse.`;
-        } else text += '. L’organisateur fixera la date.';
-        if (v.deadline)
-            text += ` Réponses jusqu’au ${fmt(v.deadline, { weekday: 'long', day: 'numeric', month: 'long' })}.`;
-        return `<p class="tllm-muted" style="margin:0">${esc(text)}</p>`;
+            text = `La date se fixe toute seule à la ${v.expected}${v.expected === 1 ? 're' : 'e'} réponse : le créneau qui a le plus de oui.`;
+            if (v.deadline) text += ' À la date limite, avec les réponses reçues.';
+        } else text = `${v.organizer} choisira la date avec vos réponses.`;
+        if (n === 0) text += ' Personne n’a encore répondu.';
+        return `<p class="tllm-sign-foot">${esc(text)}</p>`;
     }
 
     function tableHtml(v, sc, best, open) {

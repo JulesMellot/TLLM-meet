@@ -23,13 +23,14 @@
         <script defer src="../js/TllmRdvAdmin.js"></script>
     </head>
     <body class="tllm-page rdv-page">
+        <header class="tllm-bar">
+            <a class="tllm-mark" href="/">TLLM<span class="tllm-ast">*</span>meet</a>
+        </header>
         <main class="tllm-main">
             <div class="rdv-wrap" id="app">
-                <a class="tllm-brand" href="/"><img src="../images/logo.svg" alt="" /><span>TLLM*meet</span></a>
                 <p class="tllm-muted" id="loading">Chargement…</p>
                 <section id="listView" class="rdv-stack" hidden>
                     <div class="rdv-head">
-                        <span class="rdv-eyebrow">Organisateur</span>
                         <h1>Caler une réunion</h1>
                         <p class="rdv-lead">
                             Proposez plusieurs dates. Chacun répond avec le lien, sans compte. La date se fixe toute
@@ -48,7 +49,6 @@
 
                 <form id="createView" class="rdv-stack" hidden novalidate>
                     <div class="rdv-head">
-                        <span class="rdv-eyebrow">Nouveau sondage de dates</span>
                         <h1>Proposer des dates</h1>
                         <p class="rdv-lead">
                             Cliquez sur des jours, puis ajoutez un ou plusieurs horaires pour chacun.
@@ -151,7 +151,6 @@
 
                 <section id="doneView" class="rdv-stack" hidden>
                     <div class="rdv-head">
-                        <span class="rdv-eyebrow">Sondage créé</span>
                         <h1>Le sondage est prêt</h1>
                         <p class="rdv-lead">
                             Envoyez ce lien par le moyen de votre choix : messagerie, SMS, groupe. TLLM*meet n'envoie

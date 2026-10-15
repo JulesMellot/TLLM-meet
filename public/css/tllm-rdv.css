@@ -780,3 +780,175 @@ table.rdv-table {
 .rdv-page details > summary {
     cursor: pointer;
 }
+
+/* ---------- Door look (tllm-pages.css): panels without borders, condensed titles ---------- */
+.rdv-page .tllm-main {
+    display: block;
+    padding-top: 6px;
+}
+.rdv-wrap {
+    max-width: 1000px;
+}
+.rdv-card,
+.rdv-callout,
+.rdv-fixed,
+.rdv-scroll {
+    border: 0;
+    border-radius: var(--r);
+}
+.rdv-callout.is-accent {
+    box-shadow: inset 4px 0 0 var(--act);
+    background: var(--panel);
+}
+.rdv-head h1,
+.rdv-fixed h2 {
+    font-family: var(--cond);
+    font-weight: 700;
+    line-height: 1;
+}
+.rdv-head h1 {
+    font-size: clamp(2.4rem, 6vw, 3.6rem);
+}
+.rdv-fixed h2 {
+    font-size: 2rem;
+}
+.rdv-card h2,
+.rdv-callout h2 {
+    font-size: 1.1rem;
+}
+.rdv-sign {
+    overflow: hidden;
+    background: var(--panel);
+    border-radius: var(--r);
+}
+.rdv-sign-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 26px 28px 30px;
+}
+.rdv-sign .tllm-sign-foot {
+    margin-top: 0;
+}
+.rdv-sign .rdv-lead {
+    color: var(--ink-2);
+}
+
+/* Guests: one line per slot at every width; the organiser keeps the table */
+body.rdv-page:not(.is-admin) .rdv-scroll.rdv-answer {
+    display: none;
+}
+body.rdv-page:not(.is-admin) .rdv-slots {
+    display: flex;
+}
+.rdv-slots {
+    gap: 0;
+    overflow: hidden;
+    background: var(--panel);
+    border-radius: var(--r);
+}
+.rdv-slots > .rdv-field {
+    padding: 18px 22px 14px;
+    font-weight: 600;
+}
+.rdv-slot {
+    padding: 14px 22px;
+    border: 0;
+    border-top: 1px solid var(--rule);
+    border-radius: 0;
+    background: none;
+}
+.rdv-slot.is-best {
+    box-shadow: inset 5px 0 0 var(--free);
+}
+.rdv-slot .when {
+    font: 600 1.35rem/1.15 var(--cond);
+}
+.rdv-slot .when::first-letter {
+    text-transform: uppercase;
+}
+.rdv-seg {
+    border-radius: var(--r);
+}
+.rdv-seg button {
+    min-height: 42px;
+    padding: 0 14px;
+    font-weight: 600;
+    background: var(--panel);
+}
+.rdv-seg button[aria-pressed='true'][data-v='yes'] {
+    color: var(--free-ink);
+    background: var(--free);
+}
+.rdv-seg button[aria-pressed='true'][data-v='maybe'] {
+    color: var(--soon-ink);
+    background: var(--soon);
+}
+.rdv-seg button[aria-pressed='true'][data-v='no'] {
+    color: var(--ink);
+    background: var(--panel-2);
+}
+.tllm-button.rdv-secondary {
+    color: var(--ink);
+    background: var(--panel-2);
+    border: 0;
+}
+.tllm-button.rdv-secondary:hover {
+    background: var(--rule);
+}
+.tllm-button.rdv-danger {
+    color: var(--danger);
+    background: var(--panel-2);
+    border: 0;
+}
+.rdv-leaf .m {
+    background: var(--live);
+}
+.rdv-leaf .n,
+.rdv-slot-h .n {
+    font-family: var(--cond);
+}
+.rdv-cal button[aria-pressed='true'] {
+    background: var(--act);
+    color: var(--act-ink);
+}
+.rdv-day,
+.rdv-going .rdv-person {
+    background: var(--panel-2);
+}
+.rdv-chip {
+    background: var(--panel);
+}
+.rdv-chip[aria-pressed='true'] {
+    background: var(--act);
+    border-color: var(--act);
+    color: var(--act-ink);
+}
+@media (max-width: 760px) {
+    .rdv-sign-body {
+        padding: 20px 18px 22px;
+    }
+    .rdv-slot {
+        padding: 14px 16px;
+    }
+    .rdv-slot .rdv-seg {
+        grid-column: 1 / -1;
+        display: flex;
+    }
+    .rdv-slot .rdv-seg button {
+        flex: 1;
+    }
+}
+.rdv-page .tllm-main {
+    padding: 6px max(16px, env(safe-area-inset-right, 0px)) 64px max(16px, env(safe-area-inset-left, 0px));
+}
+.rdv-wrap {
+    max-width: none;
+}
+.rdv-page main a:not(.tllm-button) {
+    color: var(--act);
+}
+.rdv-field .tllm-input,
+.rdv-field select {
+    font-weight: 400;
+}
