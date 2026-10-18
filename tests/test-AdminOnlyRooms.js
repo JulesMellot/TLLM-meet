@@ -705,6 +705,126 @@ describe('Only the admin can create a meeting (integration)', function () {
         });
     });
 
+    describe('Moderator accounts', () => {
+        const MOD = { username: 'camille', password: 'Camille-Pass-7', displayname: 'Camille' };
+        let adminCookie;
+        let modCookie;
+
+        before(async () => {
+            adminCookie = await login(ADMIN);
+        });
+
+        it('lets only a HOST_USERS admin manage moderators', async () => {
+            assert.equal((await request('GET', '/api/admin/moderators')).status, 401);
+            assert.equal((await request('POST', '/api/admin/moderators', { body: MOD })).status, 401);
+            const list = await request('GET', '/api/admin/moderators', { cookie: adminCookie });
+            assert.equal(list.status, 200);
+            assert.deepEqual(list.json.moderators, []);
+        });
+
+        it('refuses an admin username, a weak password or an odd username', async () => {
+            for (const [body, status] of [
+                [{ ...MOD, username: 'jules' }, 409],
+                [{ ...MOD, username: 'JULES' }, 409],
+                [{ ...MOD, password: 'short' }, 400],
+                [{ ...MOD, password: 'x'.repeat(37) }, 400],
+                [{ ...MOD, username: 'a b' }, 400],
+                [{ ...MOD, username: ['camille'] }, 400],
+            ]) {
+                const res = await request('POST', '/api/admin/moderators', { body, cookie: adminCookie });
+                assert.equal(res.status, status, JSON.stringify(body));
+            }
+        });
+
+        it('creates a moderator who logs in on /login, without exposing the password', async () => {
+            const res = await request('POST', '/api/admin/moderators', { body: MOD, cookie: adminCookie });
+            assert.equal(res.status, 200, res.body);
+            assert.equal(res.json.username, 'camille');
+            assert.ok(!res.body.includes(MOD.password));
+            const list = await request('GET', '/api/admin/moderators', { cookie: adminCookie });
+            assert.ok(!list.body.includes(MOD.password));
+            assert.ok(!list.body.includes('hash'));
+            modCookie = await login(MOD);
+            const session = await request('GET', '/admin/session', { cookie: modCookie });
+            assert.deepEqual(session.json, { admin: true, role: 'moderator', name: 'Camille' });
+            assert.equal(
+                (await request('POST', '/api/admin/moderators', { body: MOD, cookie: adminCookie })).status,
+                409
+            );
+        });
+
+        it('does not let a moderator manage accounts', async () => {
+            const other = { username: 'eve', password: 'Eve-Pass-1234' };
+            assert.equal((await request('GET', '/api/admin/moderators', { cookie: modCookie })).status, 403);
+            assert.equal(
+                (await request('POST', '/api/admin/moderators', { body: other, cookie: modCookie })).status,
+                403
+            );
+            assert.equal((await request('DELETE', '/api/admin/moderators/camille', { cookie: modCookie })).status, 403);
+        });
+
+        it('lets a moderator open rooms and run date polls like an admin', async () => {
+            const room = await request('POST', '/admin/rooms', { body: { name: 'Atelier' }, cookie: modCookie });
+            assert.equal(room.status, 200);
+            assert.equal((await createToken(room.json.room, modCookie)).status, 200);
+            const sign = await request('GET', `/api/room/${room.json.room}`);
+            assert.equal(sign.json.organizer, 'Camille');
+            const overview = await request('GET', '/api/admin/overview', { cookie: modCookie });
+            assert.equal(overview.status, 200);
+            assert.ok(overview.json.rooms.some((r) => r.id === room.json.room));
+
+            const day = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+            const poll = await request('POST', '/api/rdv', {
+                cookie: modCookie,
+                body: {
+                    title: 'Réunion de rentrée',
+                    duration: 60,
+                    slots: [
+                        { date: day, time: '10:00' },
+                        { date: day, time: '14:00' },
+                    ],
+                },
+            });
+            assert.equal(poll.status, 200, poll.body);
+            const list = await request('GET', '/api/rdv', { cookie: modCookie });
+            assert.ok(list.json.polls.some((p) => p.id === poll.json.id));
+            const view = await request('GET', `/api/rdv/${poll.json.id}`, { cookie: modCookie });
+            assert.equal(view.json.admin, true);
+            assert.equal((await request('DELETE', `/api/rdv/${poll.json.id}`, { cookie: modCookie })).status, 200);
+        });
+
+        it('makes the moderator presenter of the meeting', async () => {
+            const roomId = 'atelier-mod-test';
+            const token = (await createToken(roomId, modCookie)).json.token;
+            const socket = await connect(modCookie);
+            sockets.push(socket);
+            const { created, room } = await joinRoom(socket, roomId, peerInfo('Camille'), token);
+            assert.equal(created.room_id, roomId);
+            assert.equal(presenterOf(room, 'Camille'), true);
+            socket.close();
+        });
+
+        it('closes the moderator sessions when the password changes or the account is removed', async () => {
+            const changed = await request('PUT', '/api/admin/moderators/camille/password', {
+                body: { password: 'Camille-New-8' },
+                cookie: adminCookie,
+            });
+            assert.equal(changed.status, 200);
+            assert.equal((await request('GET', '/admin/session', { cookie: modCookie })).json.admin, false);
+            modCookie = await login({ username: 'camille', password: 'Camille-New-8' });
+            assert.equal((await request('GET', '/admin/session', { cookie: modCookie })).json.role, 'moderator');
+
+            const removed = await request('DELETE', '/api/admin/moderators/camille', { cookie: adminCookie });
+            assert.equal(removed.status, 200);
+            assert.equal((await request('GET', '/admin/session', { cookie: modCookie })).json.admin, false);
+            assert.equal((await createToken('after-removal', modCookie)).status, 403);
+            assert.equal(
+                (await request('DELETE', '/api/admin/moderators/camille', { cookie: adminCookie })).status,
+                404
+            );
+        });
+    });
+
     it('revokes the session on logout (replaying the old cookie fails)', async () => {
         const cookie = await login(ADMIN2);
         assert.equal((await createToken('logout-room', cookie)).status, 200);
@@ -730,5 +850,6 @@ describe('Only the admin can create a meeting (integration)', function () {
         assert.ok(logs.length > 0);
         assert.ok(!logs.includes(ADMIN.password), 'admin password found in logs');
         assert.ok(!logs.includes(ADMIN2.password), 'admin password found in logs');
+        assert.ok(!logs.includes('Camille-Pass-7'), 'moderator password found in logs');
     });
 });

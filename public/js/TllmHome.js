@@ -4,6 +4,7 @@
 // Guests: a field to paste the link they received.
 // Organiser: the corridor. Every room with its band (en cours, réservée, fermée), the agenda of
 // the dates fixed by the polls, and the polls still waiting for answers. Data: /api/admin/overview.
+// Admin (HOST_USERS) only: the moderator accounts. Data: /api/admin/moderators.
 
 (function () {
     const $ = (id) => document.getElementById(id);
@@ -256,8 +257,156 @@
         }
     }
 
+    // ---------- admin: moderator accounts ----------
+
+    async function modApi(method, url, body) {
+        const res = await fetch(url, {
+            method,
+            credentials: 'same-origin',
+            headers: body ? { 'Content-Type': 'application/json' } : {},
+            body: body ? JSON.stringify(body) : undefined,
+        });
+        if (res.status === 401) {
+            window.location.href = '/login';
+            throw new Error('');
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Erreur, réessayez.');
+        return data;
+    }
+
+    function randomPassword() {
+        const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        const bytes = crypto.getRandomValues(new Uint8Array(14));
+        return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
+    }
+
+    function modRow(mod) {
+        const li = el('li', 'tllm-mod');
+        const who = el('div', 'tllm-mod-who');
+        who.append(el('b', '', mod.displayname));
+        who.append(el('span', '', `Identifiant : ${mod.username}`));
+        li.append(who);
+
+        const actions = el('div', 'tllm-mod-actions');
+        const resetBtn = el('button', 'tllm-button is-quiet is-small', 'Nouveau mot de passe');
+        resetBtn.type = 'button';
+        const removeBtn = el('button', 'tllm-button is-quiet is-small', 'Supprimer');
+        removeBtn.type = 'button';
+        actions.append(resetBtn, removeBtn);
+        li.append(actions);
+
+        resetBtn.onclick = () => {
+            if (li.querySelector('.tllm-mod-reset')) return;
+            li.querySelector('.tllm-mod-done')?.remove();
+            const form = el('form', 'tllm-mod-reset');
+            const input = el('input', 'tllm-input');
+            input.type = 'text';
+            input.maxLength = 36;
+            input.autocomplete = 'new-password';
+            input.value = randomPassword();
+            input.setAttribute('aria-label', `Nouveau mot de passe de ${mod.displayname}`);
+            const save = el('button', 'tllm-button is-small', 'Enregistrer');
+            save.type = 'submit';
+            form.append(input, save);
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                save.disabled = true;
+                try {
+                    await modApi('PUT', `/api/admin/moderators/${encodeURIComponent(mod.username)}/password`, {
+                        password: input.value,
+                    });
+                    copyText(input.value, 'Mot de passe changé et copié', 'Mot de passe changé');
+                    const shown = el('p', 'tllm-mod-done', 'Nouveau mot de passe : ');
+                    shown.append(el('b', '', input.value));
+                    form.replaceWith(shown);
+                } catch (err) {
+                    toast(err.message);
+                    save.disabled = false;
+                }
+            };
+            li.append(form);
+            input.select();
+        };
+
+        removeBtn.onclick = async () => {
+            if (!window.confirm(`Supprimer le compte de ${mod.displayname} ? Sa session sera fermée.`)) return;
+            removeBtn.disabled = true;
+            try {
+                await modApi('DELETE', `/api/admin/moderators/${encodeURIComponent(mod.username)}`);
+                toast('Compte supprimé');
+                loadModerators();
+            } catch (err) {
+                toast(err.message);
+                removeBtn.disabled = false;
+            }
+        };
+        return li;
+    }
+
+    // Passwords are shown once on the page as well: the clipboard may be refused
+    function copyText(text, copied, notCopied) {
+        if (!navigator.clipboard) return toast(notCopied);
+        navigator.clipboard.writeText(text).then(
+            () => toast(copied),
+            () => toast(notCopied)
+        );
+    }
+
+    async function loadModerators() {
+        try {
+            const data = await modApi('GET', '/api/admin/moderators');
+            const list = $('mods');
+            list.textContent = '';
+            if (!data.moderators.length) list.append(el('li', 'tllm-empty', 'Aucun modérateur pour l’instant.'));
+            data.moderators.forEach((mod) => list.append(modRow(mod)));
+        } catch {
+            /* shown again on the next load */
+        }
+    }
+
+    $('modGen').addEventListener('click', () => {
+        $('modPass').value = randomPassword();
+        $('modPass').select();
+    });
+
+    $('modForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const error = $('modError');
+        const button = $('modCreate');
+        error.textContent = '';
+        $('modDone').hidden = true;
+        button.disabled = true;
+        const account = {
+            displayname: $('modName').value.trim(),
+            username: $('modUser').value.trim(),
+            password: $('modPass').value,
+        };
+        try {
+            await modApi('POST', '/api/admin/moderators', account);
+            const login = `${window.location.origin}/login`;
+            copyText(
+                `${login}\nIdentifiant : ${account.username}\nMot de passe : ${account.password}`,
+                'Compte créé, accès copiés',
+                'Compte créé'
+            );
+            const done = $('modDone');
+            done.textContent = `Transmettez ces accès à ${account.displayname || account.username} : `;
+            done.append(el('b', '', login), ', identifiant ');
+            done.append(el('b', '', account.username), ', mot de passe ');
+            done.append(el('b', '', account.password), '.');
+            done.hidden = false;
+            $('modForm').reset();
+            loadModerators();
+        } catch (err) {
+            error.textContent = err.message;
+        } finally {
+            button.disabled = false;
+        }
+    });
+
     function showAdmin(session) {
-        $('adminName').textContent = session.name || '';
+        $('adminName').textContent = session.role === 'moderator' ? `${session.name} (modérateur)` : session.name || '';
         $('adminWho').hidden = false;
         $('logoutLink').hidden = false;
         $('loginLink').hidden = true;
@@ -267,6 +416,10 @@
         tick();
         updatePreview();
         loadOverview();
+        if (session.role === 'admin') {
+            $('modBlock').hidden = false;
+            loadModerators();
+        }
         setInterval(tick, 15000);
         setInterval(() => !document.hidden && loadOverview(), 30000);
         document.addEventListener('visibilitychange', () => !document.hidden && loadOverview());

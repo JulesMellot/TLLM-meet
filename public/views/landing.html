@@ -86,6 +86,61 @@
                             <ul class="tllm-polls" id="polls"></ul>
                             <div class="tllm-block-foot"><a href="/rdv">Proposer des dates</a></div>
                         </div>
+                        <div class="tllm-block" id="modBlock" hidden>
+                            <h2>Modérateurs</h2>
+                            <p class="tllm-hint tllm-block-pad">
+                                Un modérateur ouvre des salles, les anime comme vous et propose des dates. Il ne gère
+                                pas les comptes.
+                            </p>
+                            <ul class="tllm-mods" id="mods"></ul>
+                            <form id="modForm" class="tllm-mod-form" novalidate>
+                                <label class="tllm-field"
+                                    >Nom affiché
+                                    <input
+                                        id="modName"
+                                        class="tllm-input"
+                                        type="text"
+                                        maxlength="60"
+                                        autocomplete="off"
+                                        placeholder="Camille Martin"
+                                /></label>
+                                <label class="tllm-field"
+                                    >Identifiant
+                                    <input
+                                        id="modUser"
+                                        class="tllm-input"
+                                        type="text"
+                                        maxlength="32"
+                                        autocomplete="off"
+                                        autocapitalize="none"
+                                        spellcheck="false"
+                                        placeholder="camille"
+                                        required
+                                /></label>
+                                <label class="tllm-field"
+                                    >Mot de passe
+                                    <span class="tllm-mod-pass">
+                                        <input
+                                            id="modPass"
+                                            class="tllm-input"
+                                            type="text"
+                                            minlength="8"
+                                            maxlength="36"
+                                            autocomplete="new-password"
+                                            autocapitalize="none"
+                                            spellcheck="false"
+                                            required
+                                        />
+                                        <button id="modGen" class="tllm-button is-quiet is-small" type="button">
+                                            Générer
+                                        </button>
+                                    </span>
+                                </label>
+                                <button id="modCreate" class="tllm-button" type="submit">Créer le compte</button>
+                                <p id="modError" class="tllm-error" role="alert"></p>
+                                <p id="modDone" class="tllm-mod-done" role="status" hidden></p>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </section>

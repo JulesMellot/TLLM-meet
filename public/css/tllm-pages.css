@@ -961,6 +961,83 @@ select.tllm-input {
     color: var(--ink-2);
 }
 
+/* Moderator accounts (admin only) */
+
+.tllm-mods {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.tllm-mod {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    padding: 12px 22px;
+    border-top: 1px solid var(--rule);
+}
+
+.tllm-mod-who {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.tllm-mod-who b {
+    display: block;
+    font-weight: 600;
+}
+
+.tllm-mod-who span {
+    font-size: 0.92rem;
+    color: var(--ink-2);
+}
+
+.tllm-mod-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tllm-mod-reset {
+    display: flex;
+    flex-basis: 100%;
+    gap: 8px;
+}
+
+.tllm-mod-reset .tllm-input,
+.tllm-mod-pass .tllm-input {
+    flex: 1;
+    min-width: 0;
+    min-height: 38px;
+}
+
+.tllm-mod-pass {
+    display: flex;
+    gap: 8px;
+}
+
+.tllm-mod-done {
+    flex-basis: 100%;
+    font-size: 0.92rem;
+    color: var(--ink-2);
+    overflow-wrap: anywhere;
+}
+
+.tllm-mod-done b {
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.tllm-mod-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 22px 18px;
+    border-top: 1px solid var(--rule);
+}
+
 .tllm-toast {
     position: fixed;
     z-index: 40;

@@ -2,7 +2,7 @@
 
 Visioconférence privée, en français, pour des réunions jusqu'à une trentaine de personnes.
 
-- Seul l'administrateur crée les visios.
+- Seuls l'administrateur et les modérateurs qu'il a créés ouvrent des visios.
 - Les invités rejoignent par lien, sans compte.
 - Ni ChatGPT ni DeepSeek : aucune intégration d'IA conversationnelle.
 
@@ -40,7 +40,23 @@ l'agenda des dates fixées et les sondages de dates en attente.
 
 L'admin est présentateur de ses visios. Un invité ne le devient que si l'admin le promeut.
 
-La session admin est un cookie signé, vérifié côté serveur (`HttpOnly`, `Secure`, `SameSite=Lax`).
+## Modérateurs
+
+Les comptes de `HOST_USERS` sont les administrateurs. Depuis l'accueil, bloc **Modérateurs**,
+un administrateur crée des comptes modérateur : un nom affiché, un identifiant, un mot de passe
+(8 à 36 caractères, le bouton **Générer** en propose un). Les accès s'affichent une fois et sont copiés
+pour être transmis.
+
+Un modérateur se connecte sur `/login` comme l'admin. Il ouvre des salles, en est présentateur,
+les gère comme l'admin (verrou, salle d'attente, promotion d'un invité…) et propose des sondages de dates.
+Il voit ses propres salles et ses propres sondages. Il ne peut ni créer, ni modifier, ni supprimer de compte.
+
+L'admin peut changer le mot de passe d'un modérateur ou supprimer son compte : ses sessions ouvertes
+sont fermées aussitôt. Un identifiant déjà présent dans `HOST_USERS` est refusé.
+
+Les comptes sont enregistrés dans `DATA_DIR/moderateurs.json`, mots de passe hachés (scrypt).
+
+La session (admin ou modérateur) est un cookie signé, vérifié côté serveur (`HttpOnly`, `Secure`, `SameSite=Lax`).
 Elle ne contient pas le mot de passe et expire après `HOST_SESSION_HOURS` heures.
 La déconnexion la révoque, et changer le mot de passe invalide les sessions ouvertes.
 
@@ -78,7 +94,8 @@ Le dépôt contient [`docker-compose.coolify.yml`](docker-compose.coolify.yml), 
    (_Build Variable_ / _Available at Buildtime_) : ce sont des secrets utiles seulement à l'exécution,
    et une variable de build reste lisible dans l'historique de l'image.
 6. Le fichier déclare un volume `tllm-data`, monté sur `/src/data`. Coolify le crée tout seul
-   (onglet _Persistent Storage_) : les sondages de dates et la liste des salles y sont gardés entre deux déploiements.
+   (onglet _Persistent Storage_) : les sondages de dates, la liste des salles et les comptes modérateurs
+   y sont gardés entre deux déploiements.
    Ne pas le supprimer.
 
 Coolify lit le fichier et affiche les variables dans son interface :
@@ -143,7 +160,8 @@ Le code propre au fork est rangé dans des fichiers séparés, pour limiter les 
 | `public/js/TllmAfter.js`                                                   | page après la visio                                              |
 | `app/src/RoomRegistry.js`                                                  | salles de l'admin (`DATA_DIR/salles.json`)                       |
 | `public/fonts/`                                                            | Barlow et Barlow Condensed, licence OFL                          |
-| `app/src/AdminAuth.js`                                                     | session admin, noms de visio                                     |
+| `app/src/AdminAuth.js`                                                     | session admin ou modérateur, noms de visio                       |
+| `app/src/Moderators.js`                                                    | comptes modérateurs (`DATA_DIR/moderateurs.json`)                |
 | `app/src/ClientIp.js`                                                      | IP du client derrière les proxys                                 |
 | `public/js/TllmRoom.js`, `public/css/tllm-room.css`                        | écran de la visio (barre, panneau, discussion, sondages)         |
 | `public/js/TllmJoin.js`                                                    | écran avant d'entrer, autorisations caméra et micro              |
@@ -168,7 +186,8 @@ Les conflits se concentrent sur `app/src/Server.js`, `app/src/config.template.js
 
 Après une mise à jour, vérifier :
 
-- qu'aucune nouvelle route ni nouvel événement socket ne crée une visio sans passer par `AdminAuth` ;
+- qu'aucune nouvelle route ni nouvel événement socket ne crée une visio sans passer par `AdminAuth`
+  (qui couvre aussi les modérateurs) ;
 - que les nouvelles intégrations externes restent retirées ou désactivées par défaut.
 
 ## Licence

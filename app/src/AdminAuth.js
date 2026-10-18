@@ -3,10 +3,11 @@
 /**
  * TLLM*meet - Admin sessions
  *
- * Only an admin (an account listed in HOST_USERS) may create rooms. The admin logs in once
- * through POST /login and receives a signed session cookie. Every privileged decision
- * (room creation, presenter role) is taken server-side from that cookie: never from the
- * requester IP, the typed display name or a client-side flag.
+ * Only an admin (an account listed in HOST_USERS) or a moderator (an account an admin created,
+ * see Moderators.js) may create rooms. They log in once through POST /login and receive a signed
+ * session cookie. Both are organisers; only an admin manages the moderator accounts.
+ * Every privileged decision (room creation, presenter role) is taken server-side from that
+ * cookie: never from the requester IP, the typed display name or a client-side flag.
  *
  * The cookie is HttpOnly, Secure and SameSite=Lax, so page scripts cannot read it and
  * cross-site requests (fetch, WebSocket) do not carry it.
@@ -51,10 +52,12 @@ class AdminAuth {
      * @param {Array<{username:string,password:string,displayname?:string}>} options.users - HOST_USERS
      * @param {string} options.key - secret used to sign sessions (derived from JWT_SECRET)
      * @param {number} [options.sessionHours=12] - session lifetime
+     * @param {import('./Moderators').Moderators} [options.moderators] - accounts created by an admin
      */
-    constructor({ users, key, sessionHours = 12 }) {
+    constructor({ users, key, sessionHours = 12, moderators = null }) {
         if (!key) throw new Error('AdminAuth: missing signing key');
         this.users = Array.isArray(users) ? users.filter((u) => u && u.username && u.password) : [];
+        this.moderators = moderators;
         this.key = key;
         this.sessionHours = Number(sessionHours) > 0 ? Number(sessionHours) : 12;
         this.revoked = new Map(); // sid -> expiry (ms)
@@ -69,21 +72,27 @@ class AdminAuth {
         return this.users.length > 0;
     }
 
-    // Fingerprint of the credentials: changing the password in HOST_USERS invalidates open sessions
+    // Fingerprint of the credentials: changing a password (HOST_USERS or moderator) invalidates open sessions
     fingerprint(user) {
-        return crypto
-            .createHmac('sha256', this.key)
-            .update(`${user.username}\0${user.password}`)
-            .digest('hex')
-            .slice(0, 32);
+        const secret = user.hash ? `moderator\0${user.hash}` : user.password;
+        return crypto.createHmac('sha256', this.key).update(`${user.username}\0${secret}`).digest('hex').slice(0, 32);
     }
 
+    // HOST_USERS first: an admin can never be shadowed by a moderator account
     findUser(username) {
-        return this.users.find((u) => u.username === username) || null;
+        return this.users.find((u) => u.username === username) || this.moderators?.get(username) || null;
+    }
+
+    isAdminUser(user) {
+        return !!user && this.users.includes(user);
+    }
+
+    roleOf(user) {
+        return this.isAdminUser(user) ? 'admin' : 'moderator';
     }
 
     /**
-     * Check a username/password pair against HOST_USERS.
+     * Check a username/password pair against HOST_USERS, then the moderator accounts.
      * Always walks the whole list so timing does not reveal which usernames exist.
      */
     verifyCredentials(username, password) {
@@ -93,6 +102,10 @@ class AdminAuth {
             const userOk = safeEqual(user.username, username);
             const passOk = safeEqual(user.password, password);
             if (userOk && passOk && !match) match = user;
+        }
+        if (!match && this.moderators) {
+            const moderator = this.moderators.verify(username, password);
+            if (moderator && this.findUser(moderator.username) === moderator) match = moderator;
         }
         return match;
     }
@@ -130,7 +143,8 @@ class AdminAuth {
     }
 
     /**
-     * Verify a session token. Returns { username, displayname, sid, exp } or null.
+     * Verify a session token. Returns { username, displayname, role, sid, exp } or null.
+     * role is 'admin' (HOST_USERS) or 'moderator'.
      */
     verify(token) {
         if (!token || typeof token !== 'string') return null;
@@ -148,6 +162,7 @@ class AdminAuth {
         return {
             username: user.username,
             displayname: user.displayname || user.username,
+            role: this.roleOf(user),
             sid: decoded.sid,
             exp: decoded.exp,
         };

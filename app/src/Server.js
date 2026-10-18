@@ -86,6 +86,7 @@ const HtmlInjector = require('./HtmlInjector');
 const { CollabStore } = require('./Collab');
 const { DatePolls, DatePollError } = require('./DatePolls');
 const { RoomRegistry } = require('./RoomRegistry');
+const { Moderators, ModeratorError } = require('./Moderators');
 const log = new Logger('Server');
 const yaml = require('js-yaml');
 const swaggerUi = require('swagger-ui-express');
@@ -211,10 +212,22 @@ if (
     process.exit(1);
 }
 
+// TLLM*meet: data kept between deployments (date polls, rooms, moderator accounts). On Coolify,
+// DATA_DIR is a persistent volume.
+const dataDir = process.env.DATA_DIR || path.join(__dirname, '../../data');
+
+// Moderator accounts, created by an admin from the home page (see Moderators.js)
+const moderators = new Moderators({
+    file: path.join(dataDir, 'moderateurs.json'),
+    reserved: (username) => hostCfg.users.some((u) => u.username.toLowerCase() === username.toLowerCase()),
+    log,
+});
+
 const adminAuth = new AdminAuth({
     users: hostCfg.users,
     key: jwtKeys.adminSession,
     sessionHours: config?.security?.host?.sessionHours,
+    moderators,
 });
 
 const restApi = {
@@ -259,9 +272,7 @@ const htmlInjector = new HtmlInjector(filesPath, config.ui.brand);
 
 const roomList = new Map(); // All Rooms
 
-// TLLM*meet: date polls, kept in DATA_DIR/rendez-vous.json (see DatePolls.js). On Coolify,
-// DATA_DIR is a persistent volume, so polls survive a redeploy.
-const dataDir = process.env.DATA_DIR || path.join(__dirname, '../../data');
+// TLLM*meet: date polls, kept in DATA_DIR/rendez-vous.json (see DatePolls.js)
 const meetingTimeZone = (() => {
     const zone = process.env.MEETING_TIMEZONE || 'Europe/Paris';
     try {
@@ -445,8 +456,52 @@ function startServer() {
     app.get('/admin/session', (req, res) => {
         const admin = adminAuth.fromRequest(req);
         res.set('Cache-Control', 'no-store');
-        return res.json(admin ? { admin: true, name: admin.displayname } : { admin: false });
+        return res.json(admin ? { admin: true, role: admin.role, name: admin.displayname } : { admin: false });
     });
+
+    // ---------- TLLM*meet: moderator accounts, managed by the HOST_USERS admins only ----------
+    const moderatorsOnly = (handler) => (req, res) => {
+        const admin = adminAuth.fromRequest(req);
+        res.set('Cache-Control', 'no-store');
+        if (!admin) return res.status(401).json({ error: 'unauthorized' });
+        if (admin.role !== 'admin') return res.status(403).json({ error: 'Réservé à l’administrateur.' });
+        try {
+            return res.json(handler(req, admin));
+        } catch (err) {
+            if (err instanceof ModeratorError) return res.status(err.status).json({ error: err.message });
+            log.error('Moderators', { error: err.message });
+            return res.status(500).json({ error: 'Erreur du serveur.' });
+        }
+    };
+
+    app.get(
+        '/api/admin/moderators',
+        moderatorsOnly(() => ({ moderators: moderators.list() }))
+    );
+    app.post(
+        '/api/admin/moderators',
+        moderatorsOnly((req, admin) => {
+            const account = moderators.create(req.body || {}, admin.username);
+            log.info('Moderator created', { username: account.username, by: admin.username });
+            return account;
+        })
+    );
+    app.put(
+        '/api/admin/moderators/:username/password',
+        moderatorsOnly((req, admin) => {
+            const account = moderators.setPassword(req.params.username, req.body?.password);
+            log.info('Moderator password changed', { username: account.username, by: admin.username });
+            return account;
+        })
+    );
+    app.delete(
+        '/api/admin/moderators/:username',
+        moderatorsOnly((req, admin) => {
+            moderators.remove(req.params.username);
+            log.info('Moderator removed', { username: req.params.username, by: admin.username });
+            return { ok: true };
+        })
+    );
 
     // Admin creates a meeting: the server turns the typed name into a room id with a random suffix
     app.post('/admin/rooms', (req, res) => {
@@ -468,7 +523,7 @@ function startServer() {
             .split(/\s+/)[0]
             .slice(0, 30);
     const organizerName = (owner) => {
-        const user = hostCfg.users.find((u) => u.username === owner);
+        const user = owner ? adminAuth.findUser(owner) : null;
         return user ? user.displayname || user.username : null;
     };
 
@@ -806,7 +861,8 @@ function startServer() {
     // AXIOS
     // ####################################################
 
-    // Admin login: checks HOST_USERS and sets the session cookie. Credentials are never logged.
+    // Admin login: checks HOST_USERS and the moderator accounts, then sets the session cookie.
+    // Credentials are never logged.
     app.post('/login', loginLimiter, loginUserLimiter, (req, res) => {
         const ip = getIP(req);
         const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
@@ -824,7 +880,7 @@ function startServer() {
 
         if (!user) {
             // Helps diagnose a mistyped HOST_USERS. An unknown username is not logged (it may be a password typed in the wrong field)
-            const known = hostCfg.users.some((u) => u.username === username);
+            const known = !!adminAuth.findUser(username);
             log.warn(
                 'Admin login failed',
                 known ? { ip, username, reason: 'wrong password' } : { ip, reason: 'unknown username' }
@@ -833,7 +889,7 @@ function startServer() {
         }
 
         adminAuth.issue(res, user);
-        log.info('Admin login', { username: user.username, ip });
+        log.info('Admin login', { username: user.username, role: adminAuth.roleOf(user), ip });
         res.set('Cache-Control', 'no-store');
         return res.status(200).json({ ok: true, name: user.displayname || user.username });
     });
@@ -1108,6 +1164,7 @@ function startServer() {
                 admins: {
                     count: hostCfg.users.length,
                     usernames: hostCfg.users.map((u) => u.username),
+                    moderators: moderators.accounts.size,
                     sessionHours: adminAuth.sessionHours,
                 }, // never log passwords
                 middleware: {
@@ -1397,8 +1454,8 @@ function startServer() {
             const { peer_name, peer_id, peer_uuid, os_name, os_version, browser_name, browser_version } =
                 data.peer_info;
 
-            // TLLM*meet: the presenter role comes only from a verified admin session (cookie sent with the
-            // Socket.IO handshake). Client flags (peer_presenter, peer_token) are ignored.
+            // TLLM*meet: the presenter role comes only from a verified admin or moderator session (cookie sent
+            // with the Socket.IO handshake). Client flags (peer_presenter, peer_token) are ignored.
             const admin = adminAuth.fromSocket(socket);
             const is_presenter = Boolean(admin);
 
@@ -1423,7 +1480,7 @@ function startServer() {
             );
             if (usernameExists) return cb('isNameInUse');
 
-            // The admin is always presenter (and cannot be demoted). A guest is presenter only if a
+            // The admin (or moderator) is always presenter (and cannot be demoted). A guest is presenter only if a
             // presenter promoted this very socket during the meeting (stored server-side).
             const configuredPresenter = is_presenter;
             const shouldRegisterPresenter = is_presenter;
