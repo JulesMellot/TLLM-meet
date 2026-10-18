@@ -86,16 +86,29 @@
                             <ul class="tllm-polls" id="polls"></ul>
                             <div class="tllm-block-foot"><a href="/rdv">Proposer des dates</a></div>
                         </div>
-                        <div class="tllm-block" id="modBlock" hidden>
-                            <h2>Modérateurs</h2>
-                            <p class="tllm-hint tllm-block-pad">
-                                Un modérateur ouvre ses salles et ses sondages de dates, et les gère comme vous. Il ne
-                                voit pas ceux des autres. Vous voyez tout.
-                            </p>
-                            <ul class="tllm-mods" id="mods"></ul>
-                            <form id="modForm" class="tllm-mod-form" novalidate>
-                                <label class="tllm-field"
-                                    >Pour qui ?
+                        <div class="tllm-block has-menus" id="modBlock" hidden>
+                            <div class="tllm-block-head">
+                                <div>
+                                    <h2>Modérateurs</h2>
+                                    <p class="tllm-block-sub">
+                                        Ils ouvrent leurs propres salles et sondages. Vous voyez tout.
+                                    </p>
+                                </div>
+                                <button
+                                    id="modInvite"
+                                    class="tllm-button is-quiet is-small"
+                                    type="button"
+                                    aria-expanded="false"
+                                    aria-controls="modForm"
+                                >
+                                    Inviter
+                                </button>
+                            </div>
+                            <form id="modForm" class="tllm-mod-form" hidden novalidate>
+                                <label class="tllm-mod-label" for="modName"
+                                    >Nom de la personne <span>facultatif</span></label
+                                >
+                                <div class="tllm-mod-form-row">
                                     <input
                                         id="modName"
                                         class="tllm-input"
@@ -103,14 +116,18 @@
                                         maxlength="60"
                                         autocomplete="off"
                                         placeholder="Camille Martin"
-                                /></label>
-                                <button id="modCreate" class="tllm-button" type="submit">Créer un compte</button>
-                                <p class="tllm-hint">
-                                    Vous obtenez un lien à lui envoyer. La personne y choisit son identifiant et son mot
-                                    de passe. Le lien sert une fois, pendant 7 jours.
+                                    />
+                                    <button id="modCreate" class="tllm-button is-small" type="submit">
+                                        Créer le lien
+                                    </button>
+                                </div>
+                                <p class="tllm-mod-note">
+                                    Vous lui envoyez le lien, elle y choisit son identifiant et son mot de passe.
+                                    <button id="modCancel" class="tllm-text-button" type="button">Annuler</button>
                                 </p>
                                 <p id="modError" class="tllm-error" role="alert"></p>
                             </form>
+                            <ul class="tllm-mods" id="mods"></ul>
                         </div>
                     </div>
                 </div>

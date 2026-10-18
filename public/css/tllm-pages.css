@@ -968,7 +968,84 @@ select.tllm-input {
     color: var(--ink-2);
 }
 
-/* Moderator accounts (admin only) */
+.tllm-room-owner {
+    font-size: 0.92rem;
+    color: var(--ink-3);
+}
+
+/* ---------- Moderator accounts (admin only) ---------- */
+
+.tllm-block-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 22px 14px;
+}
+
+.tllm-block-head h2 {
+    font-size: 1.1rem;
+}
+
+.tllm-block-sub {
+    margin-top: 2px;
+    font-size: 0.92rem;
+    color: var(--ink-2);
+}
+
+.tllm-mod-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 22px 16px;
+    padding: 14px 16px;
+    background: var(--panel-2);
+    border-radius: var(--r);
+}
+
+.tllm-mod-form[hidden] {
+    display: none;
+}
+
+.tllm-mod-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.tllm-mod-label span {
+    font-weight: 400;
+    color: var(--ink-3);
+}
+
+.tllm-mod-form-row {
+    display: flex;
+    gap: 8px;
+}
+
+.tllm-mod-form-row .tllm-input {
+    flex: 1;
+    min-width: 0;
+    min-height: 38px;
+}
+
+.tllm-mod-note {
+    font-size: 0.9rem;
+    color: var(--ink-2);
+}
+
+.tllm-text-button {
+    padding: 0;
+    font: inherit;
+    font-weight: 600;
+    color: var(--act);
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.tllm-text-button:hover {
+    text-decoration: underline;
+}
 
 .tllm-mods {
     margin: 0;
@@ -976,48 +1053,154 @@ select.tllm-input {
     list-style: none;
 }
 
+.tllm-mods .tllm-empty {
+    padding-top: 0;
+}
+
 .tllm-mod {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 4px 12px;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px 12px;
     padding: 12px 22px;
     border-top: 1px solid var(--rule);
 }
 
+.tllm-mod-avatar {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    font: 600 1.05rem/1 var(--cond);
+    color: var(--ink-2);
+    background: var(--panel-2);
+    border-radius: 50%;
+}
+
+.tllm-mod.is-pending .tllm-mod-avatar {
+    background: transparent;
+    border: 1px dashed var(--rule);
+}
+
 .tllm-mod-who {
     min-width: 0;
+}
+
+.tllm-mod-name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    font-weight: 600;
     overflow-wrap: anywhere;
 }
 
-.tllm-mod-who b {
-    display: block;
+.tllm-mod-state {
+    font-size: 0.9rem;
+    color: var(--ink-2);
+}
+
+.tllm-pill {
+    padding: 1px 8px;
+    font-size: 0.8rem;
     font-weight: 600;
+    color: var(--soon-text);
+    background: color-mix(in srgb, var(--soon) 18%, transparent);
+    border-radius: 999px;
 }
 
-.tllm-mod-who span {
-    font-size: 0.92rem;
+/* Blocks clip their content (rounded corners); not those with a dropdown menu */
+.tllm-block.has-menus {
+    overflow: visible;
+}
+
+/* "⋯" menu of a row */
+.tllm-menu {
+    position: relative;
+}
+
+.tllm-menu > summary {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    font-size: 1.3rem;
+    line-height: 1;
     color: var(--ink-2);
+    list-style: none;
+    border-radius: var(--r);
+    cursor: pointer;
 }
 
-.tllm-mod-actions {
+.tllm-menu > summary::-webkit-details-marker {
+    display: none;
+}
+
+.tllm-menu > summary:hover,
+.tllm-menu[open] > summary {
+    color: var(--ink);
+    background: var(--panel-2);
+}
+
+.tllm-menu-list {
+    position: absolute;
+    z-index: 20;
+    right: 0;
+    top: calc(100% + 4px);
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.tllm-mod.is-pending .tllm-mod-who b {
-    color: var(--ink-2);
-}
-
-.tllm-mod-link {
-    display: flex;
-    flex-basis: 100%;
     flex-direction: column;
-    gap: 6px;
-    font-size: 0.92rem;
+    width: max-content;
+    max-width: min(320px, calc(100vw - 32px));
+    padding: 6px;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: var(--r);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+}
+
+.tllm-menu-list button {
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 0.95rem;
+    text-align: left;
+    color: var(--ink);
+    background: none;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.tllm-menu-list button:hover,
+.tllm-menu-list button:focus-visible {
+    background: var(--panel-2);
+}
+
+.tllm-menu-list button.is-danger {
+    color: var(--danger);
+}
+
+.tllm-menu-list hr {
+    margin: 4px 6px;
+    border: 0;
+    border-top: 1px solid var(--rule);
+}
+
+/* A fresh link to send, shown once under its row */
+.tllm-mod-link {
+    grid-column: 2 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 12px 14px;
+    font-size: 0.9rem;
     color: var(--ink-2);
+    background: var(--panel-2);
+    border-radius: var(--r);
+}
+
+.tllm-mod-link b {
+    color: var(--ink);
 }
 
 .tllm-mod-link-row {
@@ -1029,20 +1212,14 @@ select.tllm-input {
     flex: 1;
     min-width: 0;
     min-height: 38px;
-    font-size: 0.92rem;
+    font-size: 0.9rem;
+    background: var(--panel);
 }
 
-.tllm-room-owner {
-    font-size: 0.92rem;
-    color: var(--ink-3);
-}
-
-.tllm-mod-form {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px 22px 18px;
-    border-top: 1px solid var(--rule);
+@media (max-width: 760px) {
+    .tllm-mod-link {
+        grid-column: 1 / -1;
+    }
 }
 
 .tllm-toast {
