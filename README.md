@@ -97,7 +97,10 @@ avec un message qui prévient chaque participant, y compris ceux qui arrivent en
    L'audio n'est pas gardé : seulement le texte.
 3. TLLM\*meet garde chaque phrase avec le nom de la personne (celui de la visio, pas une donnée du navigateur)
    et le moment où elle a été dite.
-4. À la fin de la visio, l'organisateur de la salle (ou un administrateur) télécharge **un fichier texte** :
+4. Pendant la visio, chacun voit les sous-titres en bas des vidéos (Plus › Masquer les sous-titres pour les retirer).
+   Ils avancent pendant que la personne parle : une version provisoire toutes les secondes environ, remplacée par
+   le texte définitif à la fin de la phrase. Seul le texte définitif va dans le fichier.
+5. À la fin de la visio, l'organisateur de la salle (ou un administrateur) télécharge **un fichier texte** :
    depuis la page après la visio, ou le bouton **Transcription** de la salle sur l'accueil.
 
 ```

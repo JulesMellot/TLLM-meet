@@ -8,14 +8,21 @@
  * so each sentence carries one speaker. The server recognises it, keeps it with the speaker's
  * name and the moment it was said (Transcripts.js), and the organiser downloads the file after
  * the meeting. Nothing is sent while the microphone is off.
+ *
+ * Live captions do not wait for the end of the sentence: while it is being said, the browser sends
+ * what it holds so far every INTERIM_MS (only shown, never kept), and the final text replaces it.
  */
 
 (function () {
     const TICK_MS = 100;
     const MIN_SPEECH_MS = 300; // shorter: a cough, a click
     const END_SILENCE_MS = 700; // a pause this long ends the sentence
-    const MAX_SEGMENT_MS = 25000;
+    const SOFT_SEGMENT_MS = 10000; // past this, a short breath ends the sentence
+    const SOFT_SILENCE_MS = 250;
+    const MAX_SEGMENT_MS = 15000; // a monologue is cut here: partial captions cost more on long sentences
     const IDLE_SEGMENT_MS = 6000; // silence: start a fresh recording, so sentences stay short
+    const INTERIM_MS = 1200; // partial text of the sentence being said, for the captions
+    const TIMESLICE_MS = 400; // the recorder hands over audio this often
     const LEAD_MS = 300; // audio kept before the first word
     const MAX_IN_FLIGHT = 2;
     const MAX_QUEUE = 20;
@@ -40,7 +47,7 @@
     let source = null;
     let sourceTrack = null;
     let timer = null;
-    let seg = null; // { recorder, chunks, track, startedAt, firstSpeech, lastSpeech, speechMs }
+    let seg = null; // { id, recorder, chunks, track, startedAt, firstSpeech, lastSpeech, speechMs, interim... }
     let noiseFloor = 0.004;
     const queue = [];
     let inFlight = 0;
@@ -113,6 +120,7 @@
             return null;
         }
         const s = {
+            id: Math.random().toString(36).slice(2, 12),
             recorder,
             type: recorder.mimeType || type || 'audio/webm',
             chunks: [],
@@ -121,9 +129,11 @@
             firstSpeech: null,
             lastSpeech: null,
             speechMs: 0,
+            interimAt: 0,
+            interimBusy: false,
         };
         recorder.ondataavailable = (e) => e.data && e.data.size > 0 && s.chunks.push(e.data);
-        recorder.start();
+        recorder.start(TIMESLICE_MS);
         return s;
     }
 
@@ -133,10 +143,11 @@
         seg = null;
         if (!s) return;
         const speechStart = s.firstSpeech != null ? Math.max(s.startedAt, s.firstSpeech - LEAD_MS) : s.startedAt;
+        s.closed = true; // no more partial text for it
         s.recorder.onstop = () => {
             if (!keep) return;
             const blob = new Blob(s.chunks, { type: s.type });
-            if (blob.size > 1000) enqueue(blob, s.type, speechStart);
+            if (blob.size > 1000) enqueue(blob, s.type, speechStart, s.id);
         };
         try {
             if (s.recorder.state !== 'inactive') s.recorder.stop();
@@ -170,22 +181,54 @@
 
         const elapsed = now - seg.startedAt;
         const spoke = seg.speechMs >= MIN_SPEECH_MS;
-        if (spoke && now - seg.lastSpeech >= END_SILENCE_MS) {
+        const quiet = seg.lastSpeech == null ? Infinity : now - seg.lastSpeech;
+        if (spoke && quiet >= END_SILENCE_MS) {
+            cut(true);
+        } else if (spoke && elapsed >= SOFT_SEGMENT_MS && quiet >= SOFT_SILENCE_MS) {
             cut(true);
         } else if (elapsed >= MAX_SEGMENT_MS) {
             cut(spoke);
         } else if (!spoke && elapsed >= IDLE_SEGMENT_MS && (seg.lastSpeech == null || now - seg.lastSpeech > 1500)) {
             cut(false);
         } else {
+            // Still speaking: the sentence so far, for the captions
+            // (the recorder lags behind the level meter: wait until the first words are in its chunks)
+            const ready = spoke && now - seg.firstSpeech >= 900;
+            if (ready && !seg.interimBusy && now - seg.interimAt >= INTERIM_MS) sendInterim(seg);
             return;
         }
         // Start the next recording right away, so the next words are not lost
         seg = newSegment(track);
     }
 
-    function enqueue(blob, type, speechStart) {
+    // The sentence so far: the chunks recorded since its start make a valid file. Shown, never kept.
+    // One at a time per speaker, and never while finished sentences wait to be sent.
+    function sendInterim(s) {
+        if (queue.length || inFlight >= MAX_IN_FLIGHT || !s.chunks.length) return;
+        s.interimBusy = true;
+        s.interimAt = performance.now();
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const audio = String(reader.result || '').split(',')[1];
+            if (!audio || s.closed) {
+                s.interimBusy = false;
+                return;
+            }
+            rc.socket
+                .request(
+                    'getWhisperTranscription',
+                    { audio, mimeType: s.type, meeting: true, interim: true, seg: s.id },
+                    15000
+                )
+                .catch(() => {})
+                .finally(() => (s.interimBusy = false));
+        };
+        reader.readAsDataURL(new Blob(s.chunks, { type: s.type }));
+    }
+
+    function enqueue(blob, type, speechStart, id) {
         if (queue.length >= MAX_QUEUE) queue.shift();
-        queue.push({ blob, type, speechStart });
+        queue.push({ blob, type, speechStart, id });
         pump();
     }
 
@@ -193,7 +236,7 @@
         while (inFlight < MAX_IN_FLIGHT && queue.length) send(queue.shift());
     }
 
-    function send({ blob, type, speechStart }) {
+    function send({ blob, type, speechStart, id }) {
         inFlight++;
         const done = () => {
             inFlight--;
@@ -206,7 +249,13 @@
             rc.socket
                 .request(
                     'getWhisperTranscription',
-                    { audio, mimeType: type, meeting: true, ageMs: Math.round(performance.now() - speechStart) },
+                    {
+                        audio,
+                        mimeType: type,
+                        meeting: true,
+                        seg: id,
+                        ageMs: Math.round(performance.now() - speechStart),
+                    },
                     120000
                 )
                 .then((res) => {
@@ -274,31 +323,51 @@
         return '…' + (space > 0 && space < 30 ? cut.slice(space + 1) : cut);
     }
 
-    function showCaption(name, text) {
-        if (!S.captions || !S.active || !text) return;
+    // One line per speaker: the finished sentences of the last seconds, then the one being said.
+    // A partial text is replaced by the next one, and by the final text of its sentence.
+    function captionLine(host, data, now) {
+        const last = host.lastElementChild;
+        if (
+            last &&
+            last.dataset.peer === data.peer_id &&
+            now - last._at < CAPTION_JOIN_MS &&
+            !last.classList.contains('is-gone')
+        ) {
+            return last;
+        }
+        if (!data.text) return null;
+        const line = document.createElement('div');
+        line.className = 'tllm-cap';
+        line.dataset.peer = data.peer_id;
+        line._final = '';
+        line._interim = null;
+        line._done = [];
+        const who = document.createElement('b');
+        who.textContent = data.peer_name;
+        line.append(who, document.createElement('span'));
+        host.appendChild(line);
+        while (host.children.length > 2) host.firstElementChild.remove();
+        return line;
+    }
+
+    function showCaption(data) {
+        if (!S.captions || !S.active) return;
         const host = captionHost();
         if (!host) return;
         const now = Date.now();
-        let line = host.lastElementChild;
-        if (
-            line &&
-            line.dataset.who === name &&
-            now - line._at < CAPTION_JOIN_MS &&
-            !line.classList.contains('is-gone')
-        ) {
-            line._text += ' ' + text;
+        const line = captionLine(host, data, now);
+        if (!line) return;
+        if (data.interim) {
+            if (line._done.includes(data.seg)) return; // arrived after its final text
+            line._interim = { seg: data.seg, text: data.text };
         } else {
-            line = document.createElement('div');
-            line.className = 'tllm-cap';
-            line.dataset.who = name;
-            line._text = text;
-            const who = document.createElement('b');
-            who.textContent = name;
-            line.append(who, document.createElement('span'));
-            host.appendChild(line);
-            while (host.children.length > 2) host.firstElementChild.remove();
+            if (data.seg) line._done = [...line._done.slice(-5), data.seg];
+            if (!data.seg || line._interim?.seg === data.seg) line._interim = null;
+            if (data.text) line._final = `${line._final} ${data.text}`.trim();
         }
-        line.lastElementChild.textContent = tail(line._text);
+        const text = `${line._final} ${line._interim?.text || ''}`.trim();
+        if (!text) return line.remove();
+        line.lastElementChild.textContent = tail(text);
         line._at = now;
         clearTimeout(line._timer);
         line._timer = setTimeout(() => {
@@ -394,7 +463,14 @@
         S.started = true;
         rc.socket.on('meetingTranscription', (state) => apply(state, state?.by, 'change'));
         rc.socket.on('meetingTranscript', (data) => {
-            if (data?.text) showCaption(String(data.peer_name || 'Participant'), String(data.text));
+            if (!data) return;
+            showCaption({
+                peer_id: String(data.peer_id || data.peer_name || ''),
+                peer_name: String(data.peer_name || 'Participant'),
+                text: String(data.text || ''),
+                seg: typeof data.seg === 'string' ? data.seg : null,
+                interim: data.interim === true,
+            });
         });
         rc.socket
             .request('meetingTranscription')

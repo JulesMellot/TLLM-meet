@@ -193,11 +193,25 @@ describe('Meeting transcription (integration)', function () {
         await wait(200);
         assert.deepEqual(warmups, [`Bearer ${ASR_KEY}`]);
 
+        // While Jules speaks: the captions show the sentence so far (interim), the file does not keep it
+        const captions = [];
+        guest.on('meetingTranscript', (c) => captions.push(c));
+        const partial = await emit(admin, 'getWhisperTranscription', {
+            audio: said('On comm'),
+            mimeType: 'audio/webm',
+            meeting: true,
+            interim: true,
+            seg: 'abc123',
+            ageMs: 1000,
+        });
+        assert.equal(partial.text, 'On comm');
+
         const caption = new Promise((resolve) => admin.once('meetingTranscript', resolve));
         const one = await emit(admin, 'getWhisperTranscription', {
             audio: said('On commence ?'),
             mimeType: 'audio/webm',
             meeting: true,
+            seg: 'abc123',
             ageMs: 3000,
         });
         assert.equal(one.text, 'On commence ?');
@@ -207,7 +221,19 @@ describe('Meeting transcription (integration)', function () {
             meeting: true,
             ageMs: 1000,
         });
-        assert.deepEqual(await caption, { peer_name: 'Jules', text: 'On commence ?' });
+        const final = await caption;
+        assert.deepEqual(
+            { ...final, peer_id: typeof final.peer_id },
+            { peer_id: 'string', peer_name: 'Jules', text: 'On commence ?', seg: 'abc123', interim: false }
+        );
+        await wait(100);
+        assert.deepEqual(
+            captions.filter((c) => c.peer_name === 'Jules').map((c) => [c.text, c.interim]),
+            [
+                ['On comm', true],
+                ['On commence ?', false],
+            ]
+        );
         assert.equal(asrCalls[0].auth, `Bearer ${ASR_KEY}`);
         assert.match(asrCalls[0].raw, /name="language"\r\n\r\nfr\r\n/); // French by default
 
@@ -238,6 +264,7 @@ describe('Meeting transcription (integration)', function () {
         assert.match(body[0], /^\[00:00:0\d\] Jules : On commence \?$/);
         assert.match(body[1], /^\[00:00:0\d\] Marie : Oui, bonjour à tous\.$/);
         assert.ok(!file.body.includes('Trop tôt'));
+        assert.ok(!file.body.includes('On comm\n'), 'a partial sentence is not kept');
 
         // On the home page, the room offers the download
         const overview = await request('GET', '/api/admin/overview', { cookie });

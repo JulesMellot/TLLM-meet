@@ -3625,93 +3625,118 @@ function startServer() {
             return reply(meetingTranscriptionState(room));
         });
 
-        socket.on('getWhisperTranscription', async ({ audio, mimeType, language, meeting, ageMs }, cb) => {
-            if (!roomExists(socket)) {
-                return cb({ error: 'Room not found' });
-            }
+        socket.on(
+            'getWhisperTranscription',
+            async ({ audio, mimeType, language, meeting, ageMs, interim, seg }, cb) => {
+                if (!roomExists(socket)) {
+                    return cb({ error: 'Room not found' });
+                }
 
-            const whisper = config?.integrations?.whisper;
-            if (!whisper?.enabled) {
-                return cb({ error: 'Whisper transcription is disabled. Please try again later!' });
-            }
+                const whisper = config?.integrations?.whisper;
+                if (!whisper?.enabled) {
+                    return cb({ error: 'Whisper transcription is disabled. Please try again later!' });
+                }
 
-            // Meeting transcription: who speaks comes from the server-side peer, when from the age of the sentence
-            let session = null;
-            let speaker = '';
-            let saidAt = Date.now();
-            if (meeting === true) {
-                const { peer } = getRoomAndPeer(socket);
-                session = peer ? transcripts.begin(socket.room_id) : null;
-                if (!session) return cb({ text: '', inactive: true });
-                speaker = peer.peer_info?.peer_name ?? peer.peer_name;
-                const age = Number(ageMs);
-                if (Number.isFinite(age)) saidAt -= Math.min(Math.max(age, 0), 120000);
-            }
+                // Meeting transcription: who speaks comes from the server-side peer, when from the age of the sentence.
+                // A sentence still being said (interim) only feeds the live captions: not kept, one at a time.
+                let session = null;
+                let speaker = '';
+                let saidAt = Date.now();
+                const sentence = typeof seg === 'string' && /^[a-z0-9]{1,24}$/.test(seg) ? seg : null;
+                const partial = meeting === true && interim === true;
+                if (meeting === true) {
+                    const { peer } = getRoomAndPeer(socket);
+                    if (!peer) return cb({ text: '', inactive: true });
+                    speaker = peer.peer_info?.peer_name ?? peer.peer_name;
+                    if (partial) {
+                        if (!transcripts.isActive(socket.room_id)) return cb({ text: '', inactive: true });
+                        if (socket.tllmInterimBusy) return cb({ text: '', busy: true });
+                    } else {
+                        session = transcripts.begin(socket.room_id);
+                        if (!session) return cb({ text: '', inactive: true });
+                    }
+                    const age = Number(ageMs);
+                    if (Number.isFinite(age)) saidAt -= Math.min(Math.max(age, 0), 120000);
+                }
+                if (partial) socket.tllmInterimBusy = true;
 
-            try {
-                const maxBytes = whisper.maxAudioBytes || 25 * 1024 * 1024;
-
-                let buffer;
                 try {
-                    buffer = decodeAudioPayload(audio, maxBytes);
-                } catch (err) {
-                    if (err.message === 'Empty audio payload') return cb({ text: '' });
-                    if (err.message === 'Audio segment too large') return cb({ error: err.message });
-                    throw err;
+                    const maxBytes = whisper.maxAudioBytes || 25 * 1024 * 1024;
+
+                    let buffer;
+                    try {
+                        buffer = decodeAudioPayload(audio, maxBytes);
+                    } catch (err) {
+                        if (err.message === 'Empty audio payload') return cb({ text: '' });
+                        if (err.message === 'Audio segment too large') return cb({ error: err.message });
+                        throw err;
+                    }
+
+                    const type =
+                        typeof mimeType === 'string' && mimeType.startsWith('audio/') ? mimeType : 'audio/webm';
+                    const ext = resolveAudioExtension(type);
+
+                    const FormData = require('form-data');
+                    const form = new FormData();
+                    form.append('file', buffer, { filename: `audio.${ext}`, contentType: type });
+                    form.append('model', whisper.model || 'whisper-1');
+                    form.append('response_format', 'verbose_json');
+
+                    const lang =
+                        typeof language === 'string' && language
+                            ? language
+                            : whisper.language || (meeting === true ? 'fr' : '');
+                    if (lang) form.append('language', lang);
+
+                    const headers = { ...form.getHeaders() };
+                    if (whisper.apiKey) headers['Authorization'] = `Bearer ${whisper.apiKey}`;
+
+                    const base = (whisper.basePath || 'https://api.openai.com/v1/').replace(/\/?$/, '/');
+                    const url = `${base}audio/transcriptions`;
+
+                    const response = await axios.post(url, form, {
+                        headers,
+                        // A meeting's first sentence may wait for the model to load; a partial one is soon outdated
+                        timeout: partial ? 15000 : session ? 90000 : 30000,
+                        maxBodyLength: Infinity,
+                        maxContentLength: Infinity,
+                    });
+
+                    const raw = response.data && (response.data.text || response.data.transcript);
+                    const rawText = typeof raw === 'string' ? raw.trim() : '';
+
+                    // Filter out Whisper hallucinations that occur on silent/near-silent audio
+                    const segments = Array.isArray(response.data?.segments) ? response.data.segments : [];
+                    const text = filterTranscript(rawText, segments);
+
+                    log.debug('Whisper transcription', { language: lang || 'auto', bytes: buffer.length, text });
+
+                    if (session) {
+                        transcripts.add(session, { name: speaker, text, at: saidAt });
+                        session = null;
+                    }
+                    // Live captions: the partial text while the sentence is said, then the final one replaces it
+                    const room = meeting === true ? getRoom(socket) : null;
+                    if (room && (text || (!partial && sentence))) {
+                        room.sendToAll('meetingTranscript', {
+                            peer_id: socket.id,
+                            peer_name: speaker,
+                            text,
+                            seg: sentence,
+                            interim: partial,
+                        });
+                    }
+
+                    cb({ text });
+                } catch (error) {
+                    log.error('Whisper transcription error', error?.response?.data || error.message);
+                    cb({ error: `Whisper error: ${error?.response?.data?.error?.message || error.message}` });
+                } finally {
+                    transcripts.abandon(session); // not recognised: the file no longer waits for it
+                    if (partial) socket.tllmInterimBusy = false;
                 }
-
-                const type = typeof mimeType === 'string' && mimeType.startsWith('audio/') ? mimeType : 'audio/webm';
-                const ext = resolveAudioExtension(type);
-
-                const FormData = require('form-data');
-                const form = new FormData();
-                form.append('file', buffer, { filename: `audio.${ext}`, contentType: type });
-                form.append('model', whisper.model || 'whisper-1');
-                form.append('response_format', 'verbose_json');
-
-                const lang =
-                    typeof language === 'string' && language ? language : whisper.language || (session ? 'fr' : '');
-                if (lang) form.append('language', lang);
-
-                const headers = { ...form.getHeaders() };
-                if (whisper.apiKey) headers['Authorization'] = `Bearer ${whisper.apiKey}`;
-
-                const base = (whisper.basePath || 'https://api.openai.com/v1/').replace(/\/?$/, '/');
-                const url = `${base}audio/transcriptions`;
-
-                const response = await axios.post(url, form, {
-                    headers,
-                    // A meeting's first sentence may wait for the model to load
-                    timeout: session ? 90000 : 30000,
-                    maxBodyLength: Infinity,
-                    maxContentLength: Infinity,
-                });
-
-                const raw = response.data && (response.data.text || response.data.transcript);
-                const rawText = typeof raw === 'string' ? raw.trim() : '';
-
-                // Filter out Whisper hallucinations that occur on silent/near-silent audio
-                const segments = Array.isArray(response.data?.segments) ? response.data.segments : [];
-                const text = filterTranscript(rawText, segments);
-
-                log.debug('Whisper transcription', { language: lang || 'auto', bytes: buffer.length, text });
-
-                if (session) {
-                    transcripts.add(session, { name: speaker, text, at: saidAt });
-                    session = null;
-                    // Live captions for those who opened the panel
-                    const room = getRoom(socket);
-                    if (text && room) room.sendToAll('meetingTranscript', { peer_name: speaker, text });
-                }
-
-                cb({ text });
-            } catch (error) {
-                log.error('Whisper transcription error', error?.response?.data || error.message);
-                cb({ error: `Whisper error: ${error?.response?.data?.error?.message || error.message}` });
-            } finally {
-                transcripts.abandon(session); // not recognised: the file no longer waits for it
             }
-        });
+        );
 
         // TLLM*meet polls: presenters (the admin, and anyone the admin promoted) create, edit and
         // delete polls; everyone votes. Identity comes from the server, never from the payload.

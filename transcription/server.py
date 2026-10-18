@@ -32,6 +32,8 @@ API_KEY = os.environ.get("API_KEY", "")
 THREADS = int(os.environ.get("ASR_THREADS", "0") or 0)  # 0: onnxruntime decides
 IDLE_SECONDS = max(10, int(os.environ.get("ASR_IDLE_SECONDS", "300") or 300))
 MODEL_DIR = os.environ.get("HF_HOME", "/models")
+# Canary and Whisper can be told the language; Parakeet detects it on its own
+FORCE_LANGUAGE = any(name in MODEL.lower() for name in ("canary", "whisper"))
 LOAD_TIMEOUT = 300
 MAX_BYTES = int(os.environ.get("ASR_MAX_BYTES", str(25 * 1024 * 1024)))
 MAX_SECONDS = 120
@@ -96,9 +98,11 @@ def worker_main(conn, model_name, quantization, threads):
             return
         if pcm is None:
             return
+        pcm, language = pcm
         try:
             samples = np.frombuffer(pcm, dtype=np.float32)
-            conn.send(("ok", str(model.recognize(samples, sample_rate=SAMPLE_RATE)).strip()))
+            options = {"language": language} if language else {}
+            conn.send(("ok", str(model.recognize(samples, sample_rate=SAMPLE_RATE, **options)).strip()))
         except Exception as err:  # noqa: BLE001
             conn.send(("error", f"{type(err).__name__}: {err}"))
 
@@ -145,8 +149,8 @@ class Engine:
                 raise RuntimeError(detail)
             self.proc, self.conn = proc, parent
             self.last = time.monotonic()
-            log.info("Model %s loaded in %.1f s. Container memory: %s", MODEL, time.monotonic() - started,
-                     container_memory())
+            log.info("Model %s loaded in %.1f s, stopped after %d s without a sentence. Container memory: %s",
+                     MODEL, time.monotonic() - started, IDLE_SECONDS, container_memory())
         finally:
             self.loading = False
 
@@ -166,11 +170,11 @@ class Engine:
         if conn is not None:
             conn.close()
 
-    def recognize(self, pcm: bytes) -> str:
+    def recognize(self, pcm: bytes, language: str = "") -> str:
         with self.lock:
             self._start()
             try:
-                self.conn.send(pcm)
+                self.conn.send((pcm, language if FORCE_LANGUAGE else ""))
                 status, detail = self.conn.recv()
             except (EOFError, OSError) as err:
                 self._stop()  # the model process died: started again on the next sentence
@@ -227,6 +231,8 @@ def reaper():
 
 @asynccontextmanager
 async def lifespan(_app):
+    log.info("Model %s (%s) loaded on demand, stopped after %d s without a sentence (ASR_IDLE_SECONDS)",
+             MODEL, QUANTIZATION or "full", IDLE_SECONDS)
     threading.Thread(target=reaper, daemon=True).start()
     yield
     with engine.lock:
@@ -308,7 +314,7 @@ def transcriptions(
     started = time.perf_counter()
     if duration >= 0.2:
         try:
-            text = engine.recognize(pcm)
+            text = engine.recognize(pcm, language.split("-")[0].lower() if language else "")
         except RuntimeError as err:
             raise HTTPException(503, detail={"message": f"Transcription indisponible: {err}"}) from err
     elapsed = time.perf_counter() - started
