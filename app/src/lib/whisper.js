@@ -32,7 +32,21 @@ const WHISPER_HALLUCINATIONS = new Set([
     '謝謝觀看',
     'ご視聴ありがとうございました',
     '字幕by',
+    // French (TLLM*meet): subtitle credits Whisper learnt from films
+    'soustitresréalisésparlacommunautédamaraorg',
+    'soustitrageréalisépourlacommunautédamaraorg',
+    'soustitragest501',
+    'soustitragestv',
+    'soustitresparamaraorg',
+    'mercidavoirregardé',
+    'mercidavoirregardécettevidéo',
+    'mercidevotreattention',
+    'abonnezvous',
+    'nhésitezpasàvousabonner',
 ]);
+
+// Credits Whisper adds at the end of a real sentence: cut them out, keep the sentence
+const WHISPER_CREDIT_TAIL = /\s*(?:sous-titr(?:es|age)[^.!?]*amara\.org|[^.!?]*\bamara\.org)[^.!?]*[.!?]?\s*$/i;
 
 /**
  * Normalize Whisper text for hallucination comparison: lowercase, strip
@@ -90,7 +104,7 @@ function decodeAudioPayload(audio, maxAudioBytes) {
  * @returns {string}
  */
 function filterTranscript(text, segments = []) {
-    const out = typeof text === 'string' ? text.trim() : '';
+    const out = typeof text === 'string' ? text.replace(WHISPER_CREDIT_TAIL, '').trim() : '';
     if (!out) return '';
 
     const normalized = normalizeWhisperText(out);

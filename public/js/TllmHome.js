@@ -158,6 +158,15 @@
             live ? 'Rejoindre' : room.lastUsedAt ? 'Rouvrir' : 'Ouvrir'
         );
         go.href = url;
+        // Latest meeting transcription, once it is final
+        const t = room.transcript;
+        if (t && (t.status === 'ready' || t.status === 'paused')) {
+            const dl = el('a', 'tllm-button is-quiet is-small', 'Transcription');
+            dl.href = `/transcriptions/${encodeURIComponent(room.id)}/${t.id}.txt`;
+            dl.setAttribute('download', '');
+            dl.title = 'Télécharger la transcription de la dernière visio';
+            actions.append(dl);
+        }
         actions.append(copyBtn, go);
         li.append(actions);
         return li;

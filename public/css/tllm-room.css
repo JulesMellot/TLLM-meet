@@ -86,6 +86,14 @@ body.tllm-room {
     border-radius: 50%;
     background: var(--tllm-danger);
 }
+/* Meeting transcription under way (TllmTranscript.js) */
+#tllmTop .tllm-transcribing {
+    background: color-mix(in srgb, var(--tllm-accent) 16%, transparent);
+    color: var(--tllm-text);
+}
+#tllmTop .tllm-transcribing::before {
+    background: var(--tllm-accent);
+}
 #tllmTop .tllm-spacer {
     flex: 1;
 }

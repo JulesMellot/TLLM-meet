@@ -70,6 +70,14 @@ describe('test-Whisper', () => {
         it('returns real speech unchanged (trimmed)', () => {
             whisper.filterTranscript('  Hello, how are you?  ', []).should.equal('Hello, how are you?');
         });
+        it('drops the French subtitle credits Whisper invents, keeps real French speech', () => {
+            whisper.filterTranscript("Sous-titres réalisés par la communauté d'Amara.org", []).should.equal('');
+            whisper
+                .filterTranscript("Bonjour à tous. Sous-titres réalisés par la communauté d'Amara.org", [])
+                .should.equal('Bonjour à tous.');
+            whisper.filterTranscript("Merci d'avoir regardé !", []).should.equal('');
+            whisper.filterTranscript('Merci.', []).should.equal('Merci.');
+        });
         it('drops known hallucination phrases (silence)', () => {
             whisper.filterTranscript('Thanks for watching!', []).should.equal('');
             whisper.filterTranscript('Please subscribe', []).should.equal('');

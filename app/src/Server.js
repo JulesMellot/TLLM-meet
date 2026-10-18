@@ -86,6 +86,7 @@ const HtmlInjector = require('./HtmlInjector');
 const { CollabStore } = require('./Collab');
 const { DatePolls, DatePollError } = require('./DatePolls');
 const { RoomRegistry } = require('./RoomRegistry');
+const { Transcripts } = require('./Transcripts');
 const { Moderators, ModeratorError } = require('./Moderators');
 const log = new Logger('Server');
 const yaml = require('js-yaml');
@@ -297,6 +298,15 @@ const datePolls = new DatePolls({
     log,
 });
 setInterval(() => datePolls.checkDeadlines(), 60 * 1000).unref();
+// Meeting transcriptions, one file per meeting in DATA_DIR/transcriptions (see Transcripts.js)
+const transcripts = new Transcripts({
+    dir: path.join(dataDir, 'transcriptions'),
+    retentionDays: process.env.TRANSCRIPTION_RETENTION_DAYS || 30,
+    timeZone: meetingTimeZone,
+    log,
+});
+transcripts.purge();
+setInterval(() => transcripts.purge(), 6 * 3600 * 1000).unref();
 
 // TLLM*meet: editor and whiteboard content, kept per room by the server (see Collab.js)
 const collab = new CollabStore({}, (roomId, exceptSocketId, event, payload) => {
@@ -628,7 +638,12 @@ function startServer() {
             .map((id) => {
                 const state = roomState(id);
                 const owner = roomRegistry.get(id)?.owner || roomBooking(id)?.owner;
-                return { ...state, organizer: organizerOf(owner) };
+                const transcript = transcripts.latest(id);
+                return {
+                    ...state,
+                    organizer: organizerOf(owner),
+                    transcript: transcript && { id: transcript.id, status: transcript.status },
+                };
             })
             .sort(
                 (a, b) =>
@@ -696,6 +711,55 @@ function startServer() {
     const rdvActor = (admin, id) =>
         admin.role === 'admin' ? datePolls.get(id)?.owner || admin.username : admin.username;
     const canManagePoll = (admin, poll) => !!admin && (admin.role === 'admin' || admin.username === poll.owner);
+
+    // ---------- TLLM*meet: meeting transcriptions (see Transcripts.js) ----------
+    // Only the organiser of the room (or an admin) lists, downloads and deletes them
+    const transcriptOwner = (req, res) => {
+        const admin = adminAuth.fromRequest(req);
+        res.set('Cache-Control', 'no-store');
+        if (!admin) {
+            res.status(401).json({ error: 'unauthorized' });
+            return null;
+        }
+        if (!transcripts.eligible(req.params.room) || !ownsRoom(admin, req.params.room)) {
+            res.status(404).json({ error: 'not found' });
+            return null;
+        }
+        return admin;
+    };
+
+    app.get('/api/transcriptions/:room', (req, res) => {
+        if (!transcriptOwner(req, res)) return;
+        return res.json({
+            room: req.params.room,
+            retentionDays: transcripts.retentionMs / 86400000,
+            sessions: transcripts.list(req.params.room),
+        });
+    });
+
+    app.get('/transcriptions/:room/:id.txt', (req, res) => {
+        if (!transcriptOwner(req, res)) return;
+        const { room, id } = req.params;
+        const t = transcripts.read(room, id);
+        if (!t) return res.status(404).json({ error: 'not found' });
+        const status = transcripts.status(room, id);
+        if (status !== 'ready' && status !== 'paused') {
+            return res.status(409).json({ error: 'La transcription n’est pas terminée.', status });
+        }
+        t.name = roomRegistry.name(room);
+        const day = new Intl.DateTimeFormat('fr-CA', { timeZone: meetingTimeZone }).format(new Date(t.startedAt));
+        res.set({
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Content-Disposition': `attachment; filename="transcription-${room}-${day}.txt"`,
+        });
+        return res.send(transcripts.toText(t));
+    });
+
+    app.delete('/api/transcriptions/:room/:id', (req, res) => {
+        if (!transcriptOwner(req, res)) return;
+        if (!transcripts.remove(req.params.room, req.params.id)) return res.status(404).json({ error: 'not found' });
+        return res.json({ ok: true });
+    });
 
     // After leaving a call (see TllmRoom.js)
     app.get('/apres/:id', (req, res) => {
@@ -3514,7 +3578,35 @@ function startServer() {
 
         // https://platform.openai.com/docs/api-reference/audio/createTranscription
         // Whisper speech-to-text (OpenAI API or any OpenAI-compatible self-hosted server)
-        socket.on('getWhisperTranscription', async ({ audio, mimeType, language }, cb) => {
+        // TLLM*meet meeting transcription: a presenter starts it for the whole room, every browser then
+        // sends its microphone in sentences (meeting: true). See Transcripts.js and TllmTranscript.js.
+        const meetingTranscriptionState = (room) => ({
+            available: !!config?.integrations?.whisper?.enabled && transcripts.eligible(room.id),
+            active: transcripts.isActive(room.id),
+        });
+
+        socket.on('meetingTranscription', (_, cb) => {
+            if (typeof cb !== 'function') return;
+            if (!roomExists(socket)) return cb({ available: false, active: false });
+            return cb(meetingTranscriptionState(getRoom(socket)));
+        });
+
+        socket.on('setMeetingTranscription', (dataObject, cb) => {
+            const reply = typeof cb === 'function' ? cb : () => {};
+            if (!roomExists(socket)) return reply({ error: 'Room not found' });
+            const { room, peer } = getRoomAndPeer(socket);
+            if (!peer || !isSocketPresenter(socket, room)) return reply({ error: 'not allowed' });
+            if (!meetingTranscriptionState(room).available) return reply({ error: 'unavailable' });
+            const by = peer.peer_info?.peer_name ?? peer.peer_name;
+            const active = dataObject?.active === true;
+            if (active) transcripts.start(room.id, { name: roomRegistry.name(room.id), by });
+            else transcripts.stop(room.id, { by });
+            room.sendToAll('meetingTranscription', { ...meetingTranscriptionState(room), by });
+            log.info('Meeting transcription', { room_id: room.id, active, by });
+            return reply(meetingTranscriptionState(room));
+        });
+
+        socket.on('getWhisperTranscription', async ({ audio, mimeType, language, meeting, ageMs }, cb) => {
             if (!roomExists(socket)) {
                 return cb({ error: 'Room not found' });
             }
@@ -3522,6 +3614,19 @@ function startServer() {
             const whisper = config?.integrations?.whisper;
             if (!whisper?.enabled) {
                 return cb({ error: 'Whisper transcription is disabled. Please try again later!' });
+            }
+
+            // Meeting transcription: who speaks comes from the server-side peer, when from the age of the sentence
+            let session = null;
+            let speaker = '';
+            let saidAt = Date.now();
+            if (meeting === true) {
+                const { peer } = getRoomAndPeer(socket);
+                session = peer ? transcripts.begin(socket.room_id) : null;
+                if (!session) return cb({ text: '', inactive: true });
+                speaker = peer.peer_info?.peer_name ?? peer.peer_name;
+                const age = Number(ageMs);
+                if (Number.isFinite(age)) saidAt -= Math.min(Math.max(age, 0), 120000);
             }
 
             try {
@@ -3545,7 +3650,8 @@ function startServer() {
                 form.append('model', whisper.model || 'whisper-1');
                 form.append('response_format', 'verbose_json');
 
-                const lang = typeof language === 'string' && language ? language : whisper.language;
+                const lang =
+                    typeof language === 'string' && language ? language : whisper.language || (session ? 'fr' : '');
                 if (lang) form.append('language', lang);
 
                 const headers = { ...form.getHeaders() };
@@ -3570,10 +3676,20 @@ function startServer() {
 
                 log.debug('Whisper transcription', { language: lang || 'auto', bytes: buffer.length, text });
 
+                if (session) {
+                    transcripts.add(session, { name: speaker, text, at: saidAt });
+                    session = null;
+                    // Live captions for those who opened the panel
+                    const room = getRoom(socket);
+                    if (text && room) room.sendToAll('meetingTranscript', { peer_name: speaker, text });
+                }
+
                 cb({ text });
             } catch (error) {
                 log.error('Whisper transcription error', error?.response?.data || error.message);
                 cb({ error: `Whisper error: ${error?.response?.data?.error?.message || error.message}` });
+            } finally {
+                transcripts.abandon(session); // not recognised: the file no longer waits for it
             }
         });
 
@@ -3761,6 +3877,7 @@ function startServer() {
                 roomList.delete(socket.room_id);
                 collab.release(socket.room_id);
                 roomRegistry.closed(socket.room_id);
+                transcripts.close(socket.room_id);
 
                 delete presenters[socket.room_id];
 
@@ -3805,6 +3922,7 @@ function startServer() {
                 roomList.delete(socket.room_id);
                 collab.release(socket.room_id);
                 roomRegistry.closed(socket.room_id);
+                transcripts.close(socket.room_id);
 
                 delete presenters[socket.room_id];
 
@@ -4078,6 +4196,7 @@ async function gracefulShutdown(signal) {
 
                 roomList.delete(roomId);
                 collab.drop(roomId);
+                transcripts.close(roomId);
             } catch (err) {
                 log.error(`Error closing room ${roomId}:`, err.message);
             }

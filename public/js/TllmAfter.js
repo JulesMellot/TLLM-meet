@@ -51,4 +51,52 @@
         .catch(() => {
             $('afterLead').textContent = 'Le lien reste valable pour revenir.';
         });
+
+    // Organiser only: the transcriptions of this room (the server answers 401/404 to everyone else)
+    const day = (ms) =>
+        new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(ms));
+    const STATUS = {
+        active: 'Transcription en cours dans la salle : le fichier sera prêt à la fin de la visio.',
+        finishing: 'Dernières phrases en cours de transcription…',
+    };
+    let polls = 0;
+
+    function transcriptRow(room, t) {
+        const li = document.createElement('li');
+        const text = document.createElement('div');
+        const title = document.createElement('b');
+        title.textContent = `${day(t.startedAt)}, de ${hour(t.startedAt)} à ${hour(t.endedAt || t.startedAt)}`;
+        const detail = document.createElement('span');
+        const who = t.speakers.length ? t.speakers.join(', ') : 'aucune parole transcrite';
+        detail.textContent = STATUS[t.status] || `${t.lines} phrase${t.lines > 1 ? 's' : ''} · ${who}`;
+        text.append(title, detail);
+        li.append(text);
+        if (!STATUS[t.status]) {
+            const link = document.createElement('a');
+            link.className = 'tllm-button is-small';
+            link.href = `/transcriptions/${encodeURIComponent(room)}/${t.id}.txt`;
+            link.setAttribute('download', '');
+            link.textContent = 'Télécharger (.txt)';
+            li.append(link);
+        }
+        return li;
+    }
+
+    function loadTranscripts() {
+        fetch(`/api/transcriptions/${encodeURIComponent(roomId)}`, { cache: 'no-store' })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                const sessions = (data?.sessions || []).slice(0, 5);
+                if (!sessions.length) return;
+                if (data.retentionDays) $('afterRetention').textContent = `${data.retentionDays} jours`;
+                const list = $('afterTranscriptList');
+                list.textContent = '';
+                sessions.forEach((t) => list.append(transcriptRow(roomId, t)));
+                $('afterTranscripts').hidden = false;
+                // Not final yet: look again in a moment
+                if (sessions.some((t) => STATUS[t.status]) && polls++ < 60) setTimeout(loadTranscripts, 4000);
+            })
+            .catch(() => {});
+    }
+    loadTranscripts();
 })();

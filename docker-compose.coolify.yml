@@ -36,9 +36,29 @@ services:
             - SOURCE_URL=${SOURCE_URL:-https://github.com/JulesMellot/TLLM-meet}
             # Fuseau des sondages de dates (« Caler une réunion »)
             - MEETING_TIMEZONE=${MEETING_TIMEZONE:-Europe/Paris}
+            # Transcription des réunions, par le service « transcription » ci-dessous
+            - WHISPER_ENABLED=${TRANSCRIPTION_ENABLED:-true}
+            - WHISPER_BASE_PATH=http://transcription:8000/v1/
+            - WHISPER_API_KEY=${SERVICE_PASSWORD_ASR}
+            - WHISPER_MODEL=parakeet
+            - WHISPER_LANGUAGE=${TRANSCRIPTION_LANGUAGE:-fr}
+            - TRANSCRIPTION_RETENTION_DAYS=${TRANSCRIPTION_RETENTION_DAYS:-30}
         volumes:
             # Sondages de dates : gardés entre deux déploiements
             - tllm-data:/src/data
+
+    # Reconnaissance vocale (Parakeet TDT 0.6B v3, int8, sur CPU) : environ 1,5 Go de mémoire.
+    # Joignable seulement par tllm-meet (aucun port publié). Voir transcription/README.md.
+    transcription:
+        build: ./transcription
+        restart: unless-stopped
+        expose:
+            - '8000'
+        environment:
+            - API_KEY=${SERVICE_PASSWORD_ASR}
+            # Cœurs CPU pour une phrase (0 : tous), et phrases traitées en même temps
+            - ASR_THREADS=${TRANSCRIPTION_THREADS:-0}
+            - ASR_MAX_PARALLEL=${TRANSCRIPTION_MAX_PARALLEL:-2}
 
 volumes:
     tllm-data:

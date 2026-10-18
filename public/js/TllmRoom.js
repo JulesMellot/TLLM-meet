@@ -195,6 +195,7 @@
         watchTiles();
         watchLayout();
         listenToRoom();
+        window.tllmTranscript?.init();
         T.refreshPeers();
         T.renderBar();
         setInterval(tick, 1000);
@@ -232,6 +233,7 @@
             <span class="tllm-room-name" id="tllmRoomName"></span>
             <span class="tllm-timer" id="tllmTimer"></span>
             <span class="tllm-rec" id="tllmRec" hidden>Enregistrement</span>
+            <span class="tllm-rec tllm-transcribing" id="tllmTranscribing" hidden>Transcription</span>
             <span class="tllm-spacer"></span>
             <div class="tllm-seg" role="group" aria-label="Affichage">
                 <button type="button" id="tllmViewGrid" aria-pressed="true">Grille</button>
@@ -373,6 +375,7 @@
 
         const recording = T.recordingBy.size > 0 || (rc.isRecording && rc.isRecording());
         $('tllmRec').hidden = !recording;
+        $('tllmTranscribing').hidden = !T.transcribing;
     };
 
     // Upstream buttons change state through their "hidden" class: follow them
@@ -622,6 +625,13 @@
             meeting += item('click:editorButton', 'fas fa-file-lines', 'Lire les notes partagées');
         if (isShown('transcriptionButton'))
             meeting += item('click:transcriptionButton', 'fas fa-closed-captioning', 'Sous-titres');
+        const transcript = window.tllmTranscript;
+        if (amPresenter() && transcript?.available)
+            meeting += item(
+                'transcript',
+                'fas fa-file-lines',
+                transcript.active ? 'Arrêter la transcription' : 'Transcrire la réunion'
+            );
         if (amPresenter() && isShown('startRecButton'))
             meeting += item('click:startRecButton', 'fas fa-circle-dot', 'Enregistrer');
         if (isShown('stopRecButton'))
@@ -694,6 +704,7 @@
         if (act === 'hand') return toggleHand();
         if (act === 'react') return reactionsMenu($('tllmMore'));
         if (act === 'polls') return T.togglePanel('polls');
+        if (act === 'transcript') return window.tllmTranscript?.toggle();
         if (act === 'leave') return typeof leaveRoom === 'function' && leaveRoom();
         if (act === 'leaveAll') return typeof leaveRoom === 'function' && leaveRoom(true, true);
         if (act.startsWith('pm:')) return startPrivate(act.slice(3));
