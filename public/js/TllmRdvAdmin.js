@@ -115,6 +115,7 @@
                 poll.status === 'fixed' && poll.fixed
                     ? `Fixé : ${formatDate(poll.fixed.start)} · ${answers}`
                     : `${poll.slots} créneaux · ${answers}`;
+            if (poll.organizer) meta.textContent += ` · par ${poll.organizer}`;
             title.append(t, meta);
             const pill = document.createElement('span');
             pill.className = `rdv-pill is-${poll.status}`;

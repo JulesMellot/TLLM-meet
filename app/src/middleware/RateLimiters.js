@@ -131,6 +131,8 @@ function createRateLimiters({ getRequesterKey }) {
         text: 'Trop de réponses envoyées.',
     });
     const rdvReadLimiter = createIpLimiter({ windowMs: MINUTE_MS, max: 120, text: 'Too many requests.' });
+    // TLLM*meet moderator invitation links (account creation, new password)
+    const invitationLimiter = createIpLimiter({ windowMs: 15 * MINUTE_MS, max: 20, text: 'Trop de tentatives.' });
 
     return {
         loginLimiter,
@@ -141,6 +143,7 @@ function createRateLimiters({ getRequesterKey }) {
         createRoomLimiterMinutes,
         rdvAnswerLimiter,
         rdvReadLimiter,
+        invitationLimiter,
     };
 }
 

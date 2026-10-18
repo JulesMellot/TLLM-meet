@@ -89,13 +89,13 @@
                         <div class="tllm-block" id="modBlock" hidden>
                             <h2>Modérateurs</h2>
                             <p class="tllm-hint tllm-block-pad">
-                                Un modérateur ouvre des salles, les anime comme vous et propose des dates. Il ne gère
-                                pas les comptes.
+                                Un modérateur ouvre ses salles et ses sondages de dates, et les gère comme vous. Il ne
+                                voit pas ceux des autres. Vous voyez tout.
                             </p>
                             <ul class="tllm-mods" id="mods"></ul>
                             <form id="modForm" class="tllm-mod-form" novalidate>
                                 <label class="tllm-field"
-                                    >Nom affiché
+                                    >Pour qui ?
                                     <input
                                         id="modName"
                                         class="tllm-input"
@@ -104,41 +104,12 @@
                                         autocomplete="off"
                                         placeholder="Camille Martin"
                                 /></label>
-                                <label class="tllm-field"
-                                    >Identifiant
-                                    <input
-                                        id="modUser"
-                                        class="tllm-input"
-                                        type="text"
-                                        maxlength="32"
-                                        autocomplete="off"
-                                        autocapitalize="none"
-                                        spellcheck="false"
-                                        placeholder="camille"
-                                        required
-                                /></label>
-                                <label class="tllm-field"
-                                    >Mot de passe
-                                    <span class="tllm-mod-pass">
-                                        <input
-                                            id="modPass"
-                                            class="tllm-input"
-                                            type="text"
-                                            minlength="8"
-                                            maxlength="36"
-                                            autocomplete="new-password"
-                                            autocapitalize="none"
-                                            spellcheck="false"
-                                            required
-                                        />
-                                        <button id="modGen" class="tllm-button is-quiet is-small" type="button">
-                                            Générer
-                                        </button>
-                                    </span>
-                                </label>
-                                <button id="modCreate" class="tllm-button" type="submit">Créer le compte</button>
+                                <button id="modCreate" class="tllm-button" type="submit">Créer un compte</button>
+                                <p class="tllm-hint">
+                                    Vous obtenez un lien à lui envoyer. La personne y choisit son identifiant et son mot
+                                    de passe. Le lien sert une fois, pendant 7 jours.
+                                </p>
                                 <p id="modError" class="tllm-error" role="alert"></p>
-                                <p id="modDone" class="tllm-mod-done" role="status" hidden></p>
                             </form>
                         </div>
                     </div>

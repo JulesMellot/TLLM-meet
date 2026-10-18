@@ -2,7 +2,7 @@
 
 Visioconférence privée, en français, pour des réunions jusqu'à une trentaine de personnes.
 
-- Seuls l'administrateur et les modérateurs qu'il a créés ouvrent des visios.
+- Seuls l'administrateur et les modérateurs qu'il a invités ouvrent des visios.
 - Les invités rejoignent par lien, sans compte.
 - Ni ChatGPT ni DeepSeek : aucune intégration d'IA conversationnelle.
 
@@ -42,19 +42,26 @@ L'admin est présentateur de ses visios. Un invité ne le devient que si l'admin
 
 ## Modérateurs
 
-Les comptes de `HOST_USERS` sont les administrateurs. Depuis l'accueil, bloc **Modérateurs**,
-un administrateur crée des comptes modérateur : un nom affiché, un identifiant, un mot de passe
-(8 à 36 caractères, le bouton **Générer** en propose un). Les accès s'affichent une fois et sont copiés
-pour être transmis.
+Les comptes de `HOST_USERS` sont les administrateurs. Un administrateur voit et gère tout :
+toutes les salles (il en est présentateur), tous les sondages de dates, avec le nom de l'organisateur.
 
-Un modérateur se connecte sur `/login` comme l'admin. Il ouvre des salles, en est présentateur,
-les gère comme l'admin (verrou, salle d'attente, promotion d'un invité…) et propose des sondages de dates.
-Il voit ses propres salles et ses propres sondages. Il ne peut ni créer, ni modifier, ni supprimer de compte.
+Un modérateur ouvre des salles et propose des sondages de dates, et les gère comme l'admin
+(présentateur, verrou, salle d'attente, choix de la date…). Il ne voit que les siens : dans la salle
+d'un autre, il entre comme un invité. Il ne gère pas les comptes.
 
-L'admin peut changer le mot de passe d'un modérateur ou supprimer son compte : ses sessions ouvertes
-sont fermées aussitôt. Un identifiant déjà présent dans `HOST_USERS` est refusé.
+Créer un compte, depuis l'accueil, bloc **Modérateurs** :
 
-Les comptes sont enregistrés dans `DATA_DIR/moderateurs.json`, mots de passe hachés (scrypt).
+1. L'admin indique pour qui (un nom, facultatif) et clique sur **Créer un compte**.
+2. Il obtient un lien `/invitation/…` à envoyer à la personne. Le lien sert une fois, pendant 7 jours.
+3. La personne y choisit son identifiant et son mot de passe (avec confirmation), puis elle est connectée.
+   Ensuite, elle se connecte sur `/login`.
+
+L'admin ne voit ni l'identifiant ni le mot de passe. Pour un mot de passe oublié, **Mot de passe oublié**
+donne de la même façon un lien, valable 48 heures, où la personne choisit un nouveau mot de passe ;
+ses sessions ouvertes sont alors fermées. Supprimer un compte ferme aussi ses sessions.
+
+Les comptes sont enregistrés dans `DATA_DIR/moderateurs.json` : mots de passe hachés (scrypt),
+et seulement l'empreinte des liens en attente.
 
 La session (admin ou modérateur) est un cookie signé, vérifié côté serveur (`HttpOnly`, `Secure`, `SameSite=Lax`).
 Elle ne contient pas le mot de passe et expire après `HOST_SESSION_HOURS` heures.
@@ -161,7 +168,7 @@ Le code propre au fork est rangé dans des fichiers séparés, pour limiter les 
 | `app/src/RoomRegistry.js`                                                  | salles de l'admin (`DATA_DIR/salles.json`)                       |
 | `public/fonts/`                                                            | Barlow et Barlow Condensed, licence OFL                          |
 | `app/src/AdminAuth.js`                                                     | session admin ou modérateur, noms de visio                       |
-| `app/src/Moderators.js`                                                    | comptes modérateurs (`DATA_DIR/moderateurs.json`)                |
+| `app/src/Moderators.js`, `public/js/TllmInvitation.js`                     | comptes modérateurs, liens d'invitation                          |
 | `app/src/ClientIp.js`                                                      | IP du client derrière les proxys                                 |
 | `public/js/TllmRoom.js`, `public/css/tllm-room.css`                        | écran de la visio (barre, panneau, discussion, sondages)         |
 | `public/js/TllmJoin.js`                                                    | écran avant d'entrer, autorisations caméra et micro              |

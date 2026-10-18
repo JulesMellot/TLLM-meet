@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title id="title">TLLM*meet</title>
+        <link id="icon" rel="icon" href="../images/logo.svg" />
+        <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
+        <meta id="description" name="description" content="TLLM*meet, visioconférence privée." />
+        <meta property="og:type" content="{{OG_TYPE}}" />
+        <meta property="og:site_name" content="{{OG_SITE_NAME}}" />
+        <meta property="og:title" content="{{OG_TITLE}}" />
+        <meta property="og:description" content="{{OG_DESCRIPTION}}" />
+        <meta property="og:image" content="{{OG_IMAGE}}" />
+        <meta property="og:url" content="{{OG_URL}}" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="{{OG_TITLE}}" />
+        <meta name="twitter:description" content="{{OG_DESCRIPTION}}" />
+        <meta name="twitter:image" content="{{OG_IMAGE}}" />
+        <link rel="stylesheet" href="../css/tllm-pages.css" />
+        <script defer src="../js/Brand.js"></script>
+        <script defer src="../js/TllmInvitation.js"></script>
+    </head>
+    <body class="tllm-page">
+        <header class="tllm-bar">
+            <a class="tllm-mark" href="/">TLLM<span class="tllm-ast">*</span>meet</a>
+        </header>
+        <main class="tllm-main">
+            <div class="tllm-solo" style="max-width: 440px">
+                <p id="loading" class="tllm-lead">Chargement…</p>
+                <section id="invalidView" hidden>
+                    <h1>Ce lien n’est plus valable</h1>
+                    <p class="tllm-lead">
+                        Il a déjà servi, ou il a expiré. Demandez un nouveau lien à l’administrateur.
+                    </p>
+                </section>
+                <section id="formView" hidden>
+                    <h1 id="heading">Créer votre compte</h1>
+                    <p id="lead" class="tllm-lead"></p>
+                    <form id="inviteForm" class="tllm-form" novalidate>
+                        <label class="tllm-field" for="username" id="usernameField"
+                            >Identifiant
+                            <input
+                                id="username"
+                                class="tllm-input"
+                                type="text"
+                                autocomplete="username"
+                                autocapitalize="none"
+                                spellcheck="false"
+                                maxlength="32"
+                                required
+                        /></label>
+                        <label class="tllm-field" for="password"
+                            >Mot de passe
+                            <input
+                                id="password"
+                                class="tllm-input"
+                                type="password"
+                                autocomplete="new-password"
+                                minlength="8"
+                                maxlength="36"
+                                required
+                        /></label>
+                        <label class="tllm-field" for="confirm"
+                            >Confirmation du mot de passe
+                            <input
+                                id="confirm"
+                                class="tllm-input"
+                                type="password"
+                                autocomplete="new-password"
+                                minlength="8"
+                                maxlength="36"
+                                required
+                        /></label>
+                        <p class="tllm-hint" id="rules">
+                            Identifiant : 2 à 32 caractères, lettres sans accent, chiffres, point ou tiret. Mot de passe
+                            : 8 à 36 caractères.
+                        </p>
+                        <button id="submitButton" class="tllm-button" type="submit">Créer le compte</button>
+                        <p id="formError" class="tllm-error" role="alert"></p>
+                    </form>
+                </section>
+            </div>
+        </main>
+        <footer class="tllm-footer">
+            <a href="/privacy">Confidentialité</a>
+            <a href="https://github.com/miroslavpejic85/mirotalksfu" target="_blank" rel="noopener noreferrer"
+                >Basé sur MiroTalk SFU</a
+            >
+        </footer>
+    </body>
+</html>

@@ -706,9 +706,14 @@ describe('Only the admin can create a meeting (integration)', function () {
     });
 
     describe('Moderator accounts', () => {
-        const MOD = { username: 'camille', password: 'Camille-Pass-7', displayname: 'Camille' };
+        const PASS = 'Camille-Pass-7';
         let adminCookie;
         let modCookie;
+        let modId;
+        let modRoom;
+        let adminRoom;
+
+        const tokenOf = (url) => url.match(/\/invitation\/([A-Za-z0-9_-]{32})$/)[1];
 
         before(async () => {
             adminCookie = await login(ADMIN);
@@ -716,110 +721,177 @@ describe('Only the admin can create a meeting (integration)', function () {
 
         it('lets only a HOST_USERS admin manage moderators', async () => {
             assert.equal((await request('GET', '/api/admin/moderators')).status, 401);
-            assert.equal((await request('POST', '/api/admin/moderators', { body: MOD })).status, 401);
+            assert.equal((await request('POST', '/api/admin/moderators/invitations', { body: {} })).status, 401);
             const list = await request('GET', '/api/admin/moderators', { cookie: adminCookie });
             assert.equal(list.status, 200);
-            assert.deepEqual(list.json.moderators, []);
+            assert.deepEqual(list.json, { moderators: [], invites: [] });
         });
 
-        it('refuses an admin username, a weak password or an odd username', async () => {
-            for (const [body, status] of [
-                [{ ...MOD, username: 'jules' }, 409],
-                [{ ...MOD, username: 'JULES' }, 409],
-                [{ ...MOD, password: 'short' }, 400],
-                [{ ...MOD, password: 'x'.repeat(37) }, 400],
-                [{ ...MOD, username: 'a b' }, 400],
-                [{ ...MOD, username: ['camille'] }, 400],
-            ]) {
-                const res = await request('POST', '/api/admin/moderators', { body, cookie: adminCookie });
-                assert.equal(res.status, status, JSON.stringify(body));
-            }
-        });
+        it('creates the account from the link the admin sent: the person picks username and password', async () => {
+            const made = await request('POST', '/api/admin/moderators/invitations', {
+                body: { name: 'Camille' },
+                cookie: adminCookie,
+            });
+            assert.equal(made.status, 200, made.body);
+            const token = tokenOf(made.json.url);
+            assert.equal((await request('GET', `/invitation/${token}`)).status, 200);
+            assert.equal((await request('GET', `/api/invitation/${token}`)).json.kind, 'create');
+            assert.equal((await request('GET', `/api/invitation/${'x'.repeat(32)}`)).status, 404);
 
-        it('creates a moderator who logs in on /login, without exposing the password', async () => {
-            const res = await request('POST', '/api/admin/moderators', { body: MOD, cookie: adminCookie });
-            assert.equal(res.status, 200, res.body);
-            assert.equal(res.json.username, 'camille');
-            assert.ok(!res.body.includes(MOD.password));
-            const list = await request('GET', '/api/admin/moderators', { cookie: adminCookie });
-            assert.ok(!list.body.includes(MOD.password));
-            assert.ok(!list.body.includes('hash'));
-            modCookie = await login(MOD);
+            const pending = await request('GET', '/api/admin/moderators', { cookie: adminCookie });
+            assert.deepEqual(
+                pending.json.invites.map((i) => i.name),
+                ['Camille']
+            );
+            assert.ok(!pending.body.includes(token));
+
+            const mismatch = await request('POST', `/api/invitation/${token}`, {
+                body: { username: 'camille', password: PASS, confirm: 'other-pass' },
+            });
+            assert.equal(mismatch.status, 400);
+            assert.equal(mismatch.headers['set-cookie'], undefined);
+            const taken = await request('POST', `/api/invitation/${token}`, {
+                body: { username: 'jules', password: PASS, confirm: PASS },
+            });
+            assert.equal(taken.status, 409);
+
+            const done = await request('POST', `/api/invitation/${token}`, {
+                body: { username: 'camille', password: PASS, confirm: PASS },
+            });
+            assert.equal(done.status, 200, done.body);
+            modCookie = done.headers['set-cookie'][0].split(';')[0];
             const session = await request('GET', '/admin/session', { cookie: modCookie });
             assert.deepEqual(session.json, { admin: true, role: 'moderator', name: 'Camille' });
+            assert.equal((await request('GET', `/api/invitation/${token}`)).status, 404, 'the link works once');
+
+            // the admin sees the name, never the username or the password
+            const list = await request('GET', '/api/admin/moderators', { cookie: adminCookie });
+            assert.equal(list.json.moderators[0].displayname, 'Camille');
+            assert.deepEqual(list.json.invites, []);
+            assert.ok(!list.body.includes('camille') && !list.body.includes(PASS));
+            modId = list.json.moderators[0].id;
+
             assert.equal(
-                (await request('POST', '/api/admin/moderators', { body: MOD, cookie: adminCookie })).status,
-                409
+                (await request('POST', '/login', { body: { username: 'camille', password: PASS } })).status,
+                200
             );
         });
 
         it('does not let a moderator manage accounts', async () => {
-            const other = { username: 'eve', password: 'Eve-Pass-1234' };
             assert.equal((await request('GET', '/api/admin/moderators', { cookie: modCookie })).status, 403);
             assert.equal(
-                (await request('POST', '/api/admin/moderators', { body: other, cookie: modCookie })).status,
+                (await request('POST', '/api/admin/moderators/invitations', { body: {}, cookie: modCookie })).status,
                 403
             );
-            assert.equal((await request('DELETE', '/api/admin/moderators/camille', { cookie: modCookie })).status, 403);
+            assert.equal(
+                (await request('DELETE', `/api/admin/moderators/${modId}`, { cookie: modCookie })).status,
+                403
+            );
         });
 
-        it('lets a moderator open rooms and run date polls like an admin', async () => {
-            const room = await request('POST', '/admin/rooms', { body: { name: 'Atelier' }, cookie: modCookie });
-            assert.equal(room.status, 200);
-            assert.equal((await createToken(room.json.room, modCookie)).status, 200);
-            const sign = await request('GET', `/api/room/${room.json.room}`);
-            assert.equal(sign.json.organizer, 'Camille');
-            const overview = await request('GET', '/api/admin/overview', { cookie: modCookie });
-            assert.equal(overview.status, 200);
-            assert.ok(overview.json.rooms.some((r) => r.id === room.json.room));
+        it('lets a moderator open their own rooms only; an admin opens every room', async () => {
+            modRoom = (await request('POST', '/admin/rooms', { body: { name: 'Atelier' }, cookie: modCookie })).json
+                .room;
+            adminRoom = (await request('POST', '/admin/rooms', { body: { name: 'Bureau' }, cookie: adminCookie })).json
+                .room;
+            assert.equal((await createToken(modRoom, modCookie)).status, 200);
+            assert.equal((await createToken(adminRoom, modCookie)).status, 403);
+            assert.equal((await createToken('any-room-name', modCookie)).status, 403);
+            assert.equal((await createToken(modRoom, adminCookie)).status, 200);
+            const page = await request('GET', `/join/${adminRoom}`, { cookie: modCookie });
+            assert.equal(page.status, 302, 'a room that is not theirs: the door, like a guest');
+            assert.equal((await request('GET', `/api/room/${modRoom}`)).json.organizer, 'Camille');
+        });
 
+        it('makes the moderator presenter in their rooms only, and the admin presenter everywhere', async () => {
+            const modSocket = await connect(modCookie);
+            const adminSocket = await connect(adminCookie);
+            sockets.push(modSocket, adminSocket);
+            const token = (await createToken(modRoom, modCookie)).json.token;
+            const own = await joinRoom(modSocket, modRoom, peerInfo('Camille'), token);
+            assert.equal(presenterOf(own.room, 'Camille'), true);
+            const visit = await joinRoom(adminSocket, modRoom, peerInfo('Jules'));
+            assert.equal(presenterOf(visit.room, 'Jules'), true);
+            modSocket.close();
+            adminSocket.close();
+
+            const adminSocket2 = await connect(adminCookie);
+            const modSocket2 = await connect(modCookie);
+            sockets.push(modSocket2, adminSocket2);
+            const adminToken = (await createToken(adminRoom, adminCookie)).json.token;
+            await joinRoom(adminSocket2, adminRoom, peerInfo('Jules'), adminToken);
+            const guest = await joinRoom(modSocket2, adminRoom, peerInfo('Camille'));
+            assert.equal(presenterOf(guest.room, 'Camille'), false);
+            modSocket2.close();
+            adminSocket2.close();
+            await wait(300);
+        });
+
+        it('shows a moderator only their rooms and polls; the admin sees everything', async () => {
             const day = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-            const poll = await request('POST', '/api/rdv', {
-                cookie: modCookie,
-                body: {
-                    title: 'Réunion de rentrée',
-                    duration: 60,
-                    slots: [
-                        { date: day, time: '10:00' },
-                        { date: day, time: '14:00' },
-                    ],
-                },
+            const pollBody = (title) => ({
+                title,
+                duration: 60,
+                slots: [
+                    { date: day, time: '10:00' },
+                    { date: day, time: '14:00' },
+                ],
             });
-            assert.equal(poll.status, 200, poll.body);
-            const list = await request('GET', '/api/rdv', { cookie: modCookie });
-            assert.ok(list.json.polls.some((p) => p.id === poll.json.id));
-            const view = await request('GET', `/api/rdv/${poll.json.id}`, { cookie: modCookie });
-            assert.equal(view.json.admin, true);
-            assert.equal((await request('DELETE', `/api/rdv/${poll.json.id}`, { cookie: modCookie })).status, 200);
+            const modPoll = (await request('POST', '/api/rdv', { cookie: modCookie, body: pollBody('Atelier') })).json
+                .id;
+            const adminPoll = (await request('POST', '/api/rdv', { cookie: adminCookie, body: pollBody('Bureau') }))
+                .json.id;
+
+            const modList = (await request('GET', '/api/rdv', { cookie: modCookie })).json.polls.map((p) => p.id);
+            assert.ok(modList.includes(modPoll) && !modList.includes(adminPoll));
+            const adminList = (await request('GET', '/api/rdv', { cookie: adminCookie })).json.polls;
+            assert.equal(adminList.find((p) => p.id === modPoll).organizer, 'Camille');
+            assert.equal(adminList.find((p) => p.id === adminPoll).organizer, null);
+
+            const modView = await request('GET', '/api/admin/overview', { cookie: modCookie });
+            assert.ok(modView.json.rooms.some((r) => r.id === modRoom));
+            assert.ok(!modView.json.rooms.some((r) => r.id === adminRoom));
+            assert.ok(!modView.json.polls.some((p) => p.id === adminPoll));
+            const adminView = await request('GET', '/api/admin/overview', { cookie: adminCookie });
+            assert.equal(adminView.json.rooms.find((r) => r.id === modRoom).organizer, 'Camille');
+            assert.equal(adminView.json.polls.find((p) => p.id === modPoll).organizer, 'Camille');
+
+            // the admin manages the moderator's poll, not the other way round
+            assert.equal((await request('GET', `/api/rdv/${modPoll}`, { cookie: adminCookie })).json.admin, true);
+            assert.equal((await request('GET', `/api/rdv/${adminPoll}`, { cookie: modCookie })).json.admin, false);
+            assert.equal((await request('POST', `/api/rdv/${adminPoll}/close`, { cookie: modCookie })).status, 403);
+            assert.equal((await request('DELETE', `/api/rdv/${adminPoll}`, { cookie: modCookie })).status, 403);
+            const closed = await request('POST', `/api/rdv/${modPoll}/close`, { cookie: adminCookie });
+            assert.equal(closed.status, 200, closed.body);
+            assert.equal(closed.json.status, 'closed');
+            assert.equal((await request('DELETE', `/api/rdv/${modPoll}`, { cookie: adminCookie })).status, 200);
+            assert.equal((await request('DELETE', `/api/rdv/${adminPoll}`, { cookie: adminCookie })).status, 200);
         });
 
-        it('makes the moderator presenter of the meeting', async () => {
-            const roomId = 'atelier-mod-test';
-            const token = (await createToken(roomId, modCookie)).json.token;
-            const socket = await connect(modCookie);
-            sockets.push(socket);
-            const { created, room } = await joinRoom(socket, roomId, peerInfo('Camille'), token);
-            assert.equal(created.room_id, roomId);
-            assert.equal(presenterOf(room, 'Camille'), true);
-            socket.close();
-        });
-
-        it('closes the moderator sessions when the password changes or the account is removed', async () => {
-            const changed = await request('PUT', '/api/admin/moderators/camille/password', {
-                body: { password: 'Camille-New-8' },
-                cookie: adminCookie,
-            });
-            assert.equal(changed.status, 200);
-            assert.equal((await request('GET', '/admin/session', { cookie: modCookie })).json.admin, false);
-            modCookie = await login({ username: 'camille', password: 'Camille-New-8' });
+        it('resets a forgotten password through a link, and closes the old sessions', async () => {
+            const made = await request('POST', `/api/admin/moderators/${modId}/reset`, { cookie: adminCookie });
+            assert.equal(made.status, 200);
+            const token = tokenOf(made.json.url);
+            assert.equal((await request('GET', `/api/invitation/${token}`)).json.kind, 'reset');
             assert.equal((await request('GET', '/admin/session', { cookie: modCookie })).json.role, 'moderator');
+            const done = await request('POST', `/api/invitation/${token}`, {
+                body: { password: 'Camille-New-8', confirm: 'Camille-New-8' },
+            });
+            assert.equal(done.status, 200, done.body);
+            assert.equal((await request('GET', '/admin/session', { cookie: modCookie })).json.admin, false);
+            modCookie = done.headers['set-cookie'][0].split(';')[0];
+            assert.equal((await request('GET', '/admin/session', { cookie: modCookie })).json.role, 'moderator');
+        });
 
-            const removed = await request('DELETE', '/api/admin/moderators/camille', { cookie: adminCookie });
-            assert.equal(removed.status, 200);
+        it('removes an account and its sessions', async () => {
+            assert.equal(
+                (await request('DELETE', `/api/admin/moderators/${modId}`, { cookie: adminCookie })).status,
+                200
+            );
             assert.equal((await request('GET', '/admin/session', { cookie: modCookie })).json.admin, false);
             assert.equal((await createToken('after-removal', modCookie)).status, 403);
             assert.equal(
-                (await request('DELETE', '/api/admin/moderators/camille', { cookie: adminCookie })).status,
+                (await request('DELETE', `/api/admin/moderators/${modId}`, { cookie: adminCookie })).status,
                 404
             );
         });

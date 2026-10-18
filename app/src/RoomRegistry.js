@@ -114,9 +114,10 @@ class RoomRegistry {
         return this.rooms.get(id)?.name || nameFromId(id);
     }
 
+    // owner null: every organiser's rooms (admin view)
     recent(owner, limit = 12) {
         return Array.from(this.rooms.values())
-            .filter((r) => r.owner === owner)
+            .filter((r) => owner === null || r.owner === owner)
             .sort((a, b) => this.lastUse(b) - this.lastUse(a))
             .slice(0, limit);
     }

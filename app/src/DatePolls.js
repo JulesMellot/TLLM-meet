@@ -229,6 +229,11 @@ class DatePolls {
             .sort((a, b) => b.createdAt - a.createdAt);
     }
 
+    // Every poll, for the admins
+    listAll() {
+        return Array.from(this.polls.values()).sort((a, b) => b.createdAt - a.createdAt);
+    }
+
     owned(id, owner) {
         const poll = this.get(id);
         if (!poll) throw new DatePollError('Sondage introuvable.', 404);

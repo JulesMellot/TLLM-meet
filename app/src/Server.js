@@ -113,6 +113,7 @@ const {
     createRoomLimiterMinutes,
     rdvAnswerLimiter,
     rdvReadLimiter,
+    invitationLimiter,
 } = createRateLimiters({ getRequesterKey });
 
 // Branding configuration
@@ -255,6 +256,7 @@ const views = {
     rdv: path.join(__dirname, '../../', 'public/views/rdv.html'),
     rdvAdmin: path.join(__dirname, '../../', 'public/views/rdvAdmin.html'),
     after: path.join(__dirname, '../../', 'public/views/after.html'),
+    invitation: path.join(__dirname, '../../', 'public/views/invitation.html'),
 };
 
 const filesPath = [
@@ -266,6 +268,7 @@ const filesPath = [
     views.rdv,
     views.rdvAdmin,
     views.after,
+    views.invitation,
 ];
 
 const htmlInjector = new HtmlInjector(filesPath, config.ui.brand);
@@ -460,57 +463,93 @@ function startServer() {
     });
 
     // ---------- TLLM*meet: moderator accounts, managed by the HOST_USERS admins only ----------
-    const moderatorsOnly = (handler) => (req, res) => {
-        const admin = adminAuth.fromRequest(req);
+    // The admin makes links; the person picks the username and password on /invitation/<token>.
+    const INVITATION = /^[A-Za-z0-9_-]{32}$/;
+    const invitationUrl = (token) => `${host}/invitation/${token}`;
+    const moderatorReply = (res, fn) => {
         res.set('Cache-Control', 'no-store');
-        if (!admin) return res.status(401).json({ error: 'unauthorized' });
-        if (admin.role !== 'admin') return res.status(403).json({ error: 'Réservé à l’administrateur.' });
         try {
-            return res.json(handler(req, admin));
+            return res.json(fn());
         } catch (err) {
             if (err instanceof ModeratorError) return res.status(err.status).json({ error: err.message });
             log.error('Moderators', { error: err.message });
             return res.status(500).json({ error: 'Erreur du serveur.' });
         }
     };
+    const moderatorsOnly = (handler) => (req, res) => {
+        const admin = adminAuth.fromRequest(req);
+        if (!admin) return res.status(401).json({ error: 'unauthorized' });
+        if (admin.role !== 'admin') return res.status(403).json({ error: 'Réservé à l’administrateur.' });
+        return moderatorReply(res, () => handler(req, admin));
+    };
 
     app.get(
         '/api/admin/moderators',
-        moderatorsOnly(() => ({ moderators: moderators.list() }))
+        moderatorsOnly(() => moderators.list())
     );
     app.post(
-        '/api/admin/moderators',
+        '/api/admin/moderators/invitations',
         moderatorsOnly((req, admin) => {
-            const account = moderators.create(req.body || {}, admin.username);
-            log.info('Moderator created', { username: account.username, by: admin.username });
-            return account;
-        })
-    );
-    app.put(
-        '/api/admin/moderators/:username/password',
-        moderatorsOnly((req, admin) => {
-            const account = moderators.setPassword(req.params.username, req.body?.password);
-            log.info('Moderator password changed', { username: account.username, by: admin.username });
-            return account;
+            const { token, invite } = moderators.invite({ name: req.body?.name }, admin.username);
+            log.info('Moderator invitation created', { by: admin.username });
+            return { ...invite, url: invitationUrl(token) };
         })
     );
     app.delete(
-        '/api/admin/moderators/:username',
+        '/api/admin/moderators/invitations/:id',
+        moderatorsOnly((req) => ({ ok: moderators.cancelInvite(req.params.id) }))
+    );
+    app.post(
+        '/api/admin/moderators/:id/reset',
         moderatorsOnly((req, admin) => {
-            moderators.remove(req.params.username);
-            log.info('Moderator removed', { username: req.params.username, by: admin.username });
+            const { token, invite } = moderators.resetLink(req.params.id, admin.username);
+            log.info('Moderator password reset link created', { by: admin.username });
+            return { ...invite, url: invitationUrl(token) };
+        })
+    );
+    app.delete(
+        '/api/admin/moderators/:id',
+        moderatorsOnly((req, admin) => {
+            moderators.remove(req.params.id);
+            log.info('Moderator removed', { id: req.params.id, by: admin.username });
             return { ok: true };
+        })
+    );
+
+    // The person who received the link: create the account, or choose a new password
+    app.get('/invitation/:token', (req, res) => {
+        if (!INVITATION.test(req.params.token)) return res.status(404).sendFile(views.notFound);
+        res.set('Cache-Control', 'no-store');
+        return htmlInjector.injectHtml(views.invitation, res);
+    });
+    app.get('/api/invitation/:token', rdvReadLimiter, (req, res) =>
+        moderatorReply(res, () => {
+            const invitation = moderators.invitation(req.params.token);
+            if (!invitation) throw new ModeratorError('Ce lien n’est plus valable. Demandez-en un nouveau.', 404);
+            return invitation;
+        })
+    );
+    app.post('/api/invitation/:token', invitationLimiter, (req, res) =>
+        moderatorReply(res, () => {
+            const kind = moderators.invitation(req.params.token)?.kind;
+            const account = moderators.accept(req.params.token, req.body || {});
+            log.info(kind === 'reset' ? 'Moderator password changed' : 'Moderator account created', {
+                username: account.username,
+                ip: getIP(req),
+            });
+            adminAuth.issue(res, account); // logged in right away
+            return { ok: true, name: account.displayname };
         })
     );
 
     // Admin creates a meeting: the server turns the typed name into a room id with a random suffix
     app.post('/admin/rooms', (req, res) => {
-        if (!adminAuth.fromRequest(req)) {
+        const admin = adminAuth.fromRequest(req);
+        if (!admin) {
             return res.status(401).json({ message: 'unauthorized' });
         }
         const name = typeof req.body?.name === 'string' ? req.body.name : '';
         const room = makeRoomId(name);
-        const admin = adminAuth.fromRequest(req);
         roomRegistry.remember(room, { name: name.trim() || null, owner: admin.username });
         res.set('Cache-Control', 'no-store');
         return res.json({ room, url: '/join/' + encodeURIComponent(room) });
@@ -572,15 +611,25 @@ function startServer() {
         if (!admin) return res.status(401).json({ error: 'unauthorized' });
         res.set('Cache-Control', 'no-store');
         const now = Date.now();
-        const polls = datePolls.list(admin.username);
+        // An admin sees every room and poll; a moderator only their own
+        const everything = admin.role === 'admin';
+        const polls = everything ? datePolls.listAll() : datePolls.list(admin.username);
         const ids = new Set();
-        for (const id of roomList.keys()) if (!id.includes('_breakout_')) ids.add(id);
+        for (const id of roomList.keys()) {
+            if (!id.includes('_breakout_') && (everything || ownsRoom(admin, id))) ids.add(id);
+        }
         for (const p of polls) if (p.status === 'fixed' && p.fixed.end > now) ids.add(p.fixed.room);
-        for (const r of roomRegistry.recent(admin.username, 12)) ids.add(r.id);
+        for (const r of roomRegistry.recent(everything ? null : admin.username, everything ? 30 : 12)) ids.add(r.id);
+        const mine = (owner) => !owner || owner === admin.username;
+        const organizerOf = (owner) => (mine(owner) ? null : organizerName(owner) || owner);
 
         const rank = (r) => (r.active ? 0 : r.booking && r.booking.start - now < 24 * 3600 * 1000 ? 1 : 2);
         const rooms = Array.from(ids)
-            .map(roomState)
+            .map((id) => {
+                const state = roomState(id);
+                const owner = roomRegistry.get(id)?.owner || roomBooking(id)?.owner;
+                return { ...state, organizer: organizerOf(owner) };
+            })
             .sort(
                 (a, b) =>
                     rank(a) - rank(b) ||
@@ -599,6 +648,7 @@ function startServer() {
                 end: p.fixed.end,
                 room: p.fixed.room,
                 auto: p.fixed.auto,
+                organizer: mine(p.owner) ? null : p.organizer,
                 available: p.participants.filter((x) => x.answers[p.fixed.slot] !== 'no').length,
                 answers: p.participants.length,
             }));
@@ -611,8 +661,17 @@ function startServer() {
                 expected: p.expected,
                 deadline: p.deadline,
                 slots: p.slots.length,
+                organizer: mine(p.owner) ? null : p.organizer,
             }));
-        return res.json({ now, timeZone: meetingTimeZone, name: admin.displayname, rooms, agenda, polls: waiting });
+        return res.json({
+            now,
+            timeZone: meetingTimeZone,
+            name: admin.displayname,
+            role: admin.role,
+            rooms,
+            agenda,
+            polls: waiting,
+        });
     });
 
     // ---------- TLLM*meet: date polls (see DatePolls.js) ----------
@@ -633,6 +692,10 @@ function startServer() {
         if (!admin) return res.status(401).json({ error: 'unauthorized' });
         return rdvReply(res, () => handler(req, admin));
     };
+    // An admin manages every poll as if it were theirs; a moderator only their own
+    const rdvActor = (admin, id) =>
+        admin.role === 'admin' ? datePolls.get(id)?.owner || admin.username : admin.username;
+    const canManagePoll = (admin, poll) => !!admin && (admin.role === 'admin' || admin.username === poll.owner);
 
     // After leaving a call (see TllmRoom.js)
     app.get('/apres/:id', (req, res) => {
@@ -675,7 +738,10 @@ function startServer() {
         '/api/rdv',
         rdvAdminOnly((req, admin) => ({
             timeZone: meetingTimeZone,
-            polls: datePolls.list(admin.username).map((p) => datePolls.summary(p)),
+            polls: (admin.role === 'admin' ? datePolls.listAll() : datePolls.list(admin.username)).map((p) => ({
+                ...datePolls.summary(p),
+                organizer: p.owner === admin.username ? null : p.organizer,
+            })),
         }))
     );
     app.post(
@@ -690,7 +756,7 @@ function startServer() {
             const poll = datePolls.get(req.params.id);
             if (!poll) throw new DatePollError('Sondage introuvable.', 404);
             const admin = rdvOwner(req);
-            return datePolls.view(poll, { admin: !!admin && admin.username === poll.owner });
+            return datePolls.view(poll, { admin: canManagePoll(admin, poll) });
         })
     );
     app.post('/api/rdv/:id/answers', rdvAnswerLimiter, (req, res) =>
@@ -703,21 +769,27 @@ function startServer() {
     );
     app.delete(
         '/api/rdv/:id/answers/:pid',
-        rdvAdminOnly((req, admin) => ({ ok: datePolls.removeAnswer(req.params.id, admin.username, req.params.pid) }))
+        rdvAdminOnly((req, admin) => ({
+            ok: datePolls.removeAnswer(req.params.id, rdvActor(admin, req.params.id), req.params.pid),
+        }))
     );
     app.post(
         '/api/rdv/:id/fix',
         rdvAdminOnly((req, admin) =>
-            datePolls.view(datePolls.fix(req.params.id, admin.username, req.body?.slot), { admin: true })
+            datePolls.view(datePolls.fix(req.params.id, rdvActor(admin, req.params.id), req.body?.slot), {
+                admin: true,
+            })
         )
     );
     app.post(
         '/api/rdv/:id/close',
-        rdvAdminOnly((req, admin) => datePolls.view(datePolls.close(req.params.id, admin.username), { admin: true }))
+        rdvAdminOnly((req, admin) =>
+            datePolls.view(datePolls.close(req.params.id, rdvActor(admin, req.params.id)), { admin: true })
+        )
     );
     app.delete(
         '/api/rdv/:id',
-        rdvAdminOnly((req, admin) => ({ ok: datePolls.remove(req.params.id, admin.username) }))
+        rdvAdminOnly((req, admin) => ({ ok: datePolls.remove(req.params.id, rdvActor(admin, req.params.id)) }))
     );
 
     // Logout: revoke the admin session and clear the cookie
@@ -791,7 +863,7 @@ function startServer() {
 
         res.set('Cache-Control', 'no-store');
 
-        if (!adminAuth.fromRequest(req) && !isAuthorizedBreakout(room)) {
+        if (!ownsRoom(adminAuth.fromRequest(req), room) && !isAuthorizedBreakout(room)) {
             log.warn('Room creation token denied', { room, ip: getIP(req) });
             return res.status(403).json({ required: true, token: null });
         }
@@ -801,7 +873,7 @@ function startServer() {
 
     // Serve the room page if the meeting exists (or the admin is opening it), else the waiting page
     function serveRoomOrWaiting(req, res, roomId) {
-        if (roomList.has(roomId) || adminAuth.fromRequest(req) || isAuthorizedBreakout(roomId)) {
+        if (roomList.has(roomId) || ownsRoom(adminAuth.fromRequest(req), roomId) || isAuthorizedBreakout(roomId)) {
             return htmlInjector.injectHtml(views.room, res);
         }
         const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
@@ -1454,10 +1526,11 @@ function startServer() {
             const { peer_name, peer_id, peer_uuid, os_name, os_version, browser_name, browser_version } =
                 data.peer_info;
 
-            // TLLM*meet: the presenter role comes only from a verified admin or moderator session (cookie sent
-            // with the Socket.IO handshake). Client flags (peer_presenter, peer_token) are ignored.
+            // TLLM*meet: the presenter role comes only from a verified session (cookie sent with the Socket.IO
+            // handshake): an admin in every room, a moderator in their own rooms. Client flags
+            // (peer_presenter, peer_token) are ignored.
             const admin = adminAuth.fromSocket(socket);
-            const is_presenter = Boolean(admin);
+            const is_presenter = ownsRoom(admin, socket.room_id);
 
             // check if banned...
             if (room.isBanned(peer_uuid)) {
@@ -1480,7 +1553,7 @@ function startServer() {
             );
             if (usernameExists) return cb('isNameInUse');
 
-            // The admin (or moderator) is always presenter (and cannot be demoted). A guest is presenter only if a
+            // The admin (or the moderator who owns the room) is always presenter (and cannot be demoted). A guest is presenter only if a
             // presenter promoted this very socket during the meeting (stored server-side).
             const configuredPresenter = is_presenter;
             const shouldRegisterPresenter = is_presenter;
@@ -3950,6 +4023,15 @@ function startServer() {
 
     // A breakout room may be created by a guest's browser only after a presenter assigned it,
     // and only while its main room is running.
+    // TLLM*meet: an admin runs every room; a moderator only the rooms they opened (or that their
+    // date polls reserved), breakout rooms included
+    function ownsRoom(session, roomId) {
+        if (!session) return false;
+        if (session.role === 'admin') return true;
+        const mainRoomId = String(roomId).split('_breakout_')[0];
+        return roomRegistry.get(mainRoomId)?.owner === session.username;
+    }
+
     function isAuthorizedBreakout(roomId) {
         if (!roomId || !String(roomId).includes('_breakout_')) return false;
         const mainRoomId = String(roomId).split('_breakout_')[0];
