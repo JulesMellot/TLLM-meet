@@ -60,7 +60,7 @@ services:
             - API_KEY=${SERVICE_PASSWORD_ASR}
             # Cœurs CPU pour une phrase (0 : tous)
             - ASR_THREADS=${TRANSCRIPTION_THREADS:-0}
-            - ASR_IDLE_SECONDS=${TRANSCRIPTION_IDLE_SECONDS:-600}
+            - ASR_IDLE_SECONDS=${TRANSCRIPTION_IDLE_SECONDS:-300}
 
 volumes:
     tllm-data:

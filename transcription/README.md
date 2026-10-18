@@ -27,7 +27,8 @@ Le serveur web reste allumé (environ 50 Mo). Le modèle tourne dans un processu
 - il démarre quand une réunion lance sa transcription (TLLM\*meet appelle `POST /v1/warmup`), ou à la première
   phrase reçue ; le chargement prend quelques secondes, les premières phrases attendent ;
 - tant qu'une transcription est en cours, TLLM\*meet le garde éveillé ;
-- après `ASR_IDLE_SECONDS` (10 minutes) sans phrase, le processus est arrêté et sa mémoire rendue au système.
+- après `ASR_IDLE_SECONDS` (5 minutes) sans phrase, le processus est arrêté et sa mémoire rendue au système, cache des fichiers du
+  modèle compris. Le journal du service donne alors la mémoire du conteneur.
 
 `GET /health` indique l'état : `stopped`, `loading` ou `ready`.
 
@@ -37,7 +38,7 @@ Le serveur web reste allumé (environ 50 Mo). Le modèle tourne dans un processu
 | ------------------ | ------ | ----------------------------------------------------------------------------------------- |
 | `API_KEY`          | vide   | clé exigée dans `Authorization: Bearer …` (la même que `WHISPER_API_KEY` côté TLLM\*meet) |
 | `ASR_THREADS`      | `0`    | cœurs CPU pour une phrase (`0` : onnxruntime choisit)                                     |
-| `ASR_IDLE_SECONDS` | `600`  | secondes sans phrase avant d'arrêter le modèle et de libérer sa mémoire                   |
+| `ASR_IDLE_SECONDS` | `300`  | secondes sans phrase avant d'arrêter le modèle et de libérer sa mémoire                   |
 | `ASR_MAX_BYTES`    | 25 Mo  | taille maximale d'un envoi                                                                |
 
 Arguments de construction (`docker build --build-arg`) : `ASR_MODEL` (`nemo-parakeet-tdt-0.6b-v3`) et

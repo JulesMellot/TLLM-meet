@@ -78,6 +78,16 @@ describe('test-Whisper', () => {
             whisper.filterTranscript("Merci d'avoir regardé !", []).should.equal('');
             whisper.filterTranscript('Merci.', []).should.equal('Merci.');
         });
+        it('drops credit lines and lone hesitations heard in noise', () => {
+            whisper.filterTranscript('Sous-titres par Jérémy Diaz', []).should.equal('');
+            whisper.filterTranscript('Sous-titrage par la société Machin.', []).should.equal('');
+            whisper.filterTranscript('Uh', []).should.equal('');
+            whisper.filterTranscript('Euh...', []).should.equal('');
+            whisper
+                .filterTranscript('Les sous-titres sont faits par Marie.', [])
+                .should.equal('Les sous-titres sont faits par Marie.');
+            whisper.filterTranscript('Euh, on commence ?', []).should.equal('Euh, on commence ?');
+        });
         it('drops known hallucination phrases (silence)', () => {
             whisper.filterTranscript('Thanks for watching!', []).should.equal('');
             whisper.filterTranscript('Please subscribe', []).should.equal('');

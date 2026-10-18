@@ -43,7 +43,22 @@ const WHISPER_HALLUCINATIONS = new Set([
     'mercidevotreattention',
     'abonnezvous',
     'nhésitezpasàvousabonner',
+    // Hesitations alone: noise heard as a word
+    'uh',
+    'um',
+    'euh',
+    'heu',
+    'hum',
+    'hmm',
+    'mmh',
+    'mm',
+    'eh',
+    'bah',
 ]);
+
+// Subtitle credits heard in noise ("Sous-titres par Jérémy Diaz"): the whole text is a credit line
+const SUBTITLE_CREDIT =
+    /^\s*(?:sous[- ]?titr\w*|transcri\w*|traduction|traduit\w*|subtitles?)\b.{0,80}?\b(?:par|by)\b.{0,60}$/i;
 
 // Credits Whisper adds at the end of a real sentence: cut them out, keep the sentence
 const WHISPER_CREDIT_TAIL = /\s*(?:sous-titr(?:es|age)[^.!?]*amara\.org|[^.!?]*\bamara\.org)[^.!?]*[.!?]?\s*$/i;
@@ -109,7 +124,7 @@ function filterTranscript(text, segments = []) {
 
     const normalized = normalizeWhisperText(out);
     // Punctuation-only output or a known hallucination phrase => silence.
-    if (normalized === '' || WHISPER_HALLUCINATIONS.has(normalized)) {
+    if (normalized === '' || WHISPER_HALLUCINATIONS.has(normalized) || SUBTITLE_CREDIT.test(out)) {
         return '';
     }
 

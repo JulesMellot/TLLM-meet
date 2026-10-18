@@ -157,6 +157,38 @@ body.tllm-panel-open #tllmStage {
     z-index: 6;
     pointer-events: none;
 }
+/* Live captions of the meeting transcription (TllmTranscript.js), in the style of Zoom */
+#tllmCaptions {
+    position: absolute;
+    z-index: 7;
+    left: 50%;
+    bottom: 48px; /* above the name labels of the tiles */
+    transform: translateX(-50%);
+    width: min(820px, calc(100% - 32px));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+}
+.tllm-cap {
+    max-width: 100%;
+    padding: 7px 14px 8px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.74);
+    color: #fff;
+    font-size: 19px;
+    line-height: 1.4;
+    transition: opacity 0.4s ease;
+}
+.tllm-cap b {
+    margin-right: 8px;
+    color: #a9c7ff;
+    font-weight: 600;
+}
+.tllm-cap.is-gone {
+    opacity: 0;
+}
 
 /* Tiles */
 body.tllm-room .Camera {
@@ -1113,6 +1145,14 @@ body.tllm-room .Camera .user-hand {
     #tllmTop .tllm-rec {
         font-size: 0;
         padding: 4px;
+    }
+    #tllmCaptions {
+        bottom: 44px;
+        width: calc(100% - 20px);
+    }
+    .tllm-cap {
+        font-size: 15px;
+        padding: 6px 10px;
     }
     body.tllm-panel-open #tllmStage {
         right: 0;

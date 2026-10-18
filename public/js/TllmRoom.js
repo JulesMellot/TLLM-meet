@@ -623,9 +623,18 @@
             meeting += item('click:whiteboardButton', 'fas fa-chalkboard', 'Voir le tableau blanc');
         if (!canShare() && isShown('editorButton'))
             meeting += item('click:editorButton', 'fas fa-file-lines', 'Lire les notes partagées');
-        if (isShown('transcriptionButton'))
-            meeting += item('click:transcriptionButton', 'fas fa-closed-captioning', 'Sous-titres');
         const transcript = window.tllmTranscript;
+        // With the server transcription, captions come from it; the browser's own recognition is the fallback
+        if (transcript?.available) {
+            if (transcript.active)
+                meeting += item(
+                    'captions',
+                    'fas fa-closed-captioning',
+                    transcript.captions ? 'Masquer les sous-titres' : 'Afficher les sous-titres'
+                );
+        } else if (isShown('transcriptionButton')) {
+            meeting += item('click:transcriptionButton', 'fas fa-closed-captioning', 'Sous-titres');
+        }
         if (amPresenter() && transcript?.available)
             meeting += item(
                 'transcript',
@@ -705,6 +714,7 @@
         if (act === 'react') return reactionsMenu($('tllmMore'));
         if (act === 'polls') return T.togglePanel('polls');
         if (act === 'transcript') return window.tllmTranscript?.toggle();
+        if (act === 'captions') return window.tllmTranscript?.toggleCaptions();
         if (act === 'leave') return typeof leaveRoom === 'function' && leaveRoom();
         if (act === 'leaveAll') return typeof leaveRoom === 'function' && leaveRoom(true, true);
         if (act.startsWith('pm:')) return startPrivate(act.slice(3));

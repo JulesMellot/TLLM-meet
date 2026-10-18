@@ -19,12 +19,21 @@
     const LEAD_MS = 300; // audio kept before the first word
     const MAX_IN_FLIGHT = 2;
     const MAX_QUEUE = 20;
+    const CAPTION_MS = 7000; // a caption stays this long after its last words
+    const CAPTION_JOIN_MS = 10000; // the same speaker within this delay continues the same caption
+    const CAPTION_CHARS = 160; // older words scroll out at the start
 
     const S = (window.tllmTranscript = {
         available: false,
         active: false,
         recording: false,
+        captions: true, // this viewer's choice, kept in the browser
     });
+    try {
+        S.captions = localStorage.getItem('tllm-captions') !== 'off';
+    } catch {
+        /* default: shown */
+    }
 
     let ctx = null;
     let analyser = null;
@@ -241,12 +250,93 @@
         analyser = null;
     }
 
+    // ---------- Captions, in the style of Zoom: a dark band at the bottom of the videos ----------
+
+    function captionHost() {
+        let host = document.getElementById('tllmCaptions');
+        if (host) return host;
+        const stage = document.getElementById('tllmStage');
+        if (!stage) return null;
+        host = document.createElement('div');
+        host.id = 'tllmCaptions';
+        host.setAttribute('aria-live', 'polite');
+        host.setAttribute('translate', 'no');
+        host.classList.add('notranslate');
+        stage.appendChild(host);
+        return host;
+    }
+
+    // Keep the end of the text: the newest words matter
+    function tail(text) {
+        if (text.length <= CAPTION_CHARS) return text;
+        const cut = text.slice(-CAPTION_CHARS);
+        const space = cut.indexOf(' ');
+        return '…' + (space > 0 && space < 30 ? cut.slice(space + 1) : cut);
+    }
+
+    function showCaption(name, text) {
+        if (!S.captions || !S.active || !text) return;
+        const host = captionHost();
+        if (!host) return;
+        const now = Date.now();
+        let line = host.lastElementChild;
+        if (
+            line &&
+            line.dataset.who === name &&
+            now - line._at < CAPTION_JOIN_MS &&
+            !line.classList.contains('is-gone')
+        ) {
+            line._text += ' ' + text;
+        } else {
+            line = document.createElement('div');
+            line.className = 'tllm-cap';
+            line.dataset.who = name;
+            line._text = text;
+            const who = document.createElement('b');
+            who.textContent = name;
+            line.append(who, document.createElement('span'));
+            host.appendChild(line);
+            while (host.children.length > 2) host.firstElementChild.remove();
+        }
+        line.lastElementChild.textContent = tail(line._text);
+        line._at = now;
+        clearTimeout(line._timer);
+        line._timer = setTimeout(() => {
+            line.classList.add('is-gone');
+            setTimeout(() => line.remove(), 400);
+        }, CAPTION_MS);
+    }
+
+    function clearCaptions() {
+        const host = document.getElementById('tllmCaptions');
+        if (host) host.textContent = '';
+    }
+
+    S.toggleCaptions = function () {
+        S.captions = !S.captions;
+        try {
+            localStorage.setItem('tllm-captions', S.captions ? 'on' : 'off');
+        } catch {
+            /* this time only */
+        }
+        if (!S.captions) clearCaptions();
+        room()?.bubble?.({
+            iconCls: 'fas fa-closed-captioning',
+            title: S.captions ? 'Sous-titres affichés' : 'Sous-titres masqués',
+            text: S.captions ? '' : 'La transcription continue. Plus › Afficher les sous-titres.',
+            duration: 3500,
+        });
+    };
+
     function apply(state, by, announce) {
         const was = S.active;
         S.available = !!state?.available;
         S.active = S.available && !!state?.active;
         if (S.active) startRecording();
-        else stopRecording();
+        else {
+            stopRecording();
+            clearCaptions();
+        }
         const T = room();
         if (!T) return;
         T.transcribing = S.active;
@@ -304,14 +394,7 @@
         S.started = true;
         rc.socket.on('meetingTranscription', (state) => apply(state, state?.by, 'change'));
         rc.socket.on('meetingTranscript', (data) => {
-            // Live captions, only for those who opened the « Sous-titres » panel
-            if (typeof transcription === 'undefined' || !transcription || transcription.isHidden) return;
-            if (!data?.text) return;
-            transcription.handleTranscript({
-                peer_name: String(data.peer_name || ''),
-                peer_avatar: '',
-                text_data: String(data.text),
-            });
+            if (data?.text) showCaption(String(data.peer_name || 'Participant'), String(data.text));
         });
         rc.socket
             .request('meetingTranscription')

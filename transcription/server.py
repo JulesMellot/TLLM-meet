@@ -30,13 +30,48 @@ MODEL = os.environ.get("ASR_MODEL", "nemo-parakeet-tdt-0.6b-v3")
 QUANTIZATION = os.environ.get("ASR_QUANTIZATION", "int8") or None
 API_KEY = os.environ.get("API_KEY", "")
 THREADS = int(os.environ.get("ASR_THREADS", "0") or 0)  # 0: onnxruntime decides
-IDLE_SECONDS = max(10, int(os.environ.get("ASR_IDLE_SECONDS", "600") or 600))
+IDLE_SECONDS = max(10, int(os.environ.get("ASR_IDLE_SECONDS", "300") or 300))
+MODEL_DIR = os.environ.get("HF_HOME", "/models")
 LOAD_TIMEOUT = 300
 MAX_BYTES = int(os.environ.get("ASR_MAX_BYTES", str(25 * 1024 * 1024)))
 MAX_SECONDS = 120
 SAMPLE_RATE = 16000
 
 log = logging.getLogger("uvicorn.error")
+
+
+def drop_file_cache(root=MODEL_DIR):
+    """Evict the model files from the page cache: the kernel charges it to this container's memory."""
+    for folder, _dirs, files in os.walk(root):
+        for name in files:
+            path = os.path.join(folder, name)
+            if os.path.islink(path):
+                continue
+            try:
+                fd = os.open(path, os.O_RDONLY)
+            except OSError:
+                continue
+            try:
+                os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+            except OSError:
+                pass
+            finally:
+                os.close(fd)
+
+
+def container_memory():
+    """Memory charged to this container (cgroup v2), in MB: total, process memory, file cache."""
+    try:
+        with open("/sys/fs/cgroup/memory.current") as f:
+            total = int(f.read()) // 1048576
+        stat = {}
+        with open("/sys/fs/cgroup/memory.stat") as f:
+            for line in f:
+                key, value = line.split()
+                stat[key] = int(value) // 1048576
+        return {"total_mb": total, "process_mb": stat.get("anon"), "cache_mb": stat.get("file")}
+    except (OSError, ValueError):
+        return None
 
 
 def worker_main(conn, model_name, quantization, threads):
@@ -110,7 +145,8 @@ class Engine:
                 raise RuntimeError(detail)
             self.proc, self.conn = proc, parent
             self.last = time.monotonic()
-            log.info("Model %s loaded in %.1f s", MODEL, time.monotonic() - started)
+            log.info("Model %s loaded in %.1f s. Container memory: %s", MODEL, time.monotonic() - started,
+                     container_memory())
         finally:
             self.loading = False
 
@@ -170,7 +206,8 @@ class Engine:
             if self.proc is None or now - self.last < IDLE_SECONDS:
                 return False
             self._stop()
-            log.info("Model stopped after %d s without work", IDLE_SECONDS)
+            drop_file_cache()
+            log.info("Model stopped after %d s without work. Container memory: %s", IDLE_SECONDS, container_memory())
             return True
         finally:
             self.lock.release()
@@ -227,7 +264,14 @@ def check_key(authorization: str | None):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "model": MODEL, "quantization": QUANTIZATION, "state": engine.state}
+    return {
+        "ok": True,
+        "model": MODEL,
+        "quantization": QUANTIZATION,
+        "state": engine.state,
+        "idle_seconds": IDLE_SECONDS,
+        "memory": container_memory(),
+    }
 
 
 @app.get("/v1/models")

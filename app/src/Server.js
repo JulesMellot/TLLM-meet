@@ -321,7 +321,7 @@ function warmTranscription() {
         log.debug('Transcription warmup', { error: err.message });
     });
 }
-setInterval(() => transcripts.anyActive() && warmTranscription(), 4 * 60 * 1000).unref();
+setInterval(() => transcripts.anyActive() && warmTranscription(), 2 * 60 * 1000).unref();
 
 // TLLM*meet: editor and whiteboard content, kept per room by the server (see Collab.js)
 const collab = new CollabStore({}, (roomId, exceptSocketId, event, payload) => {
