@@ -116,8 +116,9 @@ Le temps (`[hh:mm:ss]`) part du lancement de la transcription. Une visio = un fi
 est transcrite : le message affiché à chacun le dit.
 
 Le service `transcription` de `docker-compose.coolify.yml` se construit avec l'application (le modèle, environ
-700 Mo, est téléchargé à la construction de l'image). Il demande environ 1,5 Go de mémoire. Pour s'en passer :
-`TRANSCRIPTION_ENABLED=false` et retirer le service du fichier. Détails et réglages :
+700 Mo, est téléchargé à la construction de l'image). Au repos, il occupe environ 50 Mo de mémoire : le modèle
+(environ 1,5 Go) n'est chargé que quand une transcription démarre, et libéré 10 minutes après la dernière phrase
+(`TRANSCRIPTION_IDLE_SECONDS`). Pour s'en passer : `TRANSCRIPTION_ENABLED=false` et retirer le service du fichier. Détails et réglages :
 [`transcription/README.md`](transcription/README.md).
 
 ## Déploiement (Coolify derrière Cloudflare)

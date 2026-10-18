@@ -12,15 +12,16 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Le modèle (environ 700 Mo en int8) est téléchargé une fois, à la construction de l'image :
-# le conteneur démarre ensuite sans accès à Internet.
+# Le modèle (environ 700 Mo en int8) est téléchargé une fois, à la construction de l'image, sans être
+# chargé en mémoire : le conteneur démarre ensuite sans accès à Internet. Il n'est chargé que pendant
+# les transcriptions (voir ASR_IDLE_SECONDS).
 ARG ASR_MODEL=nemo-parakeet-tdt-0.6b-v3
 ARG ASR_QUANTIZATION=int8
 ENV ASR_MODEL=${ASR_MODEL} \
     ASR_QUANTIZATION=${ASR_QUANTIZATION} \
     HF_HOME=/models \
     HF_HUB_DISABLE_TELEMETRY=1
-RUN mkdir -p /models && python -c "import os, onnx_asr; onnx_asr.load_model(os.environ['ASR_MODEL'], quantization=os.environ['ASR_QUANTIZATION'] or None)" \
+RUN mkdir -p /models && python -c "import os; from onnx_asr.loader import create_asr_resolver; print(create_asr_resolver(os.environ['ASR_MODEL']).resolve_model(quantization=os.environ['ASR_QUANTIZATION'] or None))" \
     && chown -R asr:asr /models
 ENV HF_HUB_OFFLINE=1
 

@@ -96,6 +96,7 @@ describe('Meeting transcription (integration)', function () {
     let server;
     let asr;
     let asrCalls = [];
+    const warmups = []; // the speech-to-text server is woken up when a meeting starts its transcription
     let logs = '';
     const sockets = [];
 
@@ -106,6 +107,10 @@ describe('Meeting transcription (integration)', function () {
             req.setEncoding('utf8');
             req.on('data', (c) => (raw += c));
             req.on('end', () => {
+                if (req.url === '/v1/warmup') {
+                    warmups.push(req.headers.authorization);
+                    return res.end('{"state":"loading"}');
+                }
                 asrCalls.push({ auth: req.headers.authorization, raw });
                 const match = /filename="audio\.webm"\r\nContent-Type: audio\/webm\r\n\r\n([\s\S]*?)\r\n--/.exec(raw);
                 res.setHeader('Content-Type', 'application/json');
@@ -185,6 +190,8 @@ describe('Meeting transcription (integration)', function () {
         const announced = new Promise((resolve) => guest.once('meetingTranscription', resolve));
         assert.equal((await emit(admin, 'setMeetingTranscription', { active: true })).active, true);
         assert.equal((await announced).active, true);
+        await wait(200);
+        assert.deepEqual(warmups, [`Bearer ${ASR_KEY}`]);
 
         const caption = new Promise((resolve) => admin.once('meetingTranscript', resolve));
         const one = await emit(admin, 'getWhisperTranscription', {

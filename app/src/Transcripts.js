@@ -61,6 +61,11 @@ class Transcripts {
         return !!this.live.get(room)?.active;
     }
 
+    anyActive() {
+        for (const session of this.live.values()) if (session.active) return true;
+        return false;
+    }
+
     // Start, or resume after a pause: a meeting keeps one file until its room closes
     start(room, { name, by } = {}) {
         if (!isRoomId(room)) return null;

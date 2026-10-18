@@ -308,6 +308,21 @@ const transcripts = new Transcripts({
 transcripts.purge();
 setInterval(() => transcripts.purge(), 6 * 3600 * 1000).unref();
 
+// The speech-to-text server (transcription/) loads its model only when asked and drops it when idle:
+// wake it up when a meeting starts its transcription, and keep it awake while one is running.
+// Other OpenAI-compatible servers answer 404 here, which is fine.
+function warmTranscription() {
+    const whisper = config?.integrations?.whisper;
+    if (!whisper?.enabled) return;
+    const base = (whisper.basePath || '').replace(/\/?$/, '/');
+    if (!base || base.includes('api.openai.com')) return;
+    const headers = whisper.apiKey ? { Authorization: `Bearer ${whisper.apiKey}` } : {};
+    axios.post(`${base}warmup`, null, { headers, timeout: 10000 }).catch((err) => {
+        log.debug('Transcription warmup', { error: err.message });
+    });
+}
+setInterval(() => transcripts.anyActive() && warmTranscription(), 4 * 60 * 1000).unref();
+
 // TLLM*meet: editor and whiteboard content, kept per room by the server (see Collab.js)
 const collab = new CollabStore({}, (roomId, exceptSocketId, event, payload) => {
     roomList.get(roomId)?.broadCast(exceptSocketId, event, payload);
@@ -3599,8 +3614,12 @@ function startServer() {
             if (!meetingTranscriptionState(room).available) return reply({ error: 'unavailable' });
             const by = peer.peer_info?.peer_name ?? peer.peer_name;
             const active = dataObject?.active === true;
-            if (active) transcripts.start(room.id, { name: roomRegistry.name(room.id), by });
-            else transcripts.stop(room.id, { by });
+            if (active) {
+                transcripts.start(room.id, { name: roomRegistry.name(room.id), by });
+                warmTranscription();
+            } else {
+                transcripts.stop(room.id, { by });
+            }
             room.sendToAll('meetingTranscription', { ...meetingTranscriptionState(room), by });
             log.info('Meeting transcription', { room_id: room.id, active, by });
             return reply(meetingTranscriptionState(room));
@@ -3662,7 +3681,8 @@ function startServer() {
 
                 const response = await axios.post(url, form, {
                     headers,
-                    timeout: 30000,
+                    // A meeting's first sentence may wait for the model to load
+                    timeout: session ? 90000 : 30000,
                     maxBodyLength: Infinity,
                     maxContentLength: Infinity,
                 });

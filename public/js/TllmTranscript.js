@@ -198,7 +198,7 @@
                 .request(
                     'getWhisperTranscription',
                     { audio, mimeType: type, meeting: true, ageMs: Math.round(performance.now() - speechStart) },
-                    60000
+                    120000
                 )
                 .then((res) => {
                     if (res?.inactive) stopRecording();

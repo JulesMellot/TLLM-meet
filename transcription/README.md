@@ -14,10 +14,22 @@ Reconnaissance vocale pour la transcription des réunions de TLLM\*meet. Il tour
 
 Parakeet ne génère pas le texte mot par mot comme Whisper : il est plusieurs fois plus rapide à précision
 comparable, et il n'invente pas de phrases sur les silences (le « Sous-titres réalisés par la communauté
-d'Amara.org » de Whisper). En int8, il pèse environ 700 Mo et tient dans 1,5 Go de mémoire.
+d'Amara.org » de Whisper). En int8, il pèse environ 700 Mo et tient dans 1,5 Go de mémoire, pendant les
+transcriptions seulement.
 
 Dans une réunion, une ou deux personnes parlent en même temps : c'est cette charge que le serveur porte,
 pas le nombre de participants. Chaque navigateur n'envoie que les phrases dites micro ouvert.
+
+## Le modèle ne tourne que quand on en a besoin
+
+Le serveur web reste allumé (environ 50 Mo). Le modèle tourne dans un processus à part :
+
+- il démarre quand une réunion lance sa transcription (TLLM\*meet appelle `POST /v1/warmup`), ou à la première
+  phrase reçue ; le chargement prend quelques secondes, les premières phrases attendent ;
+- tant qu'une transcription est en cours, TLLM\*meet le garde éveillé ;
+- après `ASR_IDLE_SECONDS` (10 minutes) sans phrase, le processus est arrêté et sa mémoire rendue au système.
+
+`GET /health` indique l'état : `stopped`, `loading` ou `ready`.
 
 ## Réglages
 
@@ -25,7 +37,7 @@ pas le nombre de participants. Chaque navigateur n'envoie que les phrases dites 
 | ------------------ | ------ | ----------------------------------------------------------------------------------------- |
 | `API_KEY`          | vide   | clé exigée dans `Authorization: Bearer …` (la même que `WHISPER_API_KEY` côté TLLM\*meet) |
 | `ASR_THREADS`      | `0`    | cœurs CPU pour une phrase (`0` : onnxruntime choisit)                                     |
-| `ASR_MAX_PARALLEL` | `2`    | phrases reconnues en même temps ; les autres attendent                                    |
+| `ASR_IDLE_SECONDS` | `600`  | secondes sans phrase avant d'arrêter le modèle et de libérer sa mémoire                   |
 | `ASR_MAX_BYTES`    | 25 Mo  | taille maximale d'un envoi                                                                |
 
 Arguments de construction (`docker build --build-arg`) : `ASR_MODEL` (`nemo-parakeet-tdt-0.6b-v3`) et

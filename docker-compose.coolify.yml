@@ -47,7 +47,9 @@ services:
             # Sondages de dates : gardés entre deux déploiements
             - tllm-data:/src/data
 
-    # Reconnaissance vocale (Parakeet TDT 0.6B v3, int8, sur CPU) : environ 1,5 Go de mémoire.
+    # Reconnaissance vocale (Parakeet TDT 0.6B v3, int8, sur CPU). Au repos : environ 50 Mo de mémoire.
+    # Le modèle (environ 1,5 Go) n'est chargé que pendant une transcription, et libéré après
+    # TRANSCRIPTION_IDLE_SECONDS sans phrase à traiter.
     # Joignable seulement par tllm-meet (aucun port publié). Voir transcription/README.md.
     transcription:
         build: ./transcription
@@ -56,9 +58,9 @@ services:
             - '8000'
         environment:
             - API_KEY=${SERVICE_PASSWORD_ASR}
-            # Cœurs CPU pour une phrase (0 : tous), et phrases traitées en même temps
+            # Cœurs CPU pour une phrase (0 : tous)
             - ASR_THREADS=${TRANSCRIPTION_THREADS:-0}
-            - ASR_MAX_PARALLEL=${TRANSCRIPTION_MAX_PARALLEL:-2}
+            - ASR_IDLE_SECONDS=${TRANSCRIPTION_IDLE_SECONDS:-600}
 
 volumes:
     tllm-data:

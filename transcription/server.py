@@ -4,20 +4,25 @@ A small OpenAI-compatible endpoint (POST /v1/audio/transcriptions) in front of a
 onnx-asr. Default: NVIDIA Parakeet TDT 0.6B v3 in int8 (25 European languages, French included),
 fast enough on a CPU for the one or two people speaking at the same time in a meeting.
 
+The model only lives while it is needed. This process stays small (the web server, ffmpeg calls);
+the model runs in a child process started on the first sentence, or by POST /v1/warmup when a
+meeting starts its transcription, and stopped after ASR_IDLE_SECONDS without work: its memory goes
+back to the system.
+
 The TLLM*meet server sends one sentence at a time (a few seconds of WebM/Opus from one microphone);
 ffmpeg turns it into 16 kHz mono samples for the model.
 """
 
 import hmac
+import logging
+import multiprocessing as mp
 import os
 import subprocess
 import tempfile
 import threading
 import time
+from contextlib import asynccontextmanager
 
-import numpy as np
-import onnx_asr
-import onnxruntime as rt
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import PlainTextResponse
 
@@ -25,26 +30,177 @@ MODEL = os.environ.get("ASR_MODEL", "nemo-parakeet-tdt-0.6b-v3")
 QUANTIZATION = os.environ.get("ASR_QUANTIZATION", "int8") or None
 API_KEY = os.environ.get("API_KEY", "")
 THREADS = int(os.environ.get("ASR_THREADS", "0") or 0)  # 0: onnxruntime decides
-MAX_PARALLEL = max(1, int(os.environ.get("ASR_MAX_PARALLEL", "2") or 2))
+IDLE_SECONDS = max(10, int(os.environ.get("ASR_IDLE_SECONDS", "600") or 600))
+LOAD_TIMEOUT = 300
 MAX_BYTES = int(os.environ.get("ASR_MAX_BYTES", str(25 * 1024 * 1024)))
 MAX_SECONDS = 120
 SAMPLE_RATE = 16000
 
-
-def load():
-    options = rt.SessionOptions()
-    if THREADS > 0:
-        options.intra_op_num_threads = THREADS
-    return onnx_asr.load_model(MODEL, quantization=QUANTIZATION, sess_options=options)
+log = logging.getLogger("uvicorn.error")
 
 
-model = None if os.environ.get("ASR_SKIP_LOAD") == "1" else load()
-slots = threading.BoundedSemaphore(MAX_PARALLEL)
-app = FastAPI(title="TLLM*meet transcription", docs_url=None, redoc_url=None, openapi_url=None)
+def worker_main(conn, model_name, quantization, threads):
+    """Child process: load the model, then recognise float32 samples until told to stop."""
+    try:
+        import numpy as np
+        import onnx_asr
+        import onnxruntime as rt
+
+        options = rt.SessionOptions()
+        if threads > 0:
+            options.intra_op_num_threads = threads
+        model = onnx_asr.load_model(model_name, quantization=quantization, sess_options=options)
+        conn.send(("ready", None))
+    except Exception as err:  # noqa: BLE001 - reported to the parent
+        conn.send(("error", f"{type(err).__name__}: {err}"))
+        return
+    while True:
+        try:
+            pcm = conn.recv()
+        except EOFError:
+            return
+        if pcm is None:
+            return
+        try:
+            samples = np.frombuffer(pcm, dtype=np.float32)
+            conn.send(("ok", str(model.recognize(samples, sample_rate=SAMPLE_RATE)).strip()))
+        except Exception as err:  # noqa: BLE001
+            conn.send(("error", f"{type(err).__name__}: {err}"))
 
 
-def decode(data: bytes) -> np.ndarray:
-    """Any audio ffmpeg reads (WebM/Opus, MP4/AAC, Ogg, WAV) -> float32 mono 16 kHz."""
+class Engine:
+    """The model process: started when needed, stopped when idle. One sentence at a time."""
+
+    def __init__(self, target=worker_main):
+        self.target = target
+        self.ctx = mp.get_context("spawn")
+        self.lock = threading.Lock()  # one sentence at a time, and start/stop
+        self.proc = None
+        self.conn = None
+        self.last = 0.0
+        self.loading = False
+
+    @property
+    def state(self):
+        if self.loading:
+            return "loading"
+        return "ready" if self.proc is not None and self.proc.is_alive() else "stopped"
+
+    def _start(self):
+        if self.proc is not None and self.proc.is_alive():
+            return
+        self._stop()
+        self.loading = True
+        started = time.monotonic()
+        try:
+            parent, child = self.ctx.Pipe()
+            proc = self.ctx.Process(target=self.target, args=(child, MODEL, QUANTIZATION, THREADS), daemon=True)
+            proc.start()
+            child.close()
+            if not parent.poll(LOAD_TIMEOUT):
+                proc.kill()
+                raise RuntimeError("model load timed out")
+            try:
+                status, detail = parent.recv()
+            except EOFError as err:
+                proc.join(5)
+                raise RuntimeError(f"model process exited while loading (code {proc.exitcode})") from err
+            if status != "ready":
+                proc.join(5)
+                raise RuntimeError(detail)
+            self.proc, self.conn = proc, parent
+            self.last = time.monotonic()
+            log.info("Model %s loaded in %.1f s", MODEL, time.monotonic() - started)
+        finally:
+            self.loading = False
+
+    def _stop(self):
+        proc, conn = self.proc, self.conn
+        self.proc = self.conn = None
+        if conn is not None:
+            try:
+                conn.send(None)
+            except (OSError, ValueError):
+                pass
+        if proc is not None:
+            proc.join(5)
+            if proc.is_alive():
+                proc.kill()
+                proc.join(5)
+        if conn is not None:
+            conn.close()
+
+    def recognize(self, pcm: bytes) -> str:
+        with self.lock:
+            self._start()
+            try:
+                self.conn.send(pcm)
+                status, detail = self.conn.recv()
+            except (EOFError, OSError) as err:
+                self._stop()  # the model process died: started again on the next sentence
+                raise RuntimeError("model process stopped") from err
+            self.last = time.monotonic()
+            if status != "ok":
+                raise RuntimeError(detail)
+            return detail
+
+    def warm(self):
+        """Load the model in the background (a meeting starts its transcription)."""
+        self.last = time.monotonic()
+        if self.state != "stopped" or self.lock.locked():
+            return
+
+        def load():
+            with self.lock:
+                try:
+                    self._start()
+                except Exception as err:  # noqa: BLE001
+                    log.error("Model load failed: %s", err)
+
+        threading.Thread(target=load, daemon=True).start()
+
+    def reap(self, now=None):
+        """Stop the model process after IDLE_SECONDS without a sentence."""
+        now = time.monotonic() if now is None else now
+        if self.proc is None or now - self.last < IDLE_SECONDS:
+            return False
+        if not self.lock.acquire(blocking=False):
+            return False  # busy
+        try:
+            if self.proc is None or now - self.last < IDLE_SECONDS:
+                return False
+            self._stop()
+            log.info("Model stopped after %d s without work", IDLE_SECONDS)
+            return True
+        finally:
+            self.lock.release()
+
+
+engine = Engine()
+
+
+def reaper():
+    while True:
+        time.sleep(15)
+        try:
+            engine.reap()
+        except Exception as err:  # noqa: BLE001
+            log.error("Reaper: %s", err)
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    threading.Thread(target=reaper, daemon=True).start()
+    yield
+    with engine.lock:
+        engine._stop()
+
+
+app = FastAPI(title="TLLM*meet transcription", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+
+
+def decode(data: bytes) -> bytes:
+    """Any audio ffmpeg reads (WebM/Opus, MP4/AAC, Ogg, WAV) -> float32 mono 16 kHz samples."""
     # A file rather than a pipe: MP4 from Safari keeps its index at the end
     with tempfile.NamedTemporaryFile(suffix=".audio") as src:
         src.write(data)
@@ -58,7 +214,7 @@ def decode(data: bytes) -> np.ndarray:
         )
     if proc.returncode != 0:
         raise HTTPException(400, detail={"message": "Audio illisible: " + proc.stderr.decode(errors="replace")[-300:]})
-    return np.frombuffer(proc.stdout, dtype=np.float32)
+    return proc.stdout
 
 
 def check_key(authorization: str | None):
@@ -71,13 +227,20 @@ def check_key(authorization: str | None):
 
 @app.get("/health")
 def health():
-    return {"ok": model is not None, "model": MODEL, "quantization": QUANTIZATION}
+    return {"ok": True, "model": MODEL, "quantization": QUANTIZATION, "state": engine.state}
 
 
 @app.get("/v1/models")
 def models(authorization: str | None = Header(default=None)):
     check_key(authorization)
     return {"object": "list", "data": [{"id": MODEL, "object": "model", "owned_by": "tllm-meet"}]}
+
+
+@app.post("/v1/warmup")
+def warmup(authorization: str | None = Header(default=None)):
+    check_key(authorization)
+    engine.warm()
+    return {"state": engine.state}
 
 
 @app.post("/v1/audio/transcriptions")
@@ -95,13 +258,15 @@ def transcriptions(
     if len(data) > MAX_BYTES:
         raise HTTPException(413, detail={"message": "Audio too large"})
 
-    samples = decode(data)
-    duration = len(samples) / SAMPLE_RATE
+    pcm = decode(data)
+    duration = len(pcm) / 4 / SAMPLE_RATE
     text = ""
     started = time.perf_counter()
-    if duration >= 0.2 and model is not None:
-        with slots:  # a few at a time: more would only share the same CPU cores
-            text = str(model.recognize(samples, sample_rate=SAMPLE_RATE)).strip()
+    if duration >= 0.2:
+        try:
+            text = engine.recognize(pcm)
+        except RuntimeError as err:
+            raise HTTPException(503, detail={"message": f"Transcription indisponible: {err}"}) from err
     elapsed = time.perf_counter() - started
 
     if response_format == "text":
