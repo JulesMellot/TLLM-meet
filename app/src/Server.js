@@ -322,6 +322,9 @@ function warmTranscription() {
     });
 }
 setInterval(() => transcripts.anyActive() && warmTranscription(), 2 * 60 * 1000).unref();
+// The speech-to-text server works one sentence at a time: a partial caption is skipped while a
+// finished sentence waits, so the live captions never delay what goes into the transcription file.
+const asrInFlight = { all: 0, final: 0 };
 
 // TLLM*meet: editor and whiteboard content, kept per room by the server (see Collab.js)
 const collab = new CollabStore({}, (roomId, exceptSocketId, event, payload) => {
@@ -3627,7 +3630,8 @@ function startServer() {
 
         socket.on(
             'getWhisperTranscription',
-            async ({ audio, mimeType, language, meeting, ageMs, interim, seg }, cb) => {
+            async ({ audio, mimeType, language, meeting, ageMs, interim, seg } = {}, ack) => {
+                const cb = typeof ack === 'function' ? ack : () => {};
                 if (!roomExists(socket)) {
                     return cb({ error: 'Room not found' });
                 }
@@ -3650,7 +3654,9 @@ function startServer() {
                     speaker = peer.peer_info?.peer_name ?? peer.peer_name;
                     if (partial) {
                         if (!transcripts.isActive(socket.room_id)) return cb({ text: '', inactive: true });
-                        if (socket.tllmInterimBusy) return cb({ text: '', busy: true });
+                        if (socket.tllmInterimBusy || asrInFlight.final > 0 || asrInFlight.all >= 2) {
+                            return cb({ text: '', busy: true });
+                        }
                     } else {
                         session = transcripts.begin(socket.room_id);
                         if (!session) return cb({ text: '', inactive: true });
@@ -3659,6 +3665,8 @@ function startServer() {
                     if (Number.isFinite(age)) saidAt -= Math.min(Math.max(age, 0), 120000);
                 }
                 if (partial) socket.tllmInterimBusy = true;
+                asrInFlight.all++;
+                if (!partial) asrInFlight.final++;
 
                 try {
                     const maxBytes = whisper.maxAudioBytes || 25 * 1024 * 1024;
@@ -3734,6 +3742,8 @@ function startServer() {
                 } finally {
                     transcripts.abandon(session); // not recognised: the file no longer waits for it
                     if (partial) socket.tllmInterimBusy = false;
+                    asrInFlight.all--;
+                    if (!partial) asrInFlight.final--;
                 }
             }
         );

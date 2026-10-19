@@ -35,6 +35,8 @@ MODEL_DIR = os.environ.get("HF_HOME", "/models")
 # Canary and Whisper can be told the language; Parakeet detects it on its own
 FORCE_LANGUAGE = any(name in MODEL.lower() for name in ("canary", "whisper"))
 LOAD_TIMEOUT = 300
+# A sentence takes a few seconds; past this the model process is stuck: it is killed and started again
+RECOGNIZE_TIMEOUT = max(30, int(os.environ.get("ASR_RECOGNIZE_TIMEOUT", "120") or 120))
 MAX_BYTES = int(os.environ.get("ASR_MAX_BYTES", str(25 * 1024 * 1024)))
 MAX_SECONDS = 120
 SAMPLE_RATE = 16000
@@ -136,17 +138,22 @@ class Engine:
             proc = self.ctx.Process(target=self.target, args=(child, MODEL, QUANTIZATION, THREADS), daemon=True)
             proc.start()
             child.close()
-            if not parent.poll(LOAD_TIMEOUT):
-                proc.kill()
-                raise RuntimeError("model load timed out")
             try:
-                status, detail = parent.recv()
-            except EOFError as err:
+                if not parent.poll(LOAD_TIMEOUT):
+                    raise RuntimeError("model load timed out")
+                try:
+                    status, detail = parent.recv()
+                except EOFError as err:
+                    proc.join(5)
+                    raise RuntimeError(f"model process exited while loading (code {proc.exitcode})") from err
+                if status != "ready":
+                    raise RuntimeError(detail)
+            except BaseException:
+                parent.close()
+                if proc.is_alive():
+                    proc.kill()
                 proc.join(5)
-                raise RuntimeError(f"model process exited while loading (code {proc.exitcode})") from err
-            if status != "ready":
-                proc.join(5)
-                raise RuntimeError(detail)
+                raise
             self.proc, self.conn = proc, parent
             self.last = time.monotonic()
             log.info("Model %s loaded in %.1f s, stopped after %d s without a sentence. Container memory: %s",
@@ -170,11 +177,25 @@ class Engine:
         if conn is not None:
             conn.close()
 
+    def _kill(self):
+        proc, conn = self.proc, self.conn
+        self.proc = self.conn = None
+        if proc is not None:
+            proc.kill()
+            proc.join(5)
+        if conn is not None:
+            conn.close()
+        log.error("Model process stopped: no answer after %d s (ASR_RECOGNIZE_TIMEOUT)", RECOGNIZE_TIMEOUT)
+
     def recognize(self, pcm: bytes, language: str = "") -> str:
         with self.lock:
             self._start()
             try:
                 self.conn.send((pcm, language if FORCE_LANGUAGE else ""))
+                if not self.conn.poll(RECOGNIZE_TIMEOUT):
+                    # Stuck: without this, the lock stays held and no sentence is ever recognised again
+                    self._kill()
+                    raise RuntimeError("model process did not answer")
                 status, detail = self.conn.recv()
             except (EOFError, OSError) as err:
                 self._stop()  # the model process died: started again on the next sentence

@@ -44,6 +44,7 @@
 
     let ctx = null;
     let analyser = null;
+    let samples = null; // reused by level(), read ten times a second
     let source = null;
     let sourceTrack = null;
     let timer = null;
@@ -100,7 +101,8 @@
 
     function level() {
         if (!analyser) return 0;
-        const data = new Float32Array(analyser.fftSize);
+        if (samples?.length !== analyser.fftSize) samples = new Float32Array(analyser.fftSize);
+        const data = samples;
         analyser.getFloatTimeDomainData(data);
         let sum = 0;
         for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
@@ -207,23 +209,19 @@
         if (queue.length || inFlight >= MAX_IN_FLIGHT || !s.chunks.length) return;
         s.interimBusy = true;
         s.interimAt = performance.now();
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const audio = String(reader.result || '').split(',')[1];
-            if (!audio || s.closed) {
-                s.interimBusy = false;
-                return;
-            }
-            rc.socket
-                .request(
+        // Raw bytes: Socket.IO sends them as a binary attachment, a third lighter than base64
+        new Blob(s.chunks, { type: s.type })
+            .arrayBuffer()
+            .then((audio) => {
+                if (!audio.byteLength || s.closed) return;
+                return rc.socket.request(
                     'getWhisperTranscription',
                     { audio, mimeType: s.type, meeting: true, interim: true, seg: s.id },
                     15000
-                )
-                .catch(() => {})
-                .finally(() => (s.interimBusy = false));
-        };
-        reader.readAsDataURL(new Blob(s.chunks, { type: s.type }));
+                );
+            })
+            .catch(() => {})
+            .finally(() => (s.interimBusy = false));
     }
 
     function enqueue(blob, type, speechStart, id) {
@@ -242,30 +240,28 @@
             inFlight--;
             pump();
         };
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const audio = String(reader.result || '').split(',')[1];
-            if (!audio) return done();
-            rc.socket
-                .request(
-                    'getWhisperTranscription',
-                    {
-                        audio,
-                        mimeType: type,
-                        meeting: true,
-                        seg: id,
-                        ageMs: Math.round(performance.now() - speechStart),
-                    },
-                    120000
-                )
-                .then((res) => {
-                    if (res?.inactive) stopRecording();
-                    if (res?.error) console.warn('Transcription:', res.error);
-                })
-                .catch((err) => console.warn('Transcription request failed', err))
-                .finally(done);
-        };
-        reader.readAsDataURL(blob);
+        blob.arrayBuffer()
+            .then((audio) => {
+                if (!audio.byteLength) return;
+                return rc.socket
+                    .request(
+                        'getWhisperTranscription',
+                        {
+                            audio,
+                            mimeType: type,
+                            meeting: true,
+                            seg: id,
+                            ageMs: Math.round(performance.now() - speechStart),
+                        },
+                        120000
+                    )
+                    .then((res) => {
+                        if (res?.inactive) stopRecording();
+                        if (res?.error) console.warn('Transcription:', res.error);
+                    });
+            })
+            .catch((err) => console.warn('Transcription request failed', err))
+            .finally(done);
     }
 
     function startRecording() {

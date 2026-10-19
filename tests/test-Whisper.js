@@ -50,6 +50,17 @@ describe('test-Whisper', () => {
             Buffer.isBuffer(decoded).should.be.true();
             decoded.toString().should.equal('hello whisper');
         });
+        it('takes raw bytes as they are (binary attachment)', () => {
+            whisper.decodeAudioPayload(Buffer.from('abc'), maxBytes).toString().should.equal('abc');
+            const bytes = new Uint8Array([0, 104, 105, 0]).subarray(1, 3);
+            whisper.decodeAudioPayload(bytes, maxBytes).toString().should.equal('hi');
+            whisper
+                .decodeAudioPayload(new Uint8Array([104, 105]).buffer, maxBytes)
+                .toString()
+                .should.equal('hi');
+            (() => whisper.decodeAudioPayload(Buffer.alloc(0), maxBytes)).should.throw(/Empty audio payload/);
+            (() => whisper.decodeAudioPayload(Buffer.alloc(maxBytes + 1), maxBytes)).should.throw(/too large/);
+        });
         it('rejects a non-string / missing payload (invalid audio)', () => {
             (() => whisper.decodeAudioPayload(undefined, maxBytes)).should.throw(/Invalid audio payload/);
             (() => whisper.decodeAudioPayload(12345, maxBytes)).should.throw(/Invalid audio payload/);

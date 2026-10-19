@@ -91,17 +91,28 @@ function resolveAudioExtension(mimeType) {
 }
 
 /**
- * Decode + validate the base64 audio payload sent by the browser.
- * @param {string} audio base64-encoded audio
+ * Decode + validate the audio payload sent by the browser: base64, or raw bytes
+ * (Socket.IO binary attachment, a third lighter than base64).
+ * @param {string|Buffer|Uint8Array|ArrayBuffer} audio
  * @param {number} maxAudioBytes reject anything larger than this
  * @returns {Buffer}
  * @throws {Error} on invalid/empty/oversized payloads
  */
 function decodeAudioPayload(audio, maxAudioBytes) {
-    if (!audio || typeof audio !== 'string') {
+    let buffer;
+    if (Buffer.isBuffer(audio)) {
+        buffer = audio;
+    } else if (audio instanceof Uint8Array || audio instanceof ArrayBuffer) {
+        buffer = Buffer.from(
+            audio instanceof ArrayBuffer ? audio : audio.buffer,
+            audio.byteOffset || 0,
+            audio.byteLength
+        );
+    } else if (audio && typeof audio === 'string') {
+        buffer = Buffer.from(audio, 'base64');
+    } else {
         throw new Error('Invalid audio payload');
     }
-    const buffer = Buffer.from(audio, 'base64');
     if (buffer.length === 0) {
         throw new Error('Empty audio payload');
     }

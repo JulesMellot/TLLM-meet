@@ -114,7 +114,10 @@ describe('Meeting transcription (integration)', function () {
                 asrCalls.push({ auth: req.headers.authorization, raw });
                 const match = /filename="audio\.webm"\r\nContent-Type: audio\/webm\r\n\r\n([\s\S]*?)\r\n--/.exec(raw);
                 res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ text: match ? match[1] : '', segments: [] }));
+                const reply = () => res.end(JSON.stringify({ text: match ? match[1] : '', segments: [] }));
+                if (match && match[1].includes('bonjour à tous'))
+                    setTimeout(reply, 300); // a slow sentence
+                else reply();
             });
         });
         await new Promise((r) => asr.listen(0, '127.0.0.1', r));
@@ -215,12 +218,24 @@ describe('Meeting transcription (integration)', function () {
             ageMs: 3000,
         });
         assert.equal(one.text, 'On commence ?');
-        await emit(guest, 'getWhisperTranscription', {
-            audio: said('Oui, bonjour à tous.'),
+        // Raw bytes (binary attachment), as browsers send them
+        const slow = emit(guest, 'getWhisperTranscription', {
+            audio: Buffer.from('Oui, bonjour à tous.', 'utf8'),
             mimeType: 'audio/webm',
             meeting: true,
             ageMs: 1000,
         });
+        await wait(100);
+        // A finished sentence waits for the speech-to-text server: the partial caption gives way
+        const skipped = await emit(admin, 'getWhisperTranscription', {
+            audio: said('Et en'),
+            mimeType: 'audio/webm',
+            meeting: true,
+            interim: true,
+            seg: 'def456',
+        });
+        assert.deepEqual(skipped, { text: '', busy: true });
+        assert.equal((await slow).text, 'Oui, bonjour à tous.');
         const final = await caption;
         assert.deepEqual(
             { ...final, peer_id: typeof final.peer_id },
