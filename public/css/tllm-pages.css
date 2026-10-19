@@ -76,6 +76,11 @@
     --cond: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
     --text: 'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     --r: 6px;
+    --chart-app: var(--act); /* the app, in the "Serveur" block */
+    --chart-rest: #8a939b; /* the rest of the server */
+    --good: #127c62;
+    --warn: #9a6400;
+    --bad: #c62d22;
 
     /* Names used by the older page styles (tllm-rdv.css) */
     --tllm-font: var(--text);
@@ -117,6 +122,10 @@
         --done: #6c7883;
         --danger: #ff6b62;
         --cam: #0a0d10;
+        --chart-rest: #6c7680;
+        --good: #3cc79f;
+        --warn: #f0b23e;
+        --bad: #ff6b62;
     }
     :root[data-tllm-style='papier'] {
         --wall: #171512;
@@ -1261,6 +1270,472 @@ select.tllm-input {
 @media (max-width: 760px) {
     .tllm-mod-link {
         grid-column: 1 / -1;
+    }
+}
+
+/* ---------- Server: live figures and what meetings cost (admin only, TllmServer.js) ---------- */
+
+.tllm-server {
+    margin-top: 28px;
+}
+
+.tllm-server-since {
+    font-size: 0.9rem;
+    color: var(--ink-3);
+    white-space: nowrap;
+}
+
+.tllm-server-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 20px 32px;
+    padding: 0 22px 18px;
+}
+
+.tllm-server-meters {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.tllm-meter-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 2px 12px;
+    margin-bottom: 6px;
+}
+
+.tllm-meter-title {
+    font-weight: 600;
+}
+
+.tllm-meter-values {
+    font-size: 0.92rem;
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.tllm-meter-values b {
+    color: var(--ink);
+}
+
+.tllm-meter-track {
+    display: flex;
+    gap: 2px;
+    height: 12px;
+    overflow: hidden;
+    background: var(--panel-2);
+    border-radius: 4px;
+}
+
+.tllm-meter-track i {
+    display: block;
+    min-width: 0;
+    height: 100%;
+    transition: width 0.4s ease;
+}
+
+.tllm-meter-track i:first-child {
+    border-radius: 4px 0 0 4px;
+}
+
+.tllm-meter-track i:last-child {
+    border-radius: 0 4px 4px 0;
+}
+
+.tllm-meter-track i[style*='width: 0%'] {
+    display: none;
+}
+
+.is-app {
+    background: var(--chart-app);
+}
+
+.is-rest {
+    background: var(--chart-rest);
+}
+
+.tllm-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    padding: 0;
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--ink-2);
+    list-style: none;
+}
+
+.tllm-legend li,
+.tllm-chart-tip div {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tllm-legend i,
+.tllm-chart-tip i {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+}
+
+.tllm-chart {
+    position: relative;
+    min-width: 0;
+    margin: 0;
+}
+
+.tllm-chart figcaption {
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.tllm-chart-plot {
+    position: relative;
+}
+
+.tllm-chart-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    touch-action: pan-y;
+}
+
+.tllm-chart-grid {
+    stroke: var(--rule);
+    stroke-width: 1;
+}
+
+.tllm-chart-axis,
+.tllm-chart-label {
+    font: 500 11px var(--text);
+    fill: var(--ink-3);
+}
+
+.tllm-chart-label {
+    fill: var(--ink-2);
+}
+
+.tllm-chart-line {
+    fill: none;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.tllm-chart-line.is-app {
+    background: none;
+    stroke: var(--chart-app);
+}
+
+.tllm-chart-line.is-rest {
+    background: none;
+    stroke: var(--chart-rest);
+}
+
+.tllm-chart-cross {
+    stroke: var(--ink-3);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+}
+
+.tllm-chart-dot {
+    stroke: var(--panel);
+    stroke-width: 2;
+}
+
+.tllm-chart-dot.is-app {
+    fill: var(--chart-app);
+}
+
+.tllm-chart-dot.is-rest {
+    fill: var(--chart-rest);
+}
+
+.tllm-chart-tip {
+    position: absolute;
+    top: -6px;
+    z-index: 2;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    color: var(--ink);
+    white-space: nowrap;
+    pointer-events: none;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: var(--r);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
+    transform: translate(-50%, -100%);
+}
+
+.tllm-chart-tip-sub {
+    color: var(--ink-3);
+}
+
+.tllm-chart-empty {
+    padding: 40px 0;
+    color: var(--ink-2);
+}
+
+.tllm-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    border-top: 1px solid var(--rule);
+}
+
+.tllm-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--rule);
+}
+
+.tllm-stat-label {
+    font-size: 0.85rem;
+    color: var(--ink-2);
+}
+
+.tllm-stat-value {
+    font: 600 1.5rem/1.1 var(--cond);
+    font-variant-numeric: tabular-nums;
+}
+
+.tllm-stat-sub {
+    font-size: 0.85rem;
+    color: var(--ink-3);
+    overflow-wrap: anywhere;
+}
+
+.tllm-stat.is-good .tllm-stat-sub {
+    color: var(--good);
+}
+
+.tllm-stat.is-warn .tllm-stat-sub {
+    color: var(--warn);
+}
+
+.tllm-stat.is-bad .tllm-stat-sub,
+.tllm-stat.is-bad .tllm-stat-value {
+    color: var(--bad);
+}
+
+.tllm-cost-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px 24px;
+    padding: 18px 22px 14px;
+}
+
+.tllm-cost-head > div:first-child {
+    max-width: 60ch;
+}
+
+.tllm-history-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.tllm-history-tools .tllm-input {
+    width: 220px;
+    min-height: 38px;
+    padding: 6px 12px;
+}
+
+/* Period: one button pressed at a time */
+.tllm-seg {
+    display: inline-flex;
+    padding: 3px;
+    background: var(--panel-2);
+    border-radius: var(--r);
+}
+
+.tllm-seg button {
+    min-height: 32px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--ink-2);
+    background: none;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.tllm-seg button[aria-pressed='true'] {
+    color: var(--ink);
+    background: var(--panel);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+}
+
+.tllm-history-totals {
+    border-bottom: 0;
+}
+
+.tllm-cost .is-quiet {
+    color: var(--ink-3);
+}
+
+.tllm-group-toggle {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 0;
+    font: inherit;
+    font-weight: 600;
+    color: var(--ink);
+    text-align: left;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.tllm-group-toggle:hover span:last-child {
+    text-decoration: underline;
+}
+
+.tllm-group-caret {
+    width: 1em;
+    color: var(--ink-3);
+}
+
+.tllm-group.is-open > * {
+    background: var(--panel-2);
+}
+
+.tllm-session > * {
+    background: color-mix(in srgb, var(--panel-2) 45%, var(--panel));
+}
+
+.tllm-session > th {
+    padding-left: 48px !important;
+    font-weight: 500;
+}
+
+.tllm-session-more {
+    padding-left: 48px !important;
+}
+
+.tllm-cost-head h3 {
+    font-size: 1rem;
+}
+
+.tllm-cost-wrap {
+    overflow-x: auto;
+}
+
+.tllm-cost {
+    width: 100%;
+    font-size: 0.92rem;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+.tllm-cost th,
+.tllm-cost td {
+    padding: 10px 12px;
+    text-align: left;
+    white-space: nowrap;
+    border-top: 1px solid var(--rule);
+}
+
+.tllm-cost thead th {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--ink-2);
+}
+
+.tllm-cost tr > :first-child {
+    padding-left: 22px;
+}
+
+.tllm-cost tr > :last-child {
+    padding-right: 22px;
+}
+
+.tllm-cost .is-num {
+    text-align: right;
+}
+
+.tllm-cost-name {
+    min-width: 160px;
+    font-weight: 600;
+    white-space: normal !important;
+}
+
+.tllm-cost-name > span:first-child {
+    display: block;
+}
+
+.tllm-cost-when {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 400;
+    color: var(--ink-3);
+}
+
+.tllm-pill.is-live {
+    color: var(--live);
+    background: color-mix(in srgb, var(--live) 14%, transparent);
+}
+
+/* Meetings and duration under the room name, on a phone only */
+.tllm-cost-compact {
+    display: none;
+    font-size: 0.85rem;
+    font-weight: 400;
+    color: var(--ink-2);
+}
+
+.tllm-cost-empty {
+    color: var(--ink-2);
+}
+
+@media (max-width: 760px) {
+    .tllm-server-grid {
+        grid-template-columns: 1fr;
+    }
+    .tllm-server .tllm-block-head {
+        flex-direction: column;
+    }
+    .tllm-server-since {
+        white-space: normal;
+    }
+    .tllm-history-tools,
+    .tllm-history-tools .tllm-input {
+        width: 100%;
+    }
+    /* On a phone: the room (with its meetings and duration below), CPU and memory */
+    .tllm-cost .is-quiet,
+    .tllm-cost .is-data,
+    .tllm-cost .is-wide {
+        display: none;
+    }
+    .tllm-cost-compact {
+        display: block !important;
+    }
+    .tllm-cost th,
+    .tllm-cost td {
+        padding: 10px 8px;
+    }
+    .tllm-cost-name {
+        min-width: 0;
+        width: 100%;
+    }
+    .tllm-session > th,
+    .tllm-session-more {
+        padding-left: 30px !important;
     }
 }
 

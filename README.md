@@ -23,6 +23,7 @@ de Miroslav Pejic, sous licence [AGPL-3.0](LICENSE).
 - Salle d'attente, verrouillage de la visio, mot de passe optionnel.
 - Enregistrement dans le navigateur, sous-titres (reconnaissance vocale du navigateur).
 - Transcription des réunions sur votre serveur : un fichier texte avec l'heure et le nom de chaque personne.
+- Pour l'admin : ce qu'utilisent l'application et chaque visio (processeur, mémoire), en direct et en historique.
 - Fond flou ou virtuel, réduction de bruit.
 - Interface sobre, utilisable sur téléphone ; pages en mode clair ou sombre.
 
@@ -123,6 +124,25 @@ Le service `transcription` de `docker-compose.coolify.yml` se construit avec l'a
 (environ 1,5 Go) n'est chargé que quand une transcription démarre, et libéré 5 minutes après la dernière phrase
 (`TRANSCRIPTION_IDLE_SECONDS`). Pour s'en passer : `TRANSCRIPTION_ENABLED=false` et retirer le service du fichier. Détails et réglages :
 [`transcription/README.md`](transcription/README.md).
+
+## Serveur : ce qu'utilisent l'application et chaque visio
+
+L'admin voit, en bas de l'accueil, le bloc **Serveur** (les modérateurs ne le voient pas) :
+
+- en direct, toutes les 5 secondes : le processeur et la mémoire de TLLM\*meet (Node et les workers mediasoup)
+  à côté de ceux de tout le serveur, la courbe des 5 dernières minutes, le débit audio et vidéo, les visios et
+  personnes connectées, la réactivité du serveur et l'état de la transcription ;
+- l'historique des visios, sur 7 jours, 30 jours ou tout, avec une recherche par nom : une ligne par salle,
+  qui se déplie pour voir chaque visio. Pour chacune : durée, personnes, processeur moyen et pic, mémoire
+  moyenne et pic, données échangées, temps de calcul de la transcription.
+
+Le processeur et la mémoire d'une visio sont des estimations. Quand plusieurs visios tournent en même temps, le
+serveur répartit ce qu'il utilise entre elles : le processeur d'un worker selon le trafic de chaque visio, celui de
+Node et la mémoire selon le nombre de personnes. La mémoire d'une visio est ce que l'application utilise de plus
+que sans aucune visio. Les données échangées sont exactes. L'historique est gardé dans `DATA_DIR/usage.jsonl`
+(les 2 000 dernières visios).
+
+`/healthz` répond `{"ok":true}` quand le serveur et ses workers tournent : c'est le contrôle de santé de Docker.
 
 ## Déploiement (Coolify derrière Cloudflare)
 

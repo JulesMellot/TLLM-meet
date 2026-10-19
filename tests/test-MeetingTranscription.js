@@ -301,5 +301,17 @@ describe('Meeting transcription (integration)', function () {
         const overview = await request('GET', '/api/admin/overview', { cookie });
         const room = overview.json.rooms.find((r) => r.id === roomId);
         assert.deepEqual(room.transcript, { id, status: 'ready' });
+
+        // "Serveur" block: admin only; the meeting is in the history with its transcription
+        assert.equal((await request('GET', '/api/admin/metrics')).status, 401);
+        const metrics = await request('GET', '/api/admin/metrics', { cookie });
+        assert.equal(metrics.status, 200);
+        assert.ok(metrics.json.app.memory.total > 0);
+        assert.ok(metrics.json.server.memory.total > 0);
+        const history = await request('GET', '/api/admin/usage?days=7', { cookie });
+        const meeting = history.json.meetings.find((m) => m.room === roomId);
+        assert.equal(meeting.live, false);
+        assert.equal(meeting.peakPeers, 2);
+        assert.ok(meeting.asrRequests >= 3);
     });
 });

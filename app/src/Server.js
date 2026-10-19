@@ -89,6 +89,7 @@ const { CollabStore } = require('./Collab');
 const { DatePolls, DatePollError } = require('./DatePolls');
 const { RoomRegistry } = require('./RoomRegistry');
 const { Transcripts } = require('./Transcripts');
+const { Usage } = require('./Usage');
 const { Moderators, ModeratorError } = require('./Moderators');
 const log = new Logger('Server');
 const yaml = require('js-yaml');
@@ -329,6 +330,40 @@ setInterval(() => transcripts.anyActive() && warmTranscription(), 2 * 60 * 1000)
 const asrInFlight = { all: 0, final: 0 };
 // A partial caption sends the sentence so far; past this size it is refused (about 30 s of browser audio)
 const INTERIM_MAX_BYTES = 256 * 1024;
+
+// What each meeting costs the server (CPU, memory), and the app's live figures (admin home, see Usage.js)
+const usage = new Usage({
+    file: path.join(dataDir, 'usage.jsonl'),
+    describe: (id) => {
+        const [main, breakout] = String(id).split('_breakout_');
+        const name = roomRegistry.name(main);
+        return { name: breakout ? `${name} (sous-salle)` : name, owner: roomRegistry.get(main)?.owner || null };
+    },
+    log,
+});
+
+// State of the speech-to-text server for the admin home: asked at most every 15 s
+let transcriptionHealthCache = { at: 0, value: null };
+async function transcriptionHealth() {
+    const whisper = config?.integrations?.whisper;
+    if (!whisper?.enabled) return null;
+    const base = (whisper.basePath || '').replace(/\/?$/, '/');
+    if (!base || base.includes('api.openai.com')) return { external: true };
+    if (Date.now() - transcriptionHealthCache.at < 15000) return transcriptionHealthCache.value;
+    transcriptionHealthCache.at = Date.now();
+    try {
+        // The health page is at the root of the server, next to /v1/
+        const { data } = await axios.get(new URL('../health', base).href, { timeout: 2000 });
+        transcriptionHealthCache.value = {
+            state: data?.state || null,
+            model: data?.model || null,
+            memory: data?.memory?.total_mb ? data.memory.total_mb * 1048576 : null,
+        };
+    } catch {
+        transcriptionHealthCache.value = { state: 'unreachable' };
+    }
+    return transcriptionHealthCache.value;
+}
 
 // TLLM*meet: editor and whiteboard content, kept per room by the server (see Collab.js)
 const collab = new CollabStore({}, (roomId, exceptSocketId, event, payload) => {
@@ -651,6 +686,29 @@ function startServer() {
         const state = roomState(id);
         delete state.lastUsedAt;
         return res.json(state);
+    });
+
+    // Admin home, "Serveur" block: the app's live figures next to the whole server's (see Usage.js)
+    app.get('/api/admin/metrics', async (req, res) => {
+        const admin = adminAuth.fromRequest(req);
+        if (!admin) return res.status(401).json({ error: 'unauthorized' });
+        if (admin.role !== 'admin') return res.status(403).json({ error: 'forbidden' });
+        res.set('Cache-Control', 'no-store');
+        return res.json({ ...usage.snapshot(), transcription: await transcriptionHealth() });
+    });
+
+    // What each meeting cost the server: the ones under way, then those of the period (?days=7, 30, 0 for all)
+    app.get('/api/admin/usage', (req, res) => {
+        const admin = adminAuth.fromRequest(req);
+        if (!admin) return res.status(401).json({ error: 'unauthorized' });
+        if (admin.role !== 'admin') return res.status(403).json({ error: 'forbidden' });
+        res.set('Cache-Control', 'no-store');
+        const days = Math.min(3650, Math.max(0, parseInt(req.query.days, 10) || 0));
+        return res.json({
+            cpus: usage.hostCpus,
+            days,
+            meetings: usage.list({ since: days ? Date.now() - days * 86400000 : 0 }),
+        });
     });
 
     // Organiser home: rooms (live, booked, recent), agenda of fixed meetings, polls waiting for answers
@@ -1450,6 +1508,10 @@ function startServer() {
     (async () => {
         try {
             await createWorkers();
+            usage.start(
+                () => roomList,
+                () => workers
+            );
             startServer();
         } catch (err) {
             log.error('Create Worker ERROR --->', err);
@@ -1589,6 +1651,7 @@ function startServer() {
                 const worker = await getMediasoupWorker();
                 const room = await new Room(socket.room_id, worker, io).ready();
                 roomList.set(socket.room_id, room);
+                usage.open(socket.room_id);
                 roomRegistry.opened(socket.room_id);
                 log.debug('Created room', { room_id: socket.room_id });
                 callback({ room_id: socket.room_id });
@@ -1680,6 +1743,7 @@ function startServer() {
             }
 
             room.addPeer(new Peer(socket.id, data));
+            usage.joined(room.id, room.getPeersCount()); // counted even before the next sample
 
             if (!(socket.room_id in presenters)) presenters[socket.room_id] = {};
 
@@ -3739,6 +3803,11 @@ function startServer() {
 
                     log.debug('Whisper transcription', { language: lang || 'auto', bytes: buffer.length, text });
 
+                    usage.asr(socket.room_id, {
+                        ms: Number(response.data?.processing_time) * 1000,
+                        audioMs: Number(response.data?.duration) * 1000,
+                    });
+
                     if (session) {
                         transcripts.add(session, { name: speaker, text, at: saidAt });
                         session = null;
@@ -3953,6 +4022,7 @@ function startServer() {
                 collab.release(socket.room_id);
                 roomRegistry.closed(socket.room_id);
                 transcripts.close(socket.room_id);
+                usage.close(socket.room_id);
 
                 delete presenters[socket.room_id];
 
@@ -3998,6 +4068,7 @@ function startServer() {
                 collab.release(socket.room_id);
                 roomRegistry.closed(socket.room_id);
                 transcripts.close(socket.room_id);
+                usage.close(socket.room_id);
 
                 delete presenters[socket.room_id];
 
@@ -4272,6 +4343,7 @@ async function gracefulShutdown(signal) {
                 roomList.delete(roomId);
                 collab.drop(roomId);
                 transcripts.close(roomId);
+                usage.close(roomId);
             } catch (err) {
                 log.error(`Error closing room ${roomId}:`, err.message);
             }

@@ -20,6 +20,7 @@
         <link rel="stylesheet" href="../css/tllm-pages.css" />
         <script defer src="../js/Brand.js"></script>
         <script defer src="../js/TllmHome.js"></script>
+        <script defer src="../js/TllmServer.js"></script>
     </head>
     <body class="tllm-page">
         <header class="tllm-bar">
@@ -129,6 +130,77 @@
                             </form>
                             <ul class="tllm-mods" id="mods"></ul>
                         </div>
+                    </div>
+                </div>
+                <div class="tllm-block tllm-server" id="serverBlock" hidden>
+                    <div class="tllm-block-head">
+                        <div>
+                            <h2>Serveur</h2>
+                            <p class="tllm-block-sub">
+                                Ce que TLLM*meet utilise, à côté de tout le serveur. Mis à jour toutes les 5 secondes.
+                            </p>
+                        </div>
+                        <span class="tllm-server-since" id="serverSince"></span>
+                    </div>
+                    <div class="tllm-server-grid">
+                        <div class="tllm-server-meters">
+                            <div class="tllm-meter" id="cpuMeter"></div>
+                            <div class="tllm-meter" id="memMeter"></div>
+                            <ul class="tllm-legend" aria-label="Légende">
+                                <li><i class="is-app"></i>TLLM*meet</li>
+                                <li><i class="is-rest"></i>Le reste du serveur</li>
+                            </ul>
+                        </div>
+                        <figure class="tllm-chart" id="cpuChart">
+                            <figcaption>Processeur, 5 dernières minutes</figcaption>
+                            <div class="tllm-chart-plot" id="cpuPlot"></div>
+                        </figure>
+                    </div>
+                    <ul class="tllm-stats" id="serverStats"></ul>
+                    <div class="tllm-cost-head">
+                        <div>
+                            <h3>Historique des visios</h3>
+                            <p class="tllm-block-sub">
+                                Le processeur et la mémoire utilisés par chaque visio, regroupés par salle. Ce sont des
+                                estimations : le serveur répartit ce qu'il utilise entre les visios en cours.
+                            </p>
+                        </div>
+                        <div class="tllm-history-tools">
+                            <div class="tllm-seg" id="historyPeriod" role="group" aria-label="Période">
+                                <button type="button" data-days="7" aria-pressed="true">7 jours</button>
+                                <button type="button" data-days="30" aria-pressed="false">30 jours</button>
+                                <button type="button" data-days="0" aria-pressed="false">Tout</button>
+                            </div>
+                            <input
+                                id="historySearch"
+                                class="tllm-input is-small"
+                                type="search"
+                                autocomplete="off"
+                                placeholder="Chercher une salle"
+                                aria-label="Chercher une salle"
+                            />
+                        </div>
+                    </div>
+                    <ul class="tllm-stats tllm-history-totals" id="historyTotals"></ul>
+                    <div class="tllm-cost-wrap">
+                        <table class="tllm-cost">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Salle</th>
+                                    <th scope="col" class="is-wide">Visios</th>
+                                    <th scope="col" class="is-wide">Durée</th>
+                                    <th scope="col" class="is-num">Processeur</th>
+                                    <th scope="col" class="is-num is-quiet">pic</th>
+                                    <th scope="col" class="is-num">Mémoire</th>
+                                    <th scope="col" class="is-num is-quiet">pic</th>
+                                    <th scope="col" class="is-num is-data">Données</th>
+                                </tr>
+                            </thead>
+                            <tbody id="costRows"></tbody>
+                        </table>
+                    </div>
+                    <div class="tllm-block-foot" id="historyMore" hidden>
+                        <button id="historyMoreButton" class="tllm-text-button" type="button"></button>
                     </div>
                 </div>
             </section>

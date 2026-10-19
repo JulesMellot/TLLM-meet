@@ -505,6 +505,7 @@
         if (session.role === 'admin') {
             $('modBlock').hidden = false;
             loadModerators().catch(() => {});
+            window.tllmServer?.start({ timeZone: state.timeZone }); // the "Serveur" block (TllmServer.js)
         }
         setInterval(tick, 15000);
         setInterval(() => !document.hidden && loadOverview(), 30000);
