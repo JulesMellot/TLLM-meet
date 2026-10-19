@@ -66,6 +66,7 @@ const httpolyglot = require('httpolyglot');
 const mediasoup = require('mediasoup');
 const mediasoupClient = require('mediasoup-client');
 const http = require('http');
+const net = require('net');
 const path = require('path');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
@@ -384,14 +385,22 @@ if (!announcedAddress && IP === '0.0.0.0') {
 
 function fetchPublicIp(serviceUrl) {
     return new Promise((resolve, reject) => {
-        http.get(serviceUrl, (resp) => {
+        // TLLM*meet: a service that never answers must not hold the start: the next one is tried
+        const req = http.get(serviceUrl, { timeout: 5000 }, (resp) => {
             if (resp.statusCode !== 200) {
+                resp.resume();
                 return reject(new Error(`HTTP ${resp.statusCode}`));
             }
             let data = '';
             resp.on('data', (chunk) => (data += chunk));
-            resp.on('end', () => resolve(data.toString().trim()));
-        }).on('error', reject);
+            resp.on('end', () => {
+                const ip = data.toString().trim();
+                if (net.isIP(ip)) resolve(ip);
+                else reject(new Error('not an IP address'));
+            });
+        });
+        req.on('timeout', () => req.destroy(new Error('timed out')));
+        req.on('error', reject);
     });
 }
 
@@ -427,9 +436,10 @@ function startServer() {
         })
     );
     app.use(cors(corsOptions));
-    app.use(express.json({ limit: '50mb' })); // Handles JSON payloads
-    app.use(express.urlencoded({ extended: true, limit: '50mb' })); // Handles URL-encoded payloads
-    app.use(express.raw({ type: 'video/webm', limit: '50mb' })); // Handles raw binary data
+    // TLLM*meet: forms and API calls are small; 50 MB bodies held in memory were an easy way to tire the server.
+    // Recordings stay in the browser, nothing posts raw video any more.
+    app.use(express.json({ limit: '1mb' })); // Handles JSON payloads
+    app.use(express.urlencoded({ extended: true, limit: '1mb' })); // Handles URL-encoded payloads
     app.use(restApi.basePath + '/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument)); // api docs
 
     // IP Whitelist check ...

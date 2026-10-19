@@ -10,6 +10,9 @@ services:
     tllm-meet:
         build: .
         restart: unless-stopped
+        # Un vrai PID 1 : relaie l'arrêt à Node (sondages et salles écrits avant de partir)
+        # et ramasse les processus mediasoup terminés
+        init: true
         # Port HTTP de l'application. Dans Coolify, le domaine du service s'écrit avec ce port :
         # https://meet.exemple.fr:3010 (Coolify route vers 3010, l'adresse publique reste sans port).
         expose:
@@ -32,6 +35,9 @@ services:
             - SFU_ANNOUNCED_IP=${SFU_ANNOUNCED_IP:-}
             - SFU_MIN_PORT=40000
             - SFU_MAX_PORT=40100
+            # Un port par cœur pour toutes les connexions, au lieu d'un port par connexion :
+            # sans cela, les 101 ports s'épuisent vers 50 personnes connectées en tout (2 connexions chacune)
+            - SFU_SERVER=${SFU_SERVER:-true}
             - UI_STYLE=${UI_STYLE:-sobre}
             - SOURCE_URL=${SOURCE_URL:-https://github.com/JulesMellot/TLLM-meet}
             # Fuseau des sondages de dates (« Caler une réunion »)

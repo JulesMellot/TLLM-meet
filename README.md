@@ -153,6 +153,7 @@ Coolify lit le fichier et affiche les variables dans son interface :
 | `SERVER_HOST_URL`              | **à remplir** : l'adresse publique, sans port, par exemple `https://meet.exemple.fr`                                                   |
 | `TRUST_PROXY`                  | `2` par défaut (Cloudflare + proxy Coolify)                                                                                            |
 | `SFU_ANNOUNCED_IP`             | l'IP publique du VPS (recommandé). Vide : détectée au démarrage, et le serveur s'arrête si la détection échoue                         |
+| `SFU_SERVER`                   | `true` par défaut : toutes les connexions audio et vidéo partagent un port par cœur, au lieu d'un port par connexion                   |
 | `UI_STYLE`                     | `sobre` par défaut, ou `papier`                                                                                                        |
 | `SOURCE_URL`                   | lien vers le code source de l'instance (AGPL-3.0, article 13)                                                                          |
 | `MEETING_TIMEZONE`             | fuseau des sondages de dates, `Europe/Paris` par défaut                                                                                |

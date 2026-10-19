@@ -37,5 +37,5 @@ ENV DATA_DIR=/src/data
 # Run as the non-root "node" user (uid/gid 1000) shipped with the base image
 USER node
 
-# Default command
-CMD ["npm", "start"]
+# Default command: node itself, so SIGTERM reaches the graceful shutdown (npm would stand in between)
+CMD ["node", "app/src/Server.js"]
