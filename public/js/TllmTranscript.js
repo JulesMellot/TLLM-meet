@@ -22,6 +22,10 @@
     const MAX_SEGMENT_MS = 15000; // a monologue is cut here: partial captions cost more on long sentences
     const IDLE_SEGMENT_MS = 6000; // silence: start a fresh recording, so sentences stay short
     const INTERIM_MS = 1200; // partial text of the sentence being said, for the captions
+    // Each partial text sends the whole recording again: the next one waits half the audio already there,
+    // so a long sentence costs about three times its length (not ten), and none past 10 s of speech
+    const INTERIM_GROWTH = 0.5;
+    const INTERIM_MAX_SPEECH_MS = 10000;
     const TIMESLICE_MS = 400; // the recorder hands over audio this often
     const LEAD_MS = 300; // audio kept before the first word
     const MAX_IN_FLIGHT = 2;
@@ -195,8 +199,10 @@
         } else {
             // Still speaking: the sentence so far, for the captions
             // (the recorder lags behind the level meter: wait until the first words are in its chunks)
-            const ready = spoke && now - seg.firstSpeech >= 900;
-            if (ready && !seg.interimBusy && now - seg.interimAt >= INTERIM_MS) sendInterim(seg);
+            const talking = spoke ? now - seg.firstSpeech : 0;
+            const ready = talking >= 900 && talking <= INTERIM_MAX_SPEECH_MS;
+            const wait = Math.max(INTERIM_MS, elapsed * INTERIM_GROWTH);
+            if (ready && !seg.interimBusy && now - seg.interimAt >= wait) sendInterim(seg);
             return;
         }
         // Start the next recording right away, so the next words are not lost

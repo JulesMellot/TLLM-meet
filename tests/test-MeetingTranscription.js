@@ -213,6 +213,17 @@ describe('Meeting transcription (integration)', function () {
             ageMs: 1000,
         });
         assert.equal(partial.text, 'On comm');
+        // A partial caption that grew too big is not sent to the speech-to-text server
+        const calls = asrCalls.length;
+        const huge = await emit(admin, 'getWhisperTranscription', {
+            audio: Buffer.alloc(300 * 1024, 1),
+            mimeType: 'audio/webm',
+            meeting: true,
+            interim: true,
+            seg: 'abc123',
+        });
+        assert.deepEqual(huge, { text: '', busy: true });
+        assert.equal(asrCalls.length, calls);
 
         const caption = new Promise((resolve) => admin.once('meetingTranscript', resolve));
         const one = await emit(admin, 'getWhisperTranscription', {

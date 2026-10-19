@@ -327,6 +327,8 @@ setInterval(() => transcripts.anyActive() && warmTranscription(), 2 * 60 * 1000)
 // The speech-to-text server works one sentence at a time: a partial caption is skipped while a
 // finished sentence waits, so the live captions never delay what goes into the transcription file.
 const asrInFlight = { all: 0, final: 0 };
+// A partial caption sends the sentence so far; past this size it is refused (about 30 s of browser audio)
+const INTERIM_MAX_BYTES = 256 * 1024;
 
 // TLLM*meet: editor and whiteboard content, kept per room by the server (see Collab.js)
 const collab = new CollabStore({}, (roomId, exceptSocketId, event, payload) => {
@@ -3697,6 +3699,7 @@ function startServer() {
                         if (err.message === 'Audio segment too large') return cb({ error: err.message });
                         throw err;
                     }
+                    if (partial && buffer.length > INTERIM_MAX_BYTES) return cb({ text: '', busy: true });
 
                     const type =
                         typeof mimeType === 'string' && mimeType.startsWith('audio/') ? mimeType : 'audio/webm';
