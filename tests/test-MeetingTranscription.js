@@ -161,6 +161,11 @@ describe('Meeting transcription (integration)', function () {
     });
 
     it('records who said what, and gives the organiser one file after the meeting', async () => {
+        // Health check (Docker HEALTHCHECK): the server answers and its media worker runs
+        const health = await request('GET', '/healthz');
+        assert.equal(health.status, 200);
+        assert.deepEqual(health.json, { ok: true });
+
         const login = await request('POST', '/login', {
             body: { username: ADMIN.username, password: ADMIN.password },
         });

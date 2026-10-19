@@ -417,6 +417,13 @@ function updateAnnouncedAddress(ip) {
 function startServer() {
     // Start the app
     app.set('trust proxy', trustProxy); // Enables trust for proxy headers (e.g., X-Forwarded-For) based on the trustProxy setting
+    // TLLM*meet: health check (HEALTHCHECK in the Dockerfile, read by Coolify): the server answers and its
+    // media workers run. Before the IP whitelist, so the check from inside the container always gets through.
+    app.get('/healthz', (req, res) => {
+        const ok = workers.length > 0 && workers.every((w) => !w.closed && !w.died);
+        res.set('Cache-Control', 'no-store');
+        return res.status(ok ? 200 : 503).json({ ok });
+    });
     app.use(helmet.noSniff()); // Enable content type sniffing prevention
     app.use(applyEmbedHeaders); // Apply iframe embedding restrictions (CSP frame-ancestors / X-Frame-Options)
     // TLLM*meet: compress before serving static files (JS/CSS were sent uncompressed before)
