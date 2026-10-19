@@ -87,6 +87,20 @@ describe('test-Transcripts (transcription des réunions)', () => {
         assert.equal(latest.status, 'active');
     });
 
+    it('gives the newest meeting of every room with one directory read', () => {
+        t.start('salle-k7m2xq');
+        t.close('salle-k7m2xq');
+        now += 3600000;
+        t.start('salle-k7m2xq');
+        t.start('autre-a2b3c4');
+        t.stop('autre-a2b3c4');
+        const latest = t.latestByRoom();
+        assert.deepEqual(Array.from(latest.keys()).sort(), ['autre-a2b3c4', 'salle-k7m2xq']);
+        assert.equal(latest.get('salle-k7m2xq').id, String(now));
+        assert.equal(latest.get('salle-k7m2xq').status, 'active');
+        assert.equal(latest.get('autre-a2b3c4').status, 'paused');
+    });
+
     it('writes again when the folder was removed while running', () => {
         t.start('salle-k7m2xq');
         fs.rmSync(dir, { recursive: true, force: true });

@@ -38,6 +38,10 @@ describe('test-RoomRegistry (salles de l’organisateur)', () => {
             r.recent('jules').map((x) => x.id),
             ['a', 'b']
         );
+        for (let i = 0; i < 20; i++) r.remember(`d${i}`, { owner: 'jules' });
+        assert.equal(r.recent('jules').length, 12);
+        assert.equal(r.recent('jules', 0).length, 22); // 0: all of them, for the home
+        assert.equal(r.recent(null, 0).length, 23);
     });
 
     it('keeps the rooms in a file', () => {

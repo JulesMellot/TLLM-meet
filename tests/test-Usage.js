@@ -178,6 +178,17 @@ describe('test-Usage (coût des visios)', () => {
         assert.equal(u.close('point-k7m2xq').peakPeers, 2);
     });
 
+    it('adds up the meetings of each room, the one under way included', () => {
+        u.open('point-k7m2xq');
+        now += 60000;
+        u.close('point-k7m2xq');
+        now += 3600000;
+        u.open('point-k7m2xq');
+        now += 30000;
+        const stats = u.byRoom().get('point-k7m2xq');
+        assert.deepEqual(stats, { visios: 2, durationMs: 90000, lastStart: now - 30000 });
+    });
+
     it('survives a line cut by a crash', () => {
         fs.writeFileSync(path.join(dir, 'usage.jsonl'), '{"room":"a","startedAt":1}\n{"room":"b","sta');
         assert.equal(make().list().length, 1);

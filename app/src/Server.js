@@ -725,18 +725,27 @@ function startServer() {
             if (!id.includes('_breakout_') && (everything || ownsRoom(admin, id))) ids.add(id);
         }
         for (const p of polls) if (p.status === 'fixed' && p.fixed.end > now) ids.add(p.fixed.room);
-        for (const r of roomRegistry.recent(everything ? null : admin.username, everything ? 30 : 12)) ids.add(r.id);
+        // Every room of the organiser (the registry keeps 500): the home sorts them into live, coming, past
+        for (const r of roomRegistry.recent(everything ? null : admin.username, 0)) ids.add(r.id);
         const mine = (owner) => !owner || owner === admin.username;
         const organizerOf = (owner) => (mine(owner) ? null : organizerName(owner) || owner);
 
         const rank = (r) => (r.active ? 0 : r.booking && r.booking.start - now < 24 * 3600 * 1000 ? 1 : 2);
+        const latest = transcripts.latestByRoom();
+        const visits = usage.byRoom();
         const rooms = Array.from(ids)
             .map((id) => {
                 const state = roomState(id);
-                const owner = roomRegistry.get(id)?.owner || roomBooking(id)?.owner;
-                const transcript = transcripts.latest(id);
+                const known = roomRegistry.get(id);
+                const owner = known?.owner || roomBooking(id)?.owner;
+                const transcript = latest.get(id);
+                const visit = visits.get(id);
                 return {
                     ...state,
+                    createdAt: known?.createdAt || null,
+                    // Meetings measured since the "Serveur" block exists (see Usage.js)
+                    visios: visit ? visit.visios : null,
+                    totalMs: visit ? visit.durationMs : null,
                     organizer: organizerOf(owner),
                     transcript: transcript && { id: transcript.id, status: transcript.status },
                 };
@@ -1023,9 +1032,14 @@ function startServer() {
 
         res.set('Cache-Control', 'no-store');
 
-        if (!ownsRoom(adminAuth.fromRequest(req), room) && !isAuthorizedBreakout(room)) {
+        const admin = adminAuth.fromRequest(req);
+        if (!ownsRoom(admin, room) && !isAuthorizedBreakout(room)) {
             log.warn('Room creation token denied', { room, ip: getIP(req) });
             return res.status(403).json({ required: true, token: null });
+        }
+        // A room the admin opened by typing its address: kept with the others on the home
+        if (admin && !room.includes('_breakout_') && !roomRegistry.get(room)) {
+            roomRegistry.remember(room, { owner: admin.username });
         }
 
         return res.json({ required: true, token: createCreateRoomToken(room) });

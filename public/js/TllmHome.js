@@ -37,7 +37,9 @@
 
     const duration = (ms) => {
         const min = Math.round(ms / 60000);
-        return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60}` : ''}`;
+        return min < 60
+            ? `${min} min`
+            : `${Math.floor(min / 60)} h${min % 60 ? ` ${String(min % 60).padStart(2, '0')}` : ''}`;
     };
 
     function names(people, count) {
@@ -120,28 +122,52 @@
         note.append('. La fin aléatoire empêche de deviner l’adresse.');
     }
 
-    function roomRow(room) {
-        const live = room.active;
-        const soon = !live && room.booking && room.booking.start - Date.now() < 24 * 3600000;
-        const li = el('li', `tllm-room${live ? ' is-live' : soon ? ' is-soon' : ''}`);
+    // ---------- rooms: under way, coming, never opened, past ----------
+
+    const PAST_PAGE = 8;
+    const roomsView = { query: '', shown: PAST_PAGE };
+
+    const fold = (str) =>
+        String(str || '')
+            .normalize('NFD')
+            .replace(/[̀-ͯ]/g, '')
+            .toLowerCase();
+
+    // "le 12 oct." / "hier à 14:02"
+    function when(ms) {
+        const label = dayLabel(ms);
+        return label.startsWith('le ')
+            ? `le ${fmt(ms, { day: 'numeric', month: 'short', year: Date.now() - ms > 300 * 86400000 ? 'numeric' : undefined })}`
+            : `${label} à ${hour(ms)}`;
+    }
+
+    function roomRow(room, kind) {
+        const li = el('li', `tllm-room is-${kind}`);
         li.append(el('span', 'tllm-room-tab'));
 
         const text = el('div');
         text.append(el('div', 'tllm-room-name-row', room.name));
         const stateLine = el('div', 'tllm-room-state');
-        if (live) {
+        if (kind === 'live') {
             stateLine.append(el('strong', '', room.since ? `En cours depuis ${minutesSince(room.since)}` : 'En cours'));
             const who = names(room.people, room.count);
             stateLine.append(who ? `, avec ${who}` : ', personne dedans');
-        } else if (room.booking) {
-            stateLine.append(
-                el('strong', '', `Réservée ${dayLabel(room.booking.start)} à ${hour(room.booking.start)}`)
-            );
+        } else if (kind === 'coming') {
+            stateLine.append(el('strong', '', `${hour(room.booking.start)} – ${hour(room.booking.end)}`));
             stateLine.append(', date fixée par le sondage');
-        } else if (room.lastUsedAt) {
-            stateLine.append(`Fermée, dernière visio ${dayLabel(room.lastUsedAt)}`);
+        } else if (kind === 'past') {
+            stateLine.append(`Dernière visio ${when(room.lastUsedAt)}`);
+            if (room.visios) {
+                stateLine.append(
+                    el(
+                        'span',
+                        'tllm-room-visits',
+                        ` · ${room.visios} visio${room.visios > 1 ? 's' : ''}, ${duration(room.totalMs)} en tout`
+                    )
+                );
+            }
         } else {
-            stateLine.append('Jamais ouverte');
+            stateLine.append(room.createdAt ? `Créée ${when(room.createdAt)}, jamais ouverte` : 'Jamais ouverte');
         }
         text.append(stateLine);
         if (room.organizer) text.append(el('div', 'tllm-room-owner', `Salle de ${room.organizer}`));
@@ -149,15 +175,6 @@
 
         const actions = el('div', 'tllm-room-actions');
         const url = `/join/${encodeURIComponent(room.id)}`;
-        const copyBtn = el('button', 'tllm-button is-quiet is-small', 'Copier le lien');
-        copyBtn.type = 'button';
-        copyBtn.onclick = () => copy(`${window.location.origin}${url}`);
-        const go = el(
-            'a',
-            `tllm-button is-small${live ? '' : ' is-quiet'}`,
-            live ? 'Rejoindre' : room.lastUsedAt ? 'Rouvrir' : 'Ouvrir'
-        );
-        go.href = url;
         // Latest meeting transcription, once it is final
         const t = room.transcript;
         if (t && (t.status === 'ready' || t.status === 'paused')) {
@@ -167,21 +184,154 @@
             dl.title = 'Télécharger la transcription de la dernière visio';
             actions.append(dl);
         }
+        const copyBtn = el('button', 'tllm-button is-quiet is-small', 'Copier le lien');
+        copyBtn.type = 'button';
+        copyBtn.onclick = () => copy(`${window.location.origin}${url}`);
+        const live = kind === 'live';
+        const go = el(
+            'a',
+            `tllm-button is-small${live ? '' : ' is-quiet'}`,
+            live ? 'Rejoindre' : kind === 'past' ? 'Rouvrir' : 'Ouvrir'
+        );
+        go.href = url;
         actions.append(copyBtn, go);
         li.append(actions);
         return li;
     }
 
+    function section(title, count, cls = '') {
+        const wrap = el('section', `tllm-room-group ${cls}`);
+        const head = el('div', 'tllm-room-group-head');
+        const h = el('h3', '', title);
+        if (count != null) h.append(el('span', 'tllm-room-group-count', String(count)));
+        head.append(h);
+        wrap.append(head);
+        return { wrap, head };
+    }
+
+    function subhead(text) {
+        return el('li', 'tllm-room-sub', text);
+    }
+
+    // Past rooms by period
+    function periodOf(ms) {
+        const days = (Date.now() - ms) / 86400000;
+        if (days < 7) return 'Cette semaine';
+        if (days < 31) return 'Ce mois-ci';
+        if (days < 365) return 'Ces 12 derniers mois';
+        return 'Plus ancien';
+    }
+
     function renderRooms(rooms) {
-        const list = $('rooms');
-        list.textContent = '';
+        const box = $('rooms');
+        box.textContent = '';
         if (!rooms.length) {
-            list.append(
-                el('li', 'tllm-empty', 'Aucune salle pour l’instant. Donnez un nom ci-dessus pour ouvrir la première.')
+            box.append(
+                el('p', 'tllm-empty', 'Aucune salle pour l’instant. Donnez un nom ci-dessus pour ouvrir la première.')
             );
             return;
         }
-        rooms.forEach((room) => list.append(roomRow(room)));
+        const live = rooms.filter((r) => r.active).sort((a, b) => b.count - a.count);
+        const coming = rooms.filter((r) => !r.active && r.booking).sort((a, b) => a.booking.start - b.booking.start);
+        const unused = rooms
+            .filter((r) => !r.active && !r.booking && !r.lastUsedAt)
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        const past = rooms
+            .filter((r) => !r.active && !r.booking && r.lastUsedAt)
+            .sort((a, b) => b.lastUsedAt - a.lastUsedAt);
+
+        if (live.length) {
+            const { wrap } = section('En cours', live.length, 'is-live');
+            const list = el('ul', 'tllm-rooms');
+            live.forEach((r) => list.append(roomRow(r, 'live')));
+            wrap.append(list);
+            box.append(wrap);
+        }
+
+        // Coming: by day
+        {
+            const { wrap } = section('À venir', coming.length || null);
+            const list = el('ul', 'tllm-rooms');
+            let lastDay = '';
+            for (const r of coming) {
+                const key = dayKey(r.booking.start);
+                if (key !== lastDay) {
+                    lastDay = key;
+                    list.append(subhead(cap(dayLabel(r.booking.start).replace(/^le /, ''))));
+                }
+                list.append(roomRow(r, 'coming'));
+            }
+            if (!coming.length) {
+                const p = el('p', 'tllm-empty', 'Aucune visio prévue. ');
+                const a = el('a', '', 'Proposer des dates');
+                a.href = '/rdv';
+                p.append(a, ' pour en caler une.');
+                wrap.append(p);
+            } else wrap.append(list);
+            box.append(wrap);
+        }
+
+        if (unused.length) {
+            const { wrap } = section('Pas encore ouvertes', unused.length);
+            const list = el('ul', 'tllm-rooms');
+            unused.forEach((r) => list.append(roomRow(r, 'unused')));
+            wrap.append(list);
+            box.append(wrap);
+        }
+
+        // Past: search, by period, a page at a time
+        if (past.length) {
+            const { wrap, head } = section('Passées', past.length);
+            if (past.length > 5) {
+                const search = el('input', 'tllm-input tllm-room-search');
+                search.type = 'search';
+                search.placeholder = 'Chercher une salle';
+                search.setAttribute('aria-label', 'Chercher une salle passée');
+                search.value = roomsView.query;
+                search.addEventListener('input', () => {
+                    roomsView.query = search.value;
+                    roomsView.shown = PAST_PAGE;
+                    renderRooms(state.overview.rooms);
+                    const again = $('rooms').querySelector('.tllm-room-search');
+                    again?.focus();
+                    again?.setSelectionRange(again.value.length, again.value.length);
+                });
+                head.append(search);
+            }
+            const q = fold(roomsView.query.trim());
+            const found = q ? past.filter((r) => fold(r.name).includes(q)) : past;
+            const list = el('ul', 'tllm-rooms');
+            let lastPeriod = '';
+            for (const r of found.slice(0, roomsView.shown)) {
+                const period = periodOf(r.lastUsedAt);
+                if (period !== lastPeriod) {
+                    lastPeriod = period;
+                    list.append(subhead(period));
+                }
+                list.append(roomRow(r, 'past'));
+            }
+            if (!found.length) wrap.append(el('p', 'tllm-empty', 'Aucune salle passée de ce nom.'));
+            else wrap.append(list);
+            const rest = found.length - roomsView.shown;
+            if (rest > 0) {
+                const step = PAST_PAGE * 2;
+                const foot = el('div', 'tllm-block-foot');
+                const more = el(
+                    'button',
+                    'tllm-text-button',
+                    rest <= step ? `Voir les ${rest} autres salles` : `Voir ${step} salles de plus`
+                );
+                more.type = 'button';
+                more.onclick = () => {
+                    roomsView.shown += step;
+                    renderRooms(state.overview.rooms);
+                };
+                foot.append(more);
+                if (rest > step) foot.append(el('span', 'tllm-room-rest', ` (encore ${rest})`));
+                wrap.append(foot);
+            }
+            box.append(wrap);
+        }
     }
 
     function renderAgenda(agenda) {

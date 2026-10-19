@@ -200,6 +200,21 @@ class Usage {
         return [...live, ...done];
     }
 
+    // Per room: how many meetings, how long in all, when the last one started (organiser's home)
+    byRoom() {
+        const out = new Map();
+        const add = (m, durationMs) => {
+            const r = out.get(m.room) || { visios: 0, durationMs: 0, lastStart: 0 };
+            r.visios++;
+            r.durationMs += durationMs;
+            r.lastStart = Math.max(r.lastStart, m.startedAt);
+            out.set(m.room, r);
+        };
+        for (const r of this.records) add(r, r.durationMs || 0);
+        for (const m of this.live.values()) add(m, this.now() - m.startedAt);
+        return out;
+    }
+
     // ---------- accounting ----------
 
     // One sample. rooms: [{ id, peers, worker: pid, transports: [{ id, in, out }] }] (cumulative bytes);

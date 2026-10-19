@@ -890,7 +890,8 @@ select.tllm-input {
     background: var(--live);
 }
 
-.tllm-room.is-soon .tllm-room-tab {
+.tllm-room.is-soon .tllm-room-tab,
+.tllm-room.is-coming .tllm-room-tab {
     background: var(--soon);
 }
 
@@ -912,8 +913,96 @@ select.tllm-input {
     color: var(--live);
 }
 
-.tllm-room.is-soon .tllm-room-state strong {
+.tllm-room.is-soon .tllm-room-state strong,
+.tllm-room.is-coming .tllm-room-state strong {
     color: var(--soon-text);
+}
+
+/* The rooms in groups: under way, coming (by day), never opened, past (by period) */
+.tllm-room-group {
+    border-top: 1px solid var(--rule);
+}
+
+.tllm-room-group-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    padding: 14px 22px 10px;
+}
+
+.tllm-room-group-head h3 {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--ink-2);
+}
+
+.tllm-room-group.is-live .tllm-room-group-head h3 {
+    color: var(--live);
+}
+
+.tllm-room-group-count {
+    padding: 0 7px;
+    font-size: 0.8rem;
+    color: var(--ink-2);
+    background: var(--panel-2);
+    border-radius: 999px;
+}
+
+.tllm-room-group .tllm-empty {
+    padding-top: 0;
+}
+
+.tllm-room-group .tllm-empty a {
+    font-weight: 600;
+    color: var(--act);
+}
+
+.tllm-room-sub {
+    padding: 8px 22px 6px 28px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--ink-3);
+    border-top: 1px solid var(--rule);
+}
+
+.tllm-room-sub + .tllm-room {
+    border-top: 0;
+}
+
+/* Past and never-opened rooms take less room */
+.tllm-room.is-past,
+.tllm-room.is-unused {
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.tllm-room.is-past .tllm-room-tab,
+.tllm-room.is-unused .tllm-room-tab {
+    margin: -10px 0;
+}
+
+.tllm-room.is-past .tllm-room-name-row,
+.tllm-room.is-unused .tllm-room-name-row {
+    font-size: 1.3rem;
+}
+
+.tllm-room-visits {
+    color: var(--ink-3);
+}
+
+.tllm-room-search {
+    width: 220px;
+    min-height: 36px;
+    padding: 5px 12px;
+}
+
+.tllm-room-rest {
+    color: var(--ink-3);
 }
 
 .tllm-room-actions {
@@ -1770,6 +1859,9 @@ select.tllm-input {
     .tllm-room-actions {
         grid-column: 2;
         justify-content: flex-start;
+    }
+    .tllm-room-search {
+        width: 100%;
     }
     .tllm-who {
         display: none;

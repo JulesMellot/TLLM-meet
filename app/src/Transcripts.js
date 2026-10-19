@@ -254,6 +254,29 @@ class Transcripts {
         return null;
     }
 
+    // The newest meeting of each room, for the organiser's home: one directory read for all rooms
+    latestByRoom() {
+        const out = new Map();
+        if (!this.dir) return out;
+        let names = [];
+        try {
+            names = fs.readdirSync(this.dir);
+        } catch {
+            return out;
+        }
+        const newest = new Map(); // room -> newest session id
+        for (const f of names) {
+            const m = /^(.+)--([0-9]{10,16})\.jsonl$/.exec(f);
+            if (!m || !isRoomId(m[1])) continue;
+            if (!newest.has(m[1]) || Number(m[2]) > Number(newest.get(m[1]))) newest.set(m[1], m[2]);
+        }
+        for (const [room, id] of newest) {
+            const summary = this.summary(room, id);
+            if (summary) out.set(room, { ...summary, status: this.status(room, id) });
+        }
+        return out;
+    }
+
     remove(room, id) {
         if (!isRoomId(room) || !SESSION_ID.test(String(id)) || !this.dir) return false;
         if (this.live.get(room)?.id === String(id)) return false; // still being written
