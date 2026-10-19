@@ -37,6 +37,8 @@ class Transcripts {
         this.retentionMs = Math.max(1, Number(retentionDays) || 30) * 86400000;
         this.timeZone = timeZone;
         this.live = new Map(); // room id -> session of the meeting under way
+        this.summaries = new Map(); // file -> { mtimeMs, size, summary }: the home asks every 30 s
+        this.dirReady = false;
     }
 
     file(room, id) {
@@ -45,10 +47,19 @@ class Transcripts {
 
     write(session, entry) {
         if (!this.dir) return;
+        const line = JSON.stringify(entry) + '\n';
         try {
-            fs.mkdirSync(this.dir, { recursive: true });
-            fs.appendFileSync(this.file(session.room, session.id), JSON.stringify(entry) + '\n');
+            if (!this.dirReady) fs.mkdirSync(this.dir, { recursive: true });
+            this.dirReady = true;
+            try {
+                fs.appendFileSync(this.file(session.room, session.id), line);
+            } catch (err) {
+                if (err.code !== 'ENOENT') throw err;
+                fs.mkdirSync(this.dir, { recursive: true }); // the folder was removed meanwhile
+                fs.appendFileSync(this.file(session.room, session.id), line);
+            }
         } catch (err) {
+            this.dirReady = false;
             this.log.error('Transcripts: cannot write (is DATA_DIR writable?)', { error: err.message });
         }
     }
@@ -180,8 +191,34 @@ class Transcripts {
         return 'ready';
     }
 
-    // The meetings of a room, newest first
-    list(room) {
+    // What the lists show of a meeting, read again only when its file changed
+    summary(room, id) {
+        const file = this.file(room, id);
+        let stat;
+        try {
+            stat = fs.statSync(file);
+        } catch {
+            this.summaries.delete(file);
+            return null;
+        }
+        const cached = this.summaries.get(file);
+        if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.summary;
+        const t = this.read(room, id);
+        if (!t) return null;
+        const last = t.lines.length ? t.lines[t.lines.length - 1].t : t.startedAt;
+        const summary = {
+            id,
+            startedAt: t.startedAt,
+            endedAt: t.endedAt || Math.max(last, ...t.marks.map((m) => m.at || 0)),
+            lines: t.lines.length,
+            speakers: [...new Set(t.lines.map((l) => l.who))],
+        };
+        this.summaries.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, summary });
+        return summary;
+    }
+
+    // Session ids of a room, newest first (an id is the start time)
+    ids(room) {
         if (!isRoomId(room) || !this.dir) return [];
         let names = [];
         try {
@@ -194,25 +231,27 @@ class Transcripts {
             .filter((f) => f.startsWith(prefix) && f.endsWith('.jsonl'))
             .map((f) => f.slice(prefix.length, -'.jsonl'.length))
             .filter((id) => SESSION_ID.test(id))
+            .sort((a, b) => Number(b) - Number(a));
+    }
+
+    // The meetings of a room, newest first
+    list(room) {
+        return this.ids(room)
             .map((id) => {
-                const t = this.read(room, id);
-                if (!t) return null;
-                const last = t.lines.length ? t.lines[t.lines.length - 1].t : t.startedAt;
-                return {
-                    id,
-                    startedAt: t.startedAt,
-                    endedAt: t.endedAt || Math.max(last, ...t.marks.map((m) => m.at || 0)),
-                    lines: t.lines.length,
-                    speakers: [...new Set(t.lines.map((l) => l.who))],
-                    status: this.status(room, id),
-                };
+                const summary = this.summary(room, id);
+                return summary && { ...summary, status: this.status(room, id) };
             })
             .filter(Boolean)
             .sort((a, b) => b.startedAt - a.startedAt);
     }
 
+    // Only the newest file is read
     latest(room) {
-        return this.list(room)[0] || null;
+        for (const id of this.ids(room)) {
+            const summary = this.summary(room, id);
+            if (summary) return { ...summary, status: this.status(room, id) };
+        }
+        return null;
     }
 
     remove(room, id) {
@@ -220,6 +259,7 @@ class Transcripts {
         if (this.live.get(room)?.id === String(id)) return false; // still being written
         try {
             fs.unlinkSync(this.file(room, id));
+            this.summaries.delete(this.file(room, id));
             return true;
         } catch {
             return false;
@@ -279,6 +319,7 @@ class Transcripts {
             if (!m || Number(m[1]) >= limit) continue;
             try {
                 fs.unlinkSync(path.join(this.dir, f));
+                this.summaries.delete(path.join(this.dir, f));
                 removed++;
             } catch {
                 /* tried again tomorrow */

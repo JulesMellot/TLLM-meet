@@ -63,6 +63,37 @@ describe('test-Transcripts (transcription des réunions)', () => {
         assert.equal(t.list('salle-k7m2xq')[0].lines, 1);
     });
 
+    it('reads a file again only when it changed, and latest reads only the newest', () => {
+        t.start('salle-k7m2xq');
+        t.add(t.begin('salle-k7m2xq'), { name: 'Marie', text: 'Une.', at: START + 1000 });
+        t.close('salle-k7m2xq');
+        now += 3600000;
+        t.start('salle-k7m2xq');
+        t.add(t.begin('salle-k7m2xq'), { name: 'Jules', text: 'Deux.', at: now + 1000 });
+
+        let reads = 0;
+        const read = t.read.bind(t);
+        t.read = (...args) => (reads++, read(...args));
+        assert.equal(t.list('salle-k7m2xq').length, 2);
+        assert.equal(reads, 2);
+        assert.equal(t.list('salle-k7m2xq').length, 2);
+        assert.equal(reads, 2); // nothing changed: nothing read
+
+        t.add(t.begin('salle-k7m2xq'), { name: 'Jules', text: 'Trois.', at: now + 2000 });
+        const latest = t.latest('salle-k7m2xq');
+        assert.equal(reads, 3); // only the newest file, which changed
+        assert.equal(latest.id, String(now));
+        assert.equal(latest.lines, 2);
+        assert.equal(latest.status, 'active');
+    });
+
+    it('writes again when the folder was removed while running', () => {
+        t.start('salle-k7m2xq');
+        fs.rmSync(dir, { recursive: true, force: true });
+        t.close('salle-k7m2xq');
+        assert.ok(fs.readdirSync(dir).length === 1);
+    });
+
     it('a failed recognition does not keep the file waiting', () => {
         t.start('salle-k7m2xq');
         const s = t.begin('salle-k7m2xq');
