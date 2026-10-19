@@ -8,6 +8,17 @@ const log = new Logger('Room');
 const { audioLevelObserverEnabled, activeSpeakerObserverEnabled } = config.mediasoup.router;
 
 module.exports = class Room {
+    // TLLM*meet: (room id, level, text, { who }) -> the meeting's log (see MeetingLog.js)
+    static journal = null;
+
+    note(level, text, options) {
+        try {
+            Room.journal?.(this.id, level, text, options);
+        } catch {
+            /* the log never stops the meeting */
+        }
+    }
+
     constructor(room_id, worker, io) {
         this.id = room_id;
         // Unique, one-time-use identifier for this specific room/conference instance.
@@ -770,10 +781,16 @@ module.exports = class Room {
 
             if (iceState === 'disconnected') {
                 log.debug('ICE state disconnected for transport waiting before closing', iceLog);
+                this.note('warn', `réseau coupé, attente de reprise (${iceConsentTimeout} s au plus)`, {
+                    who: peer_name,
+                });
                 iceDisconnectTimeout = setTimeout(() => {
                     iceDisconnectTimeout = null;
                     if (transport.iceState === 'disconnected') {
                         log.warn('Closing transport due to prolonged ICE disconnection', iceLog);
+                        this.note('error', `connexion fermée : pas de réseau pendant ${iceConsentTimeout} s`, {
+                            who: peer_name,
+                        });
                         if (!transport.closed) {
                             transport.close();
                         }
@@ -784,6 +801,9 @@ module.exports = class Room {
                 if (iceDisconnectTimeout) {
                     clearTimeout(iceDisconnectTimeout);
                     iceDisconnectTimeout = null;
+                    if (iceState === 'connected' || iceState === 'completed') {
+                        this.note('info', 'réseau revenu', { who: peer_name });
+                    }
                 }
                 if (iceState === 'closed') {
                     log.warn('ICE state closed, closing transport', iceLog);
@@ -803,6 +823,11 @@ module.exports = class Room {
         });
 
         transport.on('dtlsstatechange', (dtlsState) => {
+            if (dtlsState === 'failed') {
+                this.note('error', 'la connexion chiffrée (DTLS) a échoué : pare-feu ou réseau filtrant ?', {
+                    who: peer_name,
+                });
+            }
             if (dtlsState === 'failed' || dtlsState === 'closed') {
                 log.warn('DTLS state changed, closing peer', {
                     peer_name: peer_name,

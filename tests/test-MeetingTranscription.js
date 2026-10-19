@@ -275,6 +275,10 @@ describe('Meeting transcription (integration)', function () {
         const id = during.json.sessions[0].id;
         assert.equal((await request('GET', `/transcriptions/${roomId}/${id}.txt`, { cookie })).status, 409);
 
+        // A server warning while handling Marie's request goes into the meeting log, with her name
+        const bad = await emit(guest, 'restartIce', { transport_id: 'nope' });
+        assert.match(bad.error, /not found/);
+
         // Everybody leaves: the room closes and the file is final
         await emit(guest, 'exitRoom');
         await emit(admin, 'exitRoom');
@@ -313,5 +317,22 @@ describe('Meeting transcription (integration)', function () {
         assert.equal(meeting.live, false);
         assert.equal(meeting.peakPeers, 2);
         assert.ok(meeting.asrRequests >= 3);
+
+        // Its log: who came and left, the transcription, the warning; admin only
+        assert.ok(meeting.logs.warnings >= 1);
+        const logUrl = `/api/admin/logs/${roomId}/${meeting.startedAt}`;
+        assert.equal((await request('GET', logUrl)).status, 401);
+        const journal = await request('GET', logUrl, { cookie });
+        assert.equal(journal.json.live, false);
+        const events = journal.json.entries.map((e) => `${e.level} ${e.who || '-'} ${e.text}`);
+        assert.equal(events[0], 'info - Visio ouverte');
+        assert.ok(events.some((l) => /^info Marie arrivée \(/.test(l)));
+        assert.ok(events.includes('info Jules a démarré la transcription'));
+        assert.ok(events.some((l) => /^warn Marie Restart ICE attempt failed/.test(l)));
+        assert.ok(events.includes('info Marie départ (bouton Quitter)'));
+        assert.equal(events[events.length - 1], 'info - Visio terminée : plus personne dans la salle');
+        const txt = await request('GET', `${logUrl}.txt`, { cookie });
+        assert.match(txt.headers['content-type'], /^text\/plain/);
+        assert.match(txt.body, /ALERTE \[technique\] Marie : Restart ICE attempt failed/);
     });
 });

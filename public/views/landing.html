@@ -194,6 +194,7 @@
                                     <th scope="col" class="is-num">Mémoire</th>
                                     <th scope="col" class="is-num is-quiet">pic</th>
                                     <th scope="col" class="is-num is-data">Données</th>
+                                    <th scope="col" class="tllm-journal-cell">Journal</th>
                                 </tr>
                             </thead>
                             <tbody id="costRows"></tbody>
@@ -211,6 +212,23 @@
                 >Basé sur MiroTalk SFU</a
             >
         </footer>
+        <dialog class="tllm-log-dialog" id="logDialog" aria-labelledby="logTitle">
+            <div class="tllm-log-head">
+                <div>
+                    <h2 id="logTitle">Journal</h2>
+                    <p class="tllm-block-sub" id="logSub"></p>
+                </div>
+                <button id="logClose" class="tllm-button is-quiet is-small" type="button">Fermer</button>
+            </div>
+            <div class="tllm-log-tools">
+                <div class="tllm-seg" id="logFilter" role="group" aria-label="Événements">
+                    <button type="button" data-only="0" aria-pressed="true">Tout</button>
+                    <button type="button" data-only="1" aria-pressed="false">Problèmes</button>
+                </div>
+                <a id="logDownload" class="tllm-text-button" download>Télécharger (.txt)</a>
+            </div>
+            <ol class="tllm-log-list" id="logList"></ol>
+        </dialog>
         <div class="tllm-toast" id="toast" role="status" hidden></div>
     </body>
 </html>

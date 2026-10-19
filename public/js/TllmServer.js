@@ -319,7 +319,7 @@
     // Weighted by duration: a long meeting counts more than a short one
     // Meetings recorded before a figure existed have none: they are left out of its average and peak
     function aggregate(list) {
-        const total = { count: list.length, durationMs: 0, peerMs: 0, bytes: 0, cpuMs: 0 };
+        const total = { count: list.length, durationMs: 0, peerMs: 0, bytes: 0, cpuMs: 0, errors: 0, warnings: 0 };
         let memByteMs = 0;
         let memMs = 0;
         total.cpuPeak = null;
@@ -329,6 +329,8 @@
             total.peerMs += m.peerMs || 0;
             total.bytes += (m.bytesIn || 0) + (m.bytesOut || 0);
             total.cpuMs += m.cpuMs || 0;
+            total.errors += m.logs?.errors || 0;
+            total.warnings += m.logs?.warnings || 0;
             if (m.memAvg != null) {
                 memByteMs += m.memAvg * m.durationMs;
                 memMs += m.durationMs;
@@ -368,8 +370,24 @@
             stat('Durée cumulée', t.count ? span(t.durationMs) : '—', `${num(t.peerMs / 3600000, 1)} heure-personne`),
             stat('Processeur', pct(t.cpuShare), t.cpuPeak != null ? `en moyenne, pic ${pct(t.cpuPeak)}` : null),
             stat('Mémoire', bytes(t.memAvg), t.memPeak != null ? `en moyenne, pic ${bytes(t.memPeak)}` : null),
-            stat('Données', bytes(t.bytes), 'reçues et envoyées')
+            stat('Données', bytes(t.bytes), 'reçues et envoyées'),
+            stat(
+                'Problèmes',
+                String(t.errors + t.warnings),
+                t.errors + t.warnings ? `${plural(t.errors, 'erreur')}, ${plural(t.warnings, 'alerte')}` : 'aucun',
+                t.errors ? 'bad' : t.warnings ? 'warn' : null
+            )
         );
+    }
+
+    // "2 erreurs" (red), "1 alerte" (amber), or nothing, with an icon: never colour alone
+    function problems(counts) {
+        const box = el('span', 'tllm-problems');
+        if (!counts) return box;
+        if (counts.errors) box.append(el('span', 'tllm-problem is-error', `✕ ${plural(counts.errors, 'erreur')}`));
+        if (counts.warnings) box.append(el('span', 'tllm-problem is-warn', `⚠ ${plural(counts.warnings, 'alerte')}`));
+        if (!counts.errors && !counts.warnings) box.append(el('span', 'tllm-problem is-ok', '✓ rien à signaler'));
+        return box;
     }
 
     const cell = (text, cls = 'is-num', title) => {
@@ -407,7 +425,15 @@
         th.append(when);
         const visios = plural(g.total.count, 'visio');
         th.append(el('span', 'tllm-cost-compact', `${visios} · ${span(g.total.durationMs)}`)); // phone
-        tr.append(th, cell(visios, 'is-wide'), cell(span(g.total.durationMs), 'is-wide'), ...figures(g.total));
+        const logs = g.meetings.some((m) => m.logs) ? { errors: g.total.errors, warnings: g.total.warnings } : null;
+        if (logs && (logs.errors || logs.warnings)) {
+            const bits = el('span', 'tllm-cost-compact');
+            bits.append(problems(logs));
+            th.append(bits);
+        }
+        const logCell = el('td', 'tllm-journal-cell');
+        logCell.append(problems(logs));
+        tr.append(th, cell(visios, 'is-wide'), cell(span(g.total.durationMs), 'is-wide'), ...figures(g.total), logCell);
         return tr;
     }
 
@@ -424,13 +450,121 @@
         }
         const people = plural(m.peakPeers || 0, 'personne');
         th.append(el('span', 'tllm-cost-compact', `${people} · ${span(m.durationMs)}`)); // phone
+        if (m.logs) {
+            const bits = el('span', 'tllm-cost-compact tllm-journal-compact');
+            bits.append(...journalBits(m));
+            th.append(bits);
+        }
         tr.append(
             th,
             cell(people, 'is-wide', `au plus ; ${num((m.peerMs || 0) / 3600000, 1)} heure-personne`),
             cell(span(m.durationMs), 'is-wide'),
-            ...figures(m)
+            ...figures(m),
+            journalCell(m)
         );
         return tr;
+    }
+
+    // The "Journal" button of a meeting, and its problems
+    function journalBits(m) {
+        if (!m.logs) return [el('span', 'tllm-problem is-none', '—')];
+        const b = el('button', 'tllm-button is-quiet is-small', 'Journal');
+        b.type = 'button';
+        b.onclick = () => openJournal(m);
+        return [problems(m.logs), b];
+    }
+
+    function journalCell(m) {
+        const td = el('td', 'tllm-journal-cell');
+        if (!m.logs) td.title = 'Visio terminée avant l’ajout du journal';
+        td.append(...journalBits(m));
+        return td;
+    }
+
+    // ---------- the log of one meeting, in a dialog ----------
+
+    const journal = { meeting: null, onlyProblems: false, entries: [], timer: null };
+    const LEVEL = { info: ['', 'Info'], warn: ['⚠', 'Alerte'], error: ['✕', 'Erreur'] };
+
+    function renderJournal() {
+        const list = $('logList');
+        list.textContent = '';
+        const shown = journal.onlyProblems ? journal.entries.filter((e) => e.level !== 'info') : journal.entries;
+        if (!shown.length) {
+            list.append(
+                el(
+                    'li',
+                    'tllm-log-empty',
+                    journal.entries.length ? 'Aucun problème pendant cette visio.' : 'Aucun événement enregistré.'
+                )
+            );
+            return;
+        }
+        for (const e of shown) {
+            const li = el('li', `tllm-log is-${e.level}${e.tech ? ' is-tech' : ''}`);
+            li.append(el('time', 'tllm-log-time', clockSec(e.t)));
+            const [icon, label] = LEVEL[e.level] || LEVEL.info;
+            const badge = el('span', 'tllm-log-level', icon ? `${icon} ${label}` : '');
+            li.append(badge);
+            const body = el('div', 'tllm-log-body');
+            const line = el('div', 'tllm-log-text');
+            if (e.who) line.append(el('b', '', `${e.who} `));
+            line.append(e.text);
+            body.append(line);
+            if (e.detail) body.append(el('div', 'tllm-log-detail', e.detail));
+            li.append(body);
+            list.append(li);
+        }
+    }
+
+    async function loadJournal() {
+        const m = journal.meeting;
+        if (!m) return;
+        try {
+            const data = await get(`/api/admin/logs/${encodeURIComponent(m.room)}/${m.startedAt}`);
+            if (journal.meeting !== m) return;
+            journal.entries = data.entries || [];
+            renderJournal();
+            if (!data.live) clearInterval(journal.timer);
+        } catch {
+            $('logList').textContent = 'Le journal n’a pas pu être lu. Réessayez.';
+        }
+    }
+
+    function openJournal(m) {
+        journal.meeting = m;
+        journal.entries = [];
+        $('logTitle').textContent = `Journal · ${m.name}`;
+        $('logSub').textContent =
+            `${day(m.startedAt)}, ${clock(m.startedAt)} · ${span(m.durationMs)}${m.live ? ' · en cours, mis à jour toutes les 5 s' : ''}`;
+        $('logDownload').href = `/api/admin/logs/${encodeURIComponent(m.room)}/${m.startedAt}.txt`;
+        $('logList').textContent = '';
+        clearInterval(journal.timer);
+        if (m.live) journal.timer = setInterval(loadJournal, 5000);
+        loadJournal();
+        $('logDialog').showModal();
+    }
+
+    function setupJournal() {
+        const dialog = $('logDialog');
+        $('logClose').onclick = () => dialog.close();
+        dialog.addEventListener('close', () => {
+            clearInterval(journal.timer);
+            journal.meeting = null;
+        });
+        // A click on the backdrop closes it
+        dialog.addEventListener('click', (e) => {
+            if (e.target === dialog) dialog.close();
+        });
+        for (const b of document.querySelectorAll('#logFilter button')) {
+            b.onclick = () => {
+                journal.onlyProblems = b.dataset.only === '1';
+                for (const other of document.querySelectorAll('#logFilter button')) {
+                    other.setAttribute('aria-pressed', String(other === b));
+                }
+                renderJournal();
+            };
+        }
     }
 
     function renderHistory() {
@@ -449,7 +583,7 @@
                 'tllm-cost-empty',
                 q ? 'Aucune salle de ce nom sur la période.' : 'Aucune visio sur la période.'
             );
-            td.colSpan = 8;
+            td.colSpan = 9;
             tr.append(td);
             rows.append(tr);
         }
@@ -461,7 +595,7 @@
             if (many.length < g.meetings.length) {
                 const tr = el('tr', 'tllm-session');
                 const td = el('td', 'tllm-session-more');
-                td.colSpan = 8;
+                td.colSpan = 9;
                 const b = el('button', 'tllm-text-button', `Voir les ${g.meetings.length - many.length} autres visios`);
                 b.type = 'button';
                 b.onclick = () => {
@@ -523,6 +657,7 @@
             if (timeZone) state.timeZone = timeZone;
             $('serverBlock').hidden = false;
             setupHistory();
+            setupJournal();
             loadMetrics();
             loadUsage();
             setInterval(() => !document.hidden && loadMetrics(), 5000);

@@ -139,12 +139,16 @@ class Usage {
         return meeting;
     }
 
-    close(roomId) {
+    // extra: what else the record keeps (the counts of the meeting log)
+    close(roomId, extra = {}) {
         const meeting = this.live.get(roomId);
         if (!meeting) return null;
         this.live.delete(roomId);
         const { name, owner } = this.describe(roomId) || {};
-        const record = this.summary({ ...meeting, name: name || meeting.name, owner: owner || meeting.owner });
+        const record = {
+            ...this.summary({ ...meeting, name: name || meeting.name, owner: owner || meeting.owner }),
+            ...extra,
+        };
         record.endedAt = this.now();
         record.durationMs = record.endedAt - record.startedAt;
         delete record.live;

@@ -136,6 +136,14 @@ L'admin voit, en bas de l'accueil, le bloc **Serveur** (les modérateurs ne le v
   qui se déplie pour voir chaque visio. Pour chacune : durée, personnes, processeur moyen et pic, mémoire
   moyenne et pic, données échangées, temps de calcul de la transcription.
 
+Chaque visio a aussi son **journal**, ouvert depuis l'historique (bouton **Journal**), avec le nombre d'alertes
+et d'erreurs à côté : arrivées et départs (avec le navigateur, le système et la raison du départ : page fermée,
+connexion perdue…), retours après une coupure, réseau coupé ou revenu, partage d'écran, début et fin de la
+transcription, erreurs survenues dans la page de quelqu'un, et les alertes du serveur pendant qu'il traitait la
+demande d'une personne. On peut n'afficher que les problèmes, et télécharger le journal en texte. Il est gardé
+dans `DATA_DIR/journaux`, un fichier par visio, pendant `LOG_RETENTION_DAYS` jours (30 par défaut). Il contient
+les prénoms des participants, pas leur adresse IP.
+
 Le processeur et la mémoire d'une visio sont des estimations. Quand plusieurs visios tournent en même temps, le
 serveur répartit ce qu'il utilise entre elles : le processeur d'un worker selon le trafic de chaque visio, celui de
 Node et la mémoire selon le nombre de personnes. La mémoire d'une visio est ce que l'application utilise de plus

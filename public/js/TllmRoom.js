@@ -1554,3 +1554,39 @@
         }
     };
 })();
+
+// TLLM*meet: what goes wrong in this page goes into the meeting log, for the admin (home, "Serveur"
+// block): uncaught errors, and the error messages shown to the person. 20 different ones at most.
+(function () {
+    const sent = new Set();
+    function report(message, where = '') {
+        try {
+            if (typeof rc === 'undefined' || !rc?.socket?.connected) return;
+            const text = String(message || '')
+                .replace(/<[^>]*>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 300);
+            const key = `${text}|${where}`;
+            if (!text || sent.has(key) || sent.size >= 20) return;
+            sent.add(key);
+            rc.socket.emit('clientLog', { message: text, where: String(where).slice(0, 200) });
+        } catch {
+            /* reporting must never break the page */
+        }
+    }
+    window.addEventListener('error', (e) => {
+        const file = e.filename ? `${e.filename.split('/').pop().split('?')[0]}:${e.lineno}` : '';
+        report(e.message || 'Erreur', file);
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+        report(e.reason?.message || String(e.reason || 'Promesse rejetée'), 'promesse');
+    });
+    if (typeof RoomClient !== 'undefined' && typeof RoomClient.prototype.userLog === 'function') {
+        const shown = RoomClient.prototype.userLog;
+        RoomClient.prototype.userLog = function (icon, message, ...rest) {
+            if (icon === 'error') report(message, 'message affiché');
+            return shown.call(this, icon, message, ...rest);
+        };
+    }
+})();

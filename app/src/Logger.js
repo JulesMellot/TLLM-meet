@@ -15,7 +15,12 @@ const LOGS_JSON = config.system?.console?.json;
 const LOGS_JSON_PRETTY = config.system?.console?.json_pretty;
 
 module.exports = class Logger {
+    // TLLM*meet: called on every warning and error (level, app name, message, data); the server
+    // uses it to put its own problems in the log of the meeting concerned (see MeetingLog.js)
+    static hook = null;
+
     constructor(appName = 'miroTalkSfu') {
+        this.name = appName;
         this.appName = colors.yellow(appName);
         this.debugOn = config.system?.console?.debug;
         this.timeStart = Date.now();
@@ -77,7 +82,16 @@ module.exports = class Logger {
         }
     }
 
+    notify(level, msg, op) {
+        try {
+            Logger.hook?.(level, this.name, msg, op);
+        } catch {
+            /* the log line itself must never fail */
+        }
+    }
+
     warn(msg, op = '') {
+        this.notify('warn', msg, op);
         if (LOGS_JSON) {
             this.jsonLog('warn', this.appName, msg, op);
         } else {
@@ -89,6 +103,7 @@ module.exports = class Logger {
     }
 
     error(msg, op = '') {
+        this.notify('error', msg, op);
         if (LOGS_JSON) {
             this.jsonLog('error', this.appName, msg, op);
         } else {

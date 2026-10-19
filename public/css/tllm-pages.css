@@ -1672,7 +1672,7 @@ select.tllm-input {
     border-bottom: 0;
 }
 
-.tllm-cost .is-quiet {
+.tllm-cost :is(td, th).is-quiet {
     color: var(--ink-3);
 }
 
@@ -1779,6 +1779,183 @@ select.tllm-input {
     background: color-mix(in srgb, var(--live) 14%, transparent);
 }
 
+/* Meeting log: problems of a meeting, and its log in a dialog */
+.tllm-journal-cell {
+    text-align: right !important;
+}
+
+.tllm-journal-cell .tllm-button {
+    margin-left: 8px;
+}
+
+.tllm-problems {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 2px 8px;
+    vertical-align: middle;
+}
+
+.tllm-problem {
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tllm-problem.is-error {
+    color: var(--bad);
+}
+
+.tllm-problem.is-warn {
+    color: var(--warn);
+}
+
+.tllm-problem.is-ok,
+.tllm-problem.is-none {
+    font-weight: 400;
+    color: var(--ink-3);
+}
+
+.tllm-log-dialog {
+    width: min(760px, calc(100% - 32px));
+    max-height: min(80vh, 760px);
+    padding: 0;
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: var(--r);
+    box-shadow: 0 18px 50px rgb(0 0 0 / 25%);
+}
+
+.tllm-log-dialog[open] {
+    display: flex;
+    flex-direction: column;
+}
+
+.tllm-log-dialog::backdrop {
+    background: rgb(0 0 0 / 35%);
+}
+
+.tllm-log-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 22px 10px;
+}
+
+.tllm-log-head h2 {
+    font-size: 1.1rem;
+}
+
+.tllm-log-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 22px 12px;
+    border-bottom: 1px solid var(--rule);
+}
+
+.tllm-log-tools a {
+    text-decoration: none;
+}
+
+.tllm-log-list {
+    flex: 1;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.tllm-log {
+    display: grid;
+    grid-template-columns: 70px 84px minmax(0, 1fr);
+    gap: 4px 10px;
+    padding: 8px 22px;
+    font-size: 0.92rem;
+    border-bottom: 1px solid var(--rule);
+}
+
+.tllm-log-time {
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+}
+
+.tllm-log-level {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.tllm-log.is-warn {
+    background: color-mix(in srgb, var(--soon) 9%, transparent);
+}
+
+.tllm-log.is-warn .tllm-log-level {
+    color: var(--warn);
+}
+
+.tllm-log.is-error {
+    background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+
+.tllm-log.is-error .tllm-log-level {
+    color: var(--bad);
+}
+
+.tllm-log-text {
+    overflow-wrap: anywhere;
+}
+
+.tllm-log.is-tech .tllm-log-text {
+    color: var(--ink-2);
+}
+
+.tllm-log-detail {
+    margin-top: 2px;
+    font:
+        0.8rem/1.4 ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        Consolas,
+        monospace;
+    color: var(--ink-3);
+    overflow-wrap: anywhere;
+}
+
+.tllm-log-empty {
+    padding: 24px 22px;
+    color: var(--ink-2);
+}
+
+@media (max-width: 760px) {
+    .tllm-log {
+        grid-template-columns: 62px minmax(0, 1fr);
+    }
+    .tllm-log-level:empty {
+        display: none;
+    }
+    .tllm-log-body {
+        grid-column: 1 / -1;
+    }
+    /* On a phone the log sits under the name of the meeting */
+    .tllm-cost .tllm-journal-cell {
+        display: none;
+    }
+    .tllm-journal-compact {
+        display: flex !important;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 10px;
+        margin-top: 6px;
+    }
+    .tllm-cost-compact .tllm-problems {
+        justify-content: flex-start;
+    }
+}
+
 /* Meetings and duration under the room name, on a phone only */
 .tllm-cost-compact {
     display: none;
@@ -1806,7 +1983,7 @@ select.tllm-input {
         width: 100%;
     }
     /* On a phone: the room (with its meetings and duration below), CPU and memory */
-    .tllm-cost .is-quiet,
+    .tllm-cost :is(td, th).is-quiet,
     .tllm-cost .is-data,
     .tllm-cost .is-wide {
         display: none;

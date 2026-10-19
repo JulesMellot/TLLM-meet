@@ -90,6 +90,8 @@ const { DatePolls, DatePollError } = require('./DatePolls');
 const { RoomRegistry } = require('./RoomRegistry');
 const { Transcripts } = require('./Transcripts');
 const { Usage } = require('./Usage');
+const { MeetingLog } = require('./MeetingLog');
+const { AsyncLocalStorage } = require('async_hooks');
 const { Moderators, ModeratorError } = require('./Moderators');
 const log = new Logger('Server');
 const yaml = require('js-yaml');
@@ -341,6 +343,92 @@ const usage = new Usage({
     },
     log,
 });
+
+// The log of each meeting, for the admin when something went wrong (see MeetingLog.js)
+const meetingLog = new MeetingLog({
+    dir: path.join(dataDir, 'journaux'),
+    retentionDays: process.env.LOG_RETENTION_DAYS || 30,
+    log,
+});
+meetingLog.purge();
+setInterval(() => meetingLog.purge(), 6 * 3600 * 1000).unref();
+Room.journal = (roomId, level, text, options) => meetingLog.add(roomId, level, text, options);
+
+// A meeting starts and ends with its usage record and its log
+function openMeeting(roomId) {
+    const meeting = usage.open(roomId);
+    meetingLog.start(roomId, meeting.startedAt);
+    meetingLog.add(roomId, 'info', 'Visio ouverte');
+}
+function closeMeeting(roomId, why = 'plus personne dans la salle') {
+    droppedPeople.delete(roomId);
+    meetingLog.add(roomId, 'info', `Visio terminée : ${why}`);
+    usage.close(roomId, { logs: meetingLog.end(roomId) });
+}
+
+// The server's own warnings and errors while it handles someone's request go into that person's
+// meeting log: the socket handling the request is kept for the time of the handler (socket.use below)
+const requestContext = new AsyncLocalStorage();
+const TECH_TEXT = {
+    'Producer transport error': 'l’envoi du micro, de la caméra ou de l’écran a échoué',
+    'Consumer transport error': 'la réception du son ou de l’image de quelqu’un a échoué',
+    'Restart ICE warning': 'la connexion n’a pas pu être relancée',
+    'Whisper transcription error': 'une phrase n’a pas pu être transcrite',
+    'Client error': 'erreur signalée par le navigateur',
+};
+const TECH_SKIP = new Set(['Blocked event from a socket that is not a room member']);
+let inLogHook = false;
+Logger.hook = (level, app, msg, op) => {
+    if (inLogHook || app === 'MeetingLog') return;
+    const socket = requestContext.getStore();
+    if (!socket?.room_id || TECH_SKIP.has(msg)) return;
+    inLogHook = true;
+    try {
+        let detail = '';
+        if (typeof op === 'string') detail = op;
+        else if (op?.error) detail = op.error.message || String(op.error);
+        else if (op?.message) detail = op.message;
+        else if (op && typeof op === 'object') {
+            try {
+                // No addresses nor user agents in the log, only what helps to understand
+                detail = JSON.stringify(op, (key, value) => (/(^|_)ip$|^ip|user_agent/i.test(key) ? undefined : value));
+            } catch {
+                detail = '';
+            }
+        }
+        detail = String(detail)
+            .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, '[ip]')
+            .replace(/(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|[0-9a-f:]*::[0-9a-f:]*[0-9a-f]/gi, '[ip]');
+        const who = roomList.get(socket.room_id)?.getPeer(socket.id)?.peer_name;
+        const text = TECH_TEXT[msg] || String(msg);
+        meetingLog.add(socket.room_id, level, text, { who, tech: !TECH_TEXT[msg], detail });
+    } finally {
+        inLogHook = false;
+    }
+};
+
+// "Firefox 131, Windows, téléphone"
+function deviceOf(info = {}) {
+    const browser = [info.browser_name, String(info.browser_version || '').split('.')[0]].filter(Boolean).join(' ');
+    const kind = info.is_mobile_device ? 'téléphone' : info.is_tablet_device ? 'tablette' : 'ordinateur';
+    return [browser, info.os_name, kind].filter(Boolean).join(', ');
+}
+
+// People whose connection dropped, to say "retour" rather than "arrivée" when they come back:
+// room id -> Map(person -> when it dropped)
+const droppedPeople = new Map();
+const personKey = (info = {}) => info.peer_uuid || info.peer_name || '';
+
+// Why a connection ended, as Socket.IO says it
+const LEAVE_REASONS = {
+    'client namespace disconnect': ['info', 'départ (page fermée)'],
+    'server namespace disconnect': ['info', 'déconnexion par le serveur'],
+    'ping timeout': ['warn', 'connexion perdue : le navigateur ne répondait plus'],
+    'transport close': ['warn', 'connexion coupée (réseau ou page fermée brusquement)'],
+    'transport error': ['warn', 'connexion coupée : erreur réseau'],
+    'parse error': ['error', 'connexion fermée : message illisible'],
+    'server shutting down': ['info', 'arrêt du serveur'],
+};
 
 // State of the speech-to-text server for the admin home: asked at most every 15 s
 let transcriptionHealthCache = { at: 0, value: null };
@@ -704,11 +792,28 @@ function startServer() {
         if (admin.role !== 'admin') return res.status(403).json({ error: 'forbidden' });
         res.set('Cache-Control', 'no-store');
         const days = Math.min(3650, Math.max(0, parseInt(req.query.days, 10) || 0));
-        return res.json({
-            cpus: usage.hostCpus,
-            days,
-            meetings: usage.list({ since: days ? Date.now() - days * 86400000 : 0 }),
+        const meetings = usage.list({ since: days ? Date.now() - days * 86400000 : 0 });
+        for (const m of meetings) if (m.live) m.logs = meetingLog.counts(m.room);
+        return res.json({ cpus: usage.hostCpus, days, meetings });
+    });
+
+    // The log of one meeting (room + start of its usage record), as JSON or as a text file
+    app.get(/^\/api\/admin\/logs\/([A-Za-z0-9_-]{1,120})\/([0-9]{10,16})(\.txt)?$/, (req, res) => {
+        const admin = adminAuth.fromRequest(req);
+        if (!admin) return res.status(401).json({ error: 'unauthorized' });
+        if (admin.role !== 'admin') return res.status(403).json({ error: 'forbidden' });
+        const [room, id, txt] = [req.params[0], req.params[1], req.params[2]];
+        const entries = meetingLog.read(room, id);
+        if (entries === null) return res.status(400).json({ error: 'invalid' });
+        res.set('Cache-Control', 'no-store');
+        const live = meetingLog.live.get(room)?.id === id;
+        if (!txt) return res.json({ room, id, live, entries });
+        const name = usage.describe(room)?.name || room;
+        res.set({
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Content-Disposition': `attachment; filename="journal-${room}-${id}.txt"`,
         });
+        return res.send(meetingLog.toText(entries, { name, timeZone: meetingTimeZone }));
     });
 
     // Organiser home: rooms (live, booked, recent), agenda of fixed meetings, polls waiting for answers
@@ -1569,6 +1674,7 @@ function startServer() {
 
             worker.on('died', () => {
                 log.error('Mediasoup worker died, exiting in 5 seconds...', worker.pid);
+                meetingLog.addAll('error', 'le moteur audio et vidéo s’est arrêté : le serveur redémarre');
 
                 setTimeout(() => process.exit(1), 5000);
             });
@@ -1599,6 +1705,9 @@ function startServer() {
     const PRE_JOIN_EVENTS = new Set(['createRoom', 'join', 'clientError', 'error']);
 
     io.on('connection', (socket) => {
+        // TLLM*meet: the handler of each event runs with its socket known to Logger.hook (meeting log)
+        socket.use((packet, next) => requestContext.run(socket, next));
+
         // Security: only sockets that were admitted to the room (join accepted, lobby included) may use
         // room events. Rejected/unjoined sockets can still be bound to a room id by 'createRoom'.
         socket.use((packet, next) => {
@@ -1610,6 +1719,19 @@ function startServer() {
             log.warn('Blocked event from a socket that is not a room member', { event, peer_id: socket.id });
             const ack = packet[packet.length - 1];
             if (typeof ack === 'function') ack({ error: 'Not in room' });
+        });
+
+        // TLLM*meet: errors of the browser page (TllmRoom.js), into the meeting log; 20 at most per connection
+        socket.on('clientLog', (dataObject) => {
+            const peer = getPeer(socket);
+            if (!peer || (socket.tllmClientLogs = (socket.tllmClientLogs || 0) + 1) > 20) return;
+            const message = typeof dataObject?.message === 'string' ? dataObject.message : '';
+            if (!message) return;
+            const where = typeof dataObject.where === 'string' ? dataObject.where : '';
+            meetingLog.add(socket.room_id, 'warn', 'erreur dans la page de la visio', {
+                who: peer.peer_name,
+                detail: where ? `${message} — ${where}` : message,
+            });
         });
 
         socket.on('clientError', (error) => {
@@ -1665,7 +1787,7 @@ function startServer() {
                 const worker = await getMediasoupWorker();
                 const room = await new Room(socket.room_id, worker, io).ready();
                 roomList.set(socket.room_id, room);
-                usage.open(socket.room_id);
+                openMeeting(socket.room_id);
                 roomRegistry.opened(socket.room_id);
                 log.debug('Created room', { room_id: socket.room_id });
                 callback({ room_id: socket.room_id });
@@ -1758,6 +1880,17 @@ function startServer() {
 
             room.addPeer(new Peer(socket.id, data));
             usage.joined(room.id, room.getPeersCount()); // counted even before the next sample
+            const droppedAt = droppedPeople.get(room.id)?.get(personKey(data?.peer_info));
+            droppedPeople.get(room.id)?.delete(personKey(data?.peer_info));
+            const back = droppedAt && Date.now() - droppedAt < 10 * 60000;
+            meetingLog.add(
+                room.id,
+                'info',
+                back
+                    ? `retour après ${Math.max(1, Math.round((Date.now() - droppedAt) / 1000))} s de coupure (${deviceOf(data?.peer_info)})`
+                    : `arrivée (${deviceOf(data?.peer_info)})`,
+                { who: data?.peer_info?.peer_name }
+            );
 
             if (!(socket.room_id in presenters)) presenters[socket.room_id] = {};
 
@@ -1920,6 +2053,9 @@ function startServer() {
                 }
 
                 const iceParameters = await transport.restartIce();
+                meetingLog.add(socket.room_id, 'warn', 'connexion relancée après un problème de réseau', {
+                    who: peerInfo?.peer_name,
+                });
 
                 log.debug('ICE Restart successful', { transport_id: transport_id, iceParameters });
 
@@ -1971,6 +2107,10 @@ function startServer() {
                     kind,
                     appData.mediaType
                 );
+
+                if (appData.mediaType === 'screen') {
+                    meetingLog.add(room.id, 'info', 'partage son écran', { who: peerInfo.peer_name });
+                }
 
                 log.debug('Produce', {
                     kind: kind,
@@ -2736,6 +2876,18 @@ function startServer() {
             const room = getRoom(socket);
 
             if (data.action === 'ban') room.addBannedPeer(data.to_peer_uuid);
+            if (data.action === 'eject' || data.action === 'ban') {
+                const target = room.getPeer(data.peer_id)?.peer_name || data.to_peer_name;
+                const by = getPeer(socket)?.peer_name;
+                meetingLog.add(
+                    room.id,
+                    'info',
+                    data.action === 'ban' ? `bannissement par ${by}` : `retrait par ${by}`,
+                    {
+                        who: target,
+                    }
+                );
+            }
 
             data.broadcast
                 ? room.broadCast(data.peer_id, 'peerAction', data)
@@ -3721,6 +3873,9 @@ function startServer() {
             } else {
                 transcripts.stop(room.id, { by });
             }
+            meetingLog.add(room.id, 'info', active ? 'a démarré la transcription' : 'a arrêté la transcription', {
+                who: by,
+            });
             room.sendToAll('meetingTranscription', { ...meetingTranscriptionState(room), by });
             log.info('Meeting transcription', { room_id: room.id, active, by });
             return reply(meetingTranscriptionState(room));
@@ -4011,6 +4166,14 @@ function startServer() {
             const isPresenter = isPeerPresenter(socket.room_id, socket.id, peer_name, peer_uuid);
 
             log.debug('[Disconnect] - peer name', { peer_name, reason });
+            if (peer) {
+                const [level, why] = LEAVE_REASONS[reason] || ['info', `départ (${reason})`];
+                meetingLog.add(socket.room_id, level, why, { who: peer_name });
+                if (level !== 'info') {
+                    if (!droppedPeople.has(socket.room_id)) droppedPeople.set(socket.room_id, new Map());
+                    droppedPeople.get(socket.room_id).set(personKey(peer.peer_info), Date.now());
+                }
+            }
 
             room.removePeer(socket.id);
             collab.leave(socket.room_id, socket.id);
@@ -4036,7 +4199,7 @@ function startServer() {
                 collab.release(socket.room_id);
                 roomRegistry.closed(socket.room_id);
                 transcripts.close(socket.room_id);
-                usage.close(socket.room_id);
+                closeMeeting(socket.room_id);
 
                 delete presenters[socket.room_id];
 
@@ -4063,6 +4226,7 @@ function startServer() {
             const isPresenter = isPeerPresenter(socket.room_id, socket.id, peer_name, peer_uuid);
 
             log.debug('Exit room', peer_name);
+            meetingLog.add(socket.room_id, 'info', 'départ (bouton Quitter)', { who: peer_name });
 
             room.removePeer(socket.id);
             collab.leave(socket.room_id, socket.id);
@@ -4082,7 +4246,7 @@ function startServer() {
                 collab.release(socket.room_id);
                 roomRegistry.closed(socket.room_id);
                 transcripts.close(socket.room_id);
-                usage.close(socket.room_id);
+                closeMeeting(socket.room_id);
 
                 delete presenters[socket.room_id];
 
@@ -4357,7 +4521,7 @@ async function gracefulShutdown(signal) {
                 roomList.delete(roomId);
                 collab.drop(roomId);
                 transcripts.close(roomId);
-                usage.close(roomId);
+                closeMeeting(roomId, 'arrêt du serveur');
             } catch (err) {
                 log.error(`Error closing room ${roomId}:`, err.message);
             }
