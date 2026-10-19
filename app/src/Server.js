@@ -69,6 +69,7 @@ const http = require('http');
 const net = require('net');
 const path = require('path');
 const axios = require('axios');
+const FormData = require('form-data');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const helmet = require('helmet');
@@ -3701,7 +3702,6 @@ function startServer() {
                         typeof mimeType === 'string' && mimeType.startsWith('audio/') ? mimeType : 'audio/webm';
                     const ext = resolveAudioExtension(type);
 
-                    const FormData = require('form-data');
                     const form = new FormData();
                     form.append('file', buffer, { filename: `audio.${ext}`, contentType: type });
                     form.append('model', whisper.model || 'whisper-1');

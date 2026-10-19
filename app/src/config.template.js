@@ -42,8 +42,8 @@ const IPv4 = getIPv4();
 
 const RTC_MIN_PORT = parseInt(process.env.SFU_MIN_PORT) || 40000;
 const RTC_MAX_PORT = parseInt(process.env.SFU_MAX_PORT) || 40100;
-const NUM_CPUS = os.cpus().length;
-const NUM_WORKERS = Math.min(process.env.SFU_NUM_WORKERS || NUM_CPUS, NUM_CPUS);
+const NUM_CPUS = getAvailableCpus();
+const NUM_WORKERS = Math.max(1, Math.min(parseInt(process.env.SFU_NUM_WORKERS) || NUM_CPUS, NUM_CPUS));
 
 // ==============================================
 // Main Configuration Export
@@ -1126,4 +1126,29 @@ function scanAllInterfaces(ifaces, excludes) {
 function findValidAddress(addresses) {
     return addresses?.find((addr) => addr.family === 'IPv4' && !addr.internal && !addr.address.startsWith('169.254.'))
         ?.address;
+}
+
+/**
+ * Count the CPUs this process may use
+ * -----------------------------------
+ * - os.cpus() counts every core of the host, even in a container limited to two of them
+ *   (docker --cpus, Coolify limits): one mediasoup worker per host core would then share a small quota
+ * - Reads the cgroup quota when there is one (v2: cpu.max, v1: cpu.cfs_quota_us)
+ */
+function getAvailableCpus() {
+    const count = os.availableParallelism?.() || os.cpus().length;
+    const read = (file) => {
+        try {
+            return fs.readFileSync(file, 'utf8').trim();
+        } catch {
+            return null;
+        }
+    };
+    let quota;
+    let period;
+    const v2 = read('/sys/fs/cgroup/cpu.max'); // "200000 100000", or "max 100000" without limit
+    if (v2) [quota, period] = v2.split(/\s+/);
+    else [quota, period] = [read('/sys/fs/cgroup/cpu/cpu.cfs_quota_us'), read('/sys/fs/cgroup/cpu/cpu.cfs_period_us')];
+    const limit = Math.ceil(Number(quota) / Number(period)); // NaN for "max", negative for -1 (no limit)
+    return Math.max(1, Number.isFinite(limit) && limit > 0 ? Math.min(count, limit) : count);
 }
