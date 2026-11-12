@@ -410,13 +410,12 @@ describe('mobile wake-lock lifecycle', () => {
         assert.equal(context.navigator.wakeLock.request.callCount, 2);
     });
 
-    it('reports request failures and allows a later retry', async () => {
+    it('stays silent when an automatic request is refused, and allows a later retry', async () => {
+        // A phone refuses often (battery saver, page in the background): not worth a message
         context.navigator.wakeLock.request.rejects(new Error('Permission denied'));
         await context.requestWakeLock();
         await clock.tickAsync(100);
-        assert.equal(context.userLog.callCount, 1);
-        assert.equal(context.userLog.firstCall.args[0], 'error');
-        assert.match(context.userLog.firstCall.args[1], /Permission denied/);
+        assert.equal(context.userLog.callCount, 0);
         assert.equal(context.switchKeepAwake.checked, false);
         context.navigator.wakeLock.request.resolves(sentinel);
         await context.requestWakeLock();

@@ -2501,6 +2501,36 @@ function startServer() {
             }
         });
 
+        // TLLM*meet: what a presenter shows to everybody (whiteboard, shared notes or the videos).
+        // Kept by the room: who arrives later, or comes back after a cut, sees the same thing.
+        socket.on('stage', (data, callback) => {
+            const done = typeof callback === 'function' ? callback : () => {};
+            if (!roomExists(socket)) return done({ error: 'Room not found' });
+            const room = getRoom(socket);
+            const peer = getPeer(socket);
+            if (!peer || isPeerInLobby(peer)) return done({ error: 'Peer not found' });
+
+            // Asked by a browser that has just arrived: what is shown now
+            if (data?.get) return done({ stage: room.stage });
+
+            if (!isSocketPresenter(socket, room)) return done({ error: 'Only presenters change what everybody sees' });
+            const content = Room.STAGES.has(data?.content) ? data.content : null;
+            if ((room.stage?.content || null) === content) return done({ stage: room.stage });
+            const stage = room.setStage(content, peer.peer_name);
+            room.broadCast(socket.id, 'stage', stage || { content: null, by: peer.peer_name });
+            meetingLog.add(
+                room.id,
+                'info',
+                content === 'board'
+                    ? 'montre le tableau blanc à tous'
+                    : content === 'editor'
+                      ? 'montre les notes partagées à tous'
+                      : 'ferme le tableau ou les notes pour tous',
+                { who: peer.peer_name }
+            );
+            done({ stage });
+        });
+
         // TLLM*meet: the size each picture needs on this person's screen, or nothing when it is not
         // visible (public/js/TllmNetwork.js): [{ id, layer }]
         socket.on('consumerNeeds', async (list, callback) => {

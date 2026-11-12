@@ -50,9 +50,13 @@ async function requestWakeLock() {
         switchKeepAwake.checked = true;
         console.info('🟢 Wake Lock is active');
     } catch (err) {
+        // TLLM*meet: the browser often refuses (battery saver, page in the background): that is
+        // only worth a word when the person asked for it themselves
+        const asked = pendingManualWakeLockNotification === true;
         pendingManualWakeLockNotification = null;
         switchKeepAwake.checked = false;
-        userLog('error', '🔴 Failed to request Wake Lock: ' + err.message, 'top-end');
+        console.info('Wake Lock refused', err.message);
+        if (asked) userLog('error', 'Le téléphone refuse de garder l’écran allumé.', 'top-end');
     } finally {
         wakeLockRequestPending = false;
         notifyManualWakeLockChange();

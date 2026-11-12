@@ -152,6 +152,18 @@ que sans aucune visio. Les données échangées sont exactes. L'historique est g
 
 `/healthz` répond `{"ok":true}` quand le serveur et ses workers tournent : c'est le contrôle de santé de Docker.
 
+## Ce que l'animateur montre, tout le monde le voit
+
+Quand l'admin, le modérateur de la salle ou une personne rendue présentatrice ouvre le **tableau blanc** ou
+les **notes partagées**, ils s'ouvrent chez tout le monde ; quand il les ferme, ils se ferment chez tout le
+monde. La salle retient ce qui est montré : une personne qui arrive en cours de route, ou qui revient après
+une coupure, tombe sur la même chose. Un participant peut fermer pour lui seul ; le prochain changement de
+l'animateur s'applique de nouveau à tous. Le journal de la visio note chaque changement.
+
+Sur téléphone, à la verticale comme à l'horizontale, la barre du bas ne garde que les icônes et le reste
+passe dans **Plus**. Tenu à l'horizontale, le tableau et les notes prennent toute la hauteur (les vidéos
+au-dessus sont masquées, le son continue).
+
 ## Réseau : tenir sur une connexion fragile
 
 Deux choses font qu'une visio tient sur une ligne faible (4G, Wi-Fi partagé, ADSL) : ne pas sortir quelqu'un

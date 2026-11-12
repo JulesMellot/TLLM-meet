@@ -981,13 +981,6 @@
         });
     };
 
-    // A presenter opened the board: open it here too, once. Closing stays personal.
-    function openForEveryone() {
-        if (typeof isPresenter !== 'undefined' && isPresenter && rc?.socket) {
-            rc.socket.emit('whiteboardAction', { peer_name: rc.peer_name, action: 'open' });
-        }
-    }
-
     // ####################################################
     // EXPORT, CLEAR
     // ####################################################
@@ -1137,24 +1130,21 @@
     // ####################################################
 
     /* eslint-disable no-global-assign */
+    // Opening or closing by a presenter reaches everybody through TllmStage.js
     toggleWhiteboard = function () {
-        const opening = !B.open;
         B.toggle();
-        if (opening) openForEveryone();
     };
     wbUpdate = function () {};
     JsonToWbCanvas = function () {};
     handleWhiteboardObject = function () {};
     handleWhiteboardPointer = function () {};
-    whiteboardAction = function (data, emit = true) {
-        // From a presenter, through the server
-        if (!emit && data?.action === 'open' && !B.open) B.toggle(true);
-    };
+    whiteboardAction = function () {};
     /* eslint-enable no-global-assign */
 
     collab.on('synced', () => {
         refresh();
-        if (map.size && !B.open) tell('Un tableau blanc est en cours', 'Retrouvez-le dans le menu Plus.');
+        if (map.size && !B.open && window.tllmStage?.content !== 'board')
+            tell('Un tableau blanc est en cours', 'Retrouvez-le dans le menu Plus.');
     });
     collab.on('writable', refresh);
     collab.on('connection', refresh);

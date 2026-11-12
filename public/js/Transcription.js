@@ -468,10 +468,17 @@ class Transcription {
             transcriptionLanguage.options[i] = new Option(this.languages[i][0], i);
         }
 
-        transcriptionLanguage.selectedIndex = 6;
+        // TLLM*meet: the language of the browser (French when it is not in the list), not English
+        const wanted = String(navigator.language || 'fr-FR');
+        const hasCode = (list, code) => list.slice(1).some(([c]) => c === code || c.split('-')[0] === code);
+        let index = this.languages.findIndex((list) => hasCode(list, wanted));
+        if (index < 0) index = this.languages.findIndex((list) => hasCode(list, wanted.split('-')[0]));
+        if (index < 0) index = this.languages.findIndex((list) => hasCode(list, 'fr-FR'));
+        transcriptionLanguage.selectedIndex = Math.max(0, index);
         this.updateCountry();
 
-        transcriptionDialect.selectedIndex = 6;
+        const dialect = [...transcriptionDialect.options].findIndex((o) => o.value === wanted);
+        transcriptionDialect.selectedIndex = Math.max(0, dialect);
         transcriptionLanguage.onchange = () => {
             this.updateCountry();
         };

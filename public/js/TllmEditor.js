@@ -117,6 +117,10 @@
         const canWrite = collab.synced && collab.writable && collab.connected;
         E.quill.enable(canWrite);
         $('editorRoom')?.classList.toggle('tllm-editor-readonly', !collab.writable);
+        // Someone who cannot write is not invited to
+        E.quill.root.dataset.placeholder = collab.writable
+            ? 'Écrivez ici. Tout le monde voit le texte en direct.'
+            : 'Les notes sont vides pour l’instant. Le texte des présentateurs apparaîtra ici.';
         const status = $('tllmEditorStatus');
         if (!status) return;
         let text = '';
@@ -207,10 +211,8 @@
     P.toggleEditorPrivate = async function () {};
     P.toggleEditorPin = function () {};
 
-    // A presenter opened the editor: open it here too, once. Closing stays personal.
-    P.handleEditorActionsData = function (data) {
-        if (data?.action === 'open' && !this.isEditorOpen) this.toggleEditor();
-    };
+    // Opening and closing for everybody go through TllmStage.js
+    P.handleEditorActionsData = function () {};
 
     const origToggle = P.toggleEditor;
     P.toggleEditor = function () {

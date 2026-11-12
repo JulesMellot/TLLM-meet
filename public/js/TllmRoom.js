@@ -26,7 +26,8 @@
     const clickId = (id) => $(id)?.click();
     const now = () => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const amPresenter = () => typeof isPresenter !== 'undefined' && !!isPresenter;
-    const isPhone = () => window.matchMedia('(max-width: 720px)').matches;
+    // A phone, held upright or sideways (little height): same layout
+    const isPhone = () => window.matchMedia('(max-width: 720px), (max-height: 500px)').matches;
     const cfg = () => (typeof BUTTONS !== 'undefined' && BUTTONS) || {};
 
     const COLORS = ['#3b6fd8', '#2f8f6b', '#a0592e', '#7d4bb3', '#b2456e', '#4f7f2f', '#2f7f8f', '#8f6a2f'];
@@ -532,6 +533,8 @@
         el.innerHTML = html;
         document.body.appendChild(el);
         const r = anchor.getBoundingClientRect();
+        // All the room above the bar (a phone held sideways has little): the rest scrolls
+        if (r.top > window.innerHeight / 2) el.style.maxHeight = `${Math.max(160, r.top - 36)}px`;
         const pw = el.offsetWidth;
         const ph = el.offsetHeight;
         let left = align === 'right' ? r.right - pw : align === 'left' ? r.left : r.left + r.width / 2 - pw / 2;

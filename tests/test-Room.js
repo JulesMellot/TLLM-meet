@@ -6,6 +6,17 @@ const { EventEmitter } = require('events');
 const Room = require('../app/src/Room');
 
 describe('test-Room', () => {
+    it('keeps what a presenter shows to everybody: the board, the notes or nothing', () => {
+        const room = Object.create(Room.prototype);
+
+        room.setStage('board', 'Admin').should.match({ content: 'board', by: 'Admin' });
+        room.stage.content.should.equal('board');
+        room.setStage('editor', 'Admin').content.should.equal('editor');
+        (room.setStage(null, 'Admin') === null).should.be.true();
+        (room.setStage('<script>', 'Admin') === null).should.be.true();
+        (room.stage === null).should.be.true();
+    });
+
     it('persists presenter-only screen annotation moderation', () => {
         const room = Object.create(Room.prototype);
         room._moderator = { screen_annotations_cant_draw: false };

@@ -1156,7 +1156,7 @@ body.tllm-room .Camera .user-hand {
 }
 
 /* ---------- Phone ---------- */
-@media (max-width: 720px) {
+@media (max-width: 720px), (max-height: 500px) {
     :root {
         --tllm-bar-h: 64px;
         --tllm-top-h: 42px;
@@ -1259,7 +1259,7 @@ body.tllm-room .Camera .user-hand::after {
     margin-left: 6px;
     font: 600 12px var(--tllm-font);
 }
-@media (max-width: 720px) {
+@media (max-width: 720px), (max-height: 500px) {
     body.tllm-room .Camera .user-hand::after {
         content: '';
         margin: 0;
@@ -1280,6 +1280,27 @@ body.tllm-content #tllmStage #videoMediaContainer {
 }
 body.tllm-content #tllmStage #videoPinMediaContainer {
     display: none !important;
+}
+/* The videos above the shared content: one row of small tiles, the name only, no menu */
+body.tllm-content #tllmStage #videoMediaContainer {
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px !important;
+}
+body.tllm-content #tllmStage #videoMediaContainer .Camera {
+    flex: 0 0 auto !important;
+    width: 168px !important;
+    height: 96px !important;
+    margin: 0 !important;
+}
+body.tllm-content #tllmStage #videoMediaContainer .tllm-tile-more {
+    display: none;
+}
+body.tllm-content #tllmStage #videoMediaContainer .Camera .username {
+    max-width: calc(100% - 12px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 body.tllm-room #whiteboard {
     z-index: 10 !important;
@@ -1332,9 +1353,21 @@ body.tllm-room #mySettings {
     max-height: calc(100vh - 32px) !important;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (max-height: 500px) {
     body.tllm-content #tllmStage #videoMediaContainer {
         height: 78px !important;
+        justify-content: flex-start;
+    }
+    body.tllm-content #tllmStage #videoMediaContainer .Camera {
+        width: 112px !important;
+        height: 66px !important;
+        border-radius: 10px !important;
+    }
+    body.tllm-content #tllmStage #videoMediaContainer .Camera .username {
+        font-size: 11px !important;
+        padding: 2px 6px !important;
+        left: 4px !important;
+        bottom: 4px !important;
     }
     body.tllm-room #editorRoom.show {
         top: calc(var(--tllm-top-h) + env(safe-area-inset-top, 0px) + 84px) !important;
@@ -2075,7 +2108,7 @@ body.tllm-panel-open .tllm-board {
     display: none !important;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (max-height: 500px) {
     .tllm-board {
         top: calc(var(--tllm-top-h) + env(safe-area-inset-top, 0px) + 84px);
         left: 4px;
@@ -2134,4 +2167,29 @@ body.tllm-panel-open .tllm-board {
 }
 .tllm-join-wrap .tllm-join-facts dt {
     font-weight: 400 !important;
+}
+
+/* A phone held sideways: little height. The bars shrink, the shared content takes the whole height
+   (the videos above it would leave the whiteboard a few lines tall; their sound goes on). */
+@media (max-height: 500px) {
+    :root {
+        --tllm-bar-h: 52px;
+        --tllm-top-h: 36px;
+    }
+    .tllm-bb {
+        height: 44px;
+    }
+    body.tllm-content #tllmStage #videoMediaContainer {
+        display: none !important;
+    }
+    .tllm-pop .tllm-item {
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+    .tllm-board,
+    body.tllm-room #editorRoom.show {
+        top: calc(var(--tllm-top-h) + env(safe-area-inset-top, 0px) + 4px) !important;
+        left: calc(4px + env(safe-area-inset-left, 0px)) !important;
+        right: calc(4px + env(safe-area-inset-right, 0px)) !important;
+    }
 }

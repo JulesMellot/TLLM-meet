@@ -14,6 +14,8 @@ module.exports = class Room {
     // TLLM*meet: (peer id) -> the browser closed its media connection itself (page closed)
     static gone = null;
 
+    static STAGES = new Set(['board', 'editor']);
+
     // TLLM*meet: (room id, level, text, { who }) -> the meeting's log (see MeetingLog.js)
     static journal = null;
 
@@ -70,6 +72,8 @@ module.exports = class Room {
             polls_cant_create: false,
         };
         this._followMe = null;
+        // TLLM*meet: what a presenter puts in front of everybody: 'board', 'editor' or null (videos)
+        this.stage = null;
         this.survey = config?.features?.survey;
         this.redirect = config?.features?.redirect;
         this.peers = new Map();
@@ -515,6 +519,15 @@ module.exports = class Room {
             default:
                 break;
         }
+    }
+
+    // ####################################################
+    // STAGE (TLLM*meet): the shared content shown to everybody
+    // ####################################################
+
+    setStage(content, by = null) {
+        this.stage = Room.STAGES.has(content) ? { content, by, at: Date.now() } : null;
+        return this.stage;
     }
 
     // ####################################################
