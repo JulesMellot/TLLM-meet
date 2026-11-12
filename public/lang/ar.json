@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "تمت الموافقة على طلب انضمامك من قِبل المشرف.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "تم رفض طلب انضمامك من قِبل المشرف. يمكنك المحاولة مرة أخرى لاحقًا إذا أصبحت الغرفة متاحة.",
         "Your profile": "ملفك الشخصي",
-        "Your recording session will be stored on the server.": "سيتم تخزين جلسة التسجيل الخاصة بك على الخادم."
+        "Your recording session will be stored on the server.": "سيتم تخزين جلسة التسجيل الخاصة بك على الخادم.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "يلزم وجود مقدّم عرض لبدء الاجتماع. يُرجى محاولة الانضمام مرة أخرى لاحقًا.",

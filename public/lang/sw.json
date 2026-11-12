@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "Ombi lako la kujiunga liliidhinishwa na msimamizi.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "Ombi lako la kujiunga lilikataliwa na msimamizi. Unaweza kujaribu tena baadaye ikiwa chumba kitapatikana.",
         "Your profile": "Wasifu wako",
-        "Your recording session will be stored on the server.": "Kipindi chako cha kurekodi kitahifadhiwa kwenye seva."
+        "Your recording session will be stored on the server.": "Kipindi chako cha kurekodi kitahifadhiwa kwenye seva.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "Mwasilishaji anahitajika ili kuanzisha mkutano. Tafadhali jaribu kujiunga tena baadaye.",

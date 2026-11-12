@@ -441,6 +441,30 @@ module.exports = class Peer {
         };
     }
 
+    // TLLM*meet: what the receiver looks at (public/js/TllmNetwork.js). layer -1: the picture is not
+    // visible, nothing is sent; 0, 1, 2: the size its tile needs (quarter, half, whole picture)
+    async setConsumerNeed(consumer_id, layer) {
+        const consumer = this.getConsumer(consumer_id);
+        if (!consumer || consumer.closed || consumer.kind !== 'video') return false;
+        const want = Number.isInteger(layer) ? layer : 2;
+
+        if (want < 0) {
+            if (!consumer.paused) await consumer.pause();
+            return true;
+        }
+
+        if (['simulcast', 'svc'].includes(consumer.type)) {
+            const { scalabilityMode } = consumer.rtpParameters.encodings[0];
+            const { spatialLayers, temporalLayers } = parseScalabilityMode(scalabilityMode);
+            await consumer.setPreferredLayers({
+                spatialLayer: Math.min(want, Math.max(spatialLayers - 1, 0)),
+                temporalLayer: Math.max(temporalLayers - 1, 0),
+            });
+        }
+        if (consumer.paused) await consumer.resume();
+        return true;
+    }
+
     getConsumerParams(consumer) {
         const { producerId, id, kind, rtpParameters, type, producerPaused } = consumer;
         return { producerId, id, kind, rtpParameters, type, producerPaused };

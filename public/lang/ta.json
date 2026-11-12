@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "உங்கள் சேர்வுக் கோரிக்கையை நடுவர் ஏற்றார்.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "உங்கள் சேர்வுக் கோரிக்கையை நடுவர் நிராகரித்தார். அறை கிடைத்தால் பிறகு மீண்டும் முயற்சிக்கலாம்.",
         "Your profile": "உங்கள் சுயவிவரம்",
-        "Your recording session will be stored on the server.": "உங்கள் பதிவு அமர்வு சேவையகத்தில் சேமிக்கப்படும்."
+        "Your recording session will be stored on the server.": "உங்கள் பதிவு அமர்வு சேவையகத்தில் சேமிக்கப்படும்.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "கூட்டத்தைத் தொடங்க ஒரு வழங்குபவர் தேவை. பின்னர் மீண்டும் சேர முயற்சிக்கவும்.",

@@ -7,7 +7,13 @@ const log = new Logger('Room');
 
 const { audioLevelObserverEnabled, activeSpeakerObserverEnabled } = config.mediasoup.router;
 
+// Events that are only worth something at the moment they are sent
+const VOLATILE_EVENTS = new Set(['audioVolume', 'dominantSpeaker', 'whiteboardPointer', 'chatTyping']);
+
 module.exports = class Room {
+    // TLLM*meet: (peer id) -> the browser closed its media connection itself (page closed)
+    static gone = null;
+
     // TLLM*meet: (room id, level, text, { who }) -> the meeting's log (see MeetingLog.js)
     static journal = null;
 
@@ -828,6 +834,11 @@ module.exports = class Room {
                     who: peer_name,
                 });
             }
+            if (dtlsState === 'closed') {
+                // Closed by the browser itself: the page is gone, this is not a network cut
+                peer.mediaClosedAt = Date.now();
+                Room.gone?.(socket_id);
+            }
             if (dtlsState === 'failed' || dtlsState === 'closed') {
                 log.warn('DTLS state changed, closing peer', {
                     peer_name: peer_name,
@@ -1333,6 +1344,9 @@ module.exports = class Room {
     }
 
     send(socket_id, action, data) {
+        // TLLM*meet: what is only worth something right now is not kept for someone whose connection
+        // is cut (see Resume.js), and is dropped rather than queued when their line is saturated
+        if (VOLATILE_EVENTS.has(action)) return this.io.to(socket_id).volatile.emit(action, data);
         this.io.to(socket_id).emit(action, data);
     }
 };

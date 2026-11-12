@@ -457,6 +457,19 @@ class RoomClient {
         this.webcamScalabilityMode = 'L3T3'; // Scalability Mode for webcam | 'L1T3' for VP8/H264 (in each simulcast encoding), 'L3T3_KEY' for VP9
         this.sharingScalabilityMode = 'L1T3'; // Scalability Mode for screen sharing | 'L1T3' for VP8/H264 (in each simulcast encoding), 'L3T3' for VP9
 
+        // TLLM*meet: what is sent at most, in bits per second. A meeting is faces and voices: these
+        // ceilings keep the picture clean and leave room on weak lines (ADSL, 4G, shared Wi-Fi).
+        // The camera goes out in three sizes; each person receives the one that fits the tile they
+        // look at (see syncVideoNeeds), never more.
+        this.sendBitrate = {
+            camSmall: 150000, // a quarter of the picture: a tile in a grid
+            camMedium: 450000, // half of the picture: a large tile
+            camFull: 1200000, // the whole picture: someone pinned or full screen
+            screen: 1500000, // a shared screen: text must stay sharp
+            audio: 32000, // one voice
+            videoStart: 300, // kbps, where the encoder starts before it has measured the line
+        };
+
         this.myVideoEl = null;
         this.myAudioEl = null;
         this.showPeerInfo = false; // on peerName mouse hover show additional info
@@ -1054,6 +1067,7 @@ class RoomClient {
                     break;
                 case 'failed':
                     console.warn('❌ Producer Transport failed', { id: this.producerTransport.id });
+                    this.restartProducerIce().catch(() => {});
                     break;
                 default:
                     console.log('Producer transport connection state changed', {
@@ -1132,6 +1146,7 @@ class RoomClient {
                     break;
                 case 'failed':
                     console.warn('❌ Consumer Transport failed', { id: this.consumerTransport.id });
+                    this.restartConsumerIce().catch(() => {});
                     break;
                 default:
                     console.log('Consumer transport connection state changed', {
@@ -1161,7 +1176,7 @@ class RoomClient {
     // HANDLE ICE
     // ####################################################
 
-    async restartTransportIce(transport, type) {
+    async restartTransportIce(transport, type, reason = '') {
         if (!transport || typeof transport !== 'object' || transport.closed) return false;
 
         try {
@@ -1170,9 +1185,14 @@ class RoomClient {
                 state: transport.connectionState,
             });
 
-            const iceParameters = await this.socket.request('restartIce', {
-                transport_id: transport.id,
-            });
+            const iceParameters = await this.socket.request(
+                'restartIce',
+                {
+                    transport_id: transport.id,
+                    reason,
+                },
+                8000
+            );
 
             if (!iceParameters) {
                 console.warn(`⚠️ No ${type} ICE Parameters received`);
@@ -1194,62 +1214,83 @@ class RoomClient {
         }
     }
 
-    async restartTransportWithRetry(transport, transportType, maxRetries = 5, initialDelay = 1000) {
-        let delay = initialDelay;
+    // TLLM*meet: resolves once the signalling socket is connected (at once if it is)
+    whenSocketConnected() {
+        if (this.socket.connected) return Promise.resolve();
+        return new Promise((resolve) => this.socket.once('connect', resolve));
+    }
 
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            const reconnected = await this.restartTransportIce(transport, transportType);
+    // TLLM*meet: the media connection of a transport is relaunched without touching what it carries.
+    // One relaunch at a time per transport. While the signalling is cut nothing can be asked from
+    // the server: we wait for it instead of burning attempts, and the transport is never closed here
+    // (a closed transport means camera, microphone and everybody's tiles to rebuild). If the
+    // signalling works and the media still cannot pass after every attempt, the page joins again.
+    async restartTransportWithRetry(transport, transportType, maxRetries = 5, initialDelay = 1000, reason = '') {
+        if (!transport || transport.closed) return false;
+        this.iceRestartsRunning = this.iceRestartsRunning || new Map();
+        const running = this.iceRestartsRunning.get(transport.id);
+        if (running) return running;
 
-            if (reconnected) {
-                console.info(`✅ ${transportType} reconnected successfully on attempt ${attempt}.`);
-                return true;
+        const run = (async () => {
+            let delay = initialDelay;
+
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                await this.whenSocketConnected();
+                // The socket has just come back: is our place kept? (see resumeAfterCut)
+                if (this.resuming) await this.resuming;
+                if (transport.closed) return false;
+
+                const reconnected = await this.restartTransportIce(transport, transportType, reason);
+
+                if (reconnected) {
+                    console.info(`✅ ${transportType} reconnected successfully on attempt ${attempt}.`);
+                    return true;
+                }
+
+                // A cut signalling is not a failed attempt
+                if (!this.socket.connected) attempt--;
+
+                if (attempt < maxRetries) {
+                    console.warn(
+                        `🌀 ${transportType} reconnection attempt ${attempt} failed. Retrying in ${delay}ms...`
+                    );
+                    await new Promise((resolve) => setTimeout(resolve, delay));
+                    delay = Math.min(delay * 2, 8000);
+                }
             }
 
-            if (attempt < maxRetries) {
-                console.warn(`🌀 ${transportType} reconnection attempt ${attempt} failed. Retrying in ${delay}ms...`);
-                await new Promise((resolve) => setTimeout(resolve, delay));
-                delay *= 2; // Exponential backoff: 1s -> 2s -> 4s -> 8s -> 16s
-            } else {
-                console.error(`❌ ${transportType} failed to reconnect after ${maxRetries} attempts.`);
-            }
+            console.error(`❌ ${transportType} failed to reconnect after ${maxRetries} attempts: joining again.`);
+            if (!transport.closed && transport.connectionState !== 'connected' && !isExiting) this.refreshBrowser();
+            return false;
+        })();
+
+        this.iceRestartsRunning.set(transport.id, run);
+        try {
+            return await run;
+        } finally {
+            this.iceRestartsRunning.delete(transport.id);
         }
-
-        console.error('❌ Failed to reconnect after multiple attempts.');
-        transport.close();
-
-        popupHtmlMessage(
-            null,
-            image.network,
-            `${transportType} Transport`,
-            'Unable to reconnect. Please check your network.',
-            'center',
-            false,
-            true
-        );
-
-        return false;
     }
 
-    async restartProducerIce(retries = 5, delay = 1000) {
-        return this.restartTransportWithRetry(this.producerTransport, 'Producer', retries, delay);
+    async restartProducerIce(retries = 5, delay = 1000, reason = '') {
+        return this.restartTransportWithRetry(this.producerTransport, 'Producer', retries, delay, reason);
     }
 
-    async restartConsumerIce(retries = 5, delay = 1000) {
-        return this.restartTransportWithRetry(this.consumerTransport, 'Consumer', retries, delay);
+    async restartConsumerIce(retries = 5, delay = 1000, reason = '') {
+        return this.restartTransportWithRetry(this.consumerTransport, 'Consumer', retries, delay, reason);
     }
 
-    async restartIce() {
+    async restartIce(reason = '') {
         if (this.iceRestarting) return;
 
         console.warn('Restart ICE...', {
-            producerTransportConnectionState: this.producerTransport.connectionState,
-            consumerTransportConnectionState: this.consumerTransport.connectionState,
+            producerTransportConnectionState: this.producerTransport?.connectionState,
+            consumerTransportConnectionState: this.consumerTransport?.connectionState,
         });
 
         try {
             this.iceRestarting = true;
-            await this.restartProducerIce();
-            await this.restartConsumerIce();
+            await Promise.all([this.restartProducerIce(5, 1000, reason), this.restartConsumerIce(5, 1000, reason)]);
             console.log('✅ Restart ICE done');
         } catch (error) {
             console.error('❌ Restart ICE error', error);
@@ -1320,7 +1361,9 @@ class RoomClient {
     // ####################################################
 
     handleSocketConnect = () => {
-        console.log('SocketOn Connected to signaling server!');
+        console.log('SocketOn Connected to signaling server!', { recovered: this.socket.recovered });
+        // TLLM*meet: back after a cut. Is our place kept, or do we join again?
+        if (this.cutAt) this.resuming = this.resumeAfterCut().finally(() => (this.resuming = null));
     };
 
     handleSocketDisconnect = (reason) => {
@@ -1338,8 +1381,9 @@ class RoomClient {
     };
 
     handleSocketReconnect = () => {
+        // What happens next is decided when the server has said whether our place is kept
+        // (handleSocketConnect), which comes right after
         console.log('SocketOn Reconnected to signaling server!');
-        this.handleReconnect();
     };
 
     handleSocketReconnectFailed = () => {
@@ -1358,7 +1402,17 @@ class RoomClient {
         );
         if (transport && !transport.closed) {
             console.warn('SocketOn Closing transport', { transport_id });
+            // TLLM*meet: the server gave up on this media connection (no network for too long, or
+            // our place was not kept). Closing it switches camera and microphone off: remember how
+            // they were, and join again by ourselves rather than stay in a meeting without sound
+            this.peerInfoAtCut = this.peerInfoAtCut || { ...this.peer_info };
             transport.close();
+            if (!isExiting && !this._forcedExitPending) {
+                this.whenSocketConnected().then(async () => {
+                    if (this.resuming) await this.resuming;
+                    this.rejoinAfterCut();
+                });
+            }
         }
     };
 
@@ -1859,11 +1913,12 @@ class RoomClient {
     showReconnectAlert(reason) {
         this.renderReconnectBanner({
             title: 'Connection lost',
-            message: `${reason || 'Network issue'}.`,
+            message: 'Reconnecting, stay on this page.',
             meta: 'Retrying',
             icon: 'fa-solid fa-plug',
             state: 'reconnecting',
             showSpinner: true,
+            blockUi: false,
         });
     }
 
@@ -1898,21 +1953,86 @@ class RoomClient {
         this.updateReconnectAlert(delay, currentAttempt);
     }
 
+    // TLLM*meet: the signalling is cut. Sound and image travel on their own and often go on: nothing
+    // is torn down. The server keeps our place for a while (app/src/Resume.js); the socket reconnects
+    // by itself and resumeAfterCut() says what to do then.
     handleDisconnect(reason) {
-        endRoomSession();
+        console.log('Disconnected.', reason);
 
+        if (isExiting || reason === 'io client disconnect') return;
+
+        this.cutAt = this.cutAt || Date.now();
+        // Camera and microphone as they are now, should we have to join again from a fresh page
+        this.peerInfoAtCut = this.peerInfoAtCut || { ...this.peer_info };
+        this.serverAwayShown = false;
+        this._isConnected = false;
+
+        // The server closed this connection itself: Socket.IO does not reconnect on its own then
+        if (reason === 'io server disconnect') {
+            this.rejoinAfterCut();
+            return;
+        }
+
+        this.showReconnectAlert(reason);
+    }
+
+    // The socket is connected again after a cut
+    async resumeAfterCut() {
+        let kept = false;
+        if (this.socket.recovered) {
+            try {
+                const answer = await this.socket.request('resume', {}, 8000);
+                kept = answer?.ok === true;
+            } catch (error) {
+                console.warn('Resume request failed', error);
+            }
+        }
+
+        if (!kept) return this.rejoinAfterCut();
+
+        console.info('✅ Back in the meeting without reloading', { awayMs: Date.now() - this.cutAt });
+        this.cutAt = null;
+        this.peerInfoAtCut = null;
+        this._isConnected = true;
+        this.closeReconnectAlert(true, false);
+
+        // The network may have changed (Wi-Fi to 4G): the media connections are relaunched on the
+        // new path, without waiting for the browser to notice by itself
+        this.restartIce('resume');
+    }
+
+    // Our place was not kept (too long away, server restarted): join again from a fresh page
+    rejoinAfterCut() {
+        if (this.rejoining || isExiting) return;
+        this.rejoining = true;
+
+        // Not in a loop: after three automatic returns in five minutes the person decides
+        let recent = [];
+        try {
+            recent = JSON.parse(sessionStorage.getItem('tllm-rejoins') || '[]').filter(
+                (at) => Date.now() - at < 5 * 60000
+            );
+            sessionStorage.setItem('tllm-rejoins', JSON.stringify([...recent, Date.now()]));
+        } catch {
+            /* no storage: no limit */
+        }
+        if (recent.length >= 3) {
+            this.rejoining = false;
+            this.closeReconnectAlert();
+            this.showMaxAttemptsAlert();
+            return;
+        }
+
+        endRoomSession();
         window.localStorage.isReconnected = true;
-        console.log('Disconnected.');
 
         // Immediately save recording if there is one, a paused one included.
         if (this.isRecording() || this.hasActiveRecorder()) {
             this.saveRecording('Socket disconnected');
         }
 
-        this.serverAwayShown = false;
-        this._isConnected = false;
-
-        this.showReconnectAlert(reason);
+        this.cutAt = null;
+        this.handleReconnect();
     }
 
     handleReconnectAttempt(attempt) {
@@ -1938,15 +2058,16 @@ class RoomClient {
 
         this.renderReconnectBanner({
             title: 'Reconnecting',
-            message: `Attempt ${attempt} of ${this.maxReconnectAttempts}.`,
-            meta: `Retry in ${seconds}s`,
+            message: 'Reconnecting, stay on this page.',
+            meta: `${attempt}`,
             icon: 'fa-solid fa-rotate-right',
             state: 'reconnecting',
             showSpinner: true,
+            blockUi: false,
         });
     }
 
-    closeReconnectAlert(showRestoredState = false) {
+    closeReconnectAlert(showRestoredState = false, reloading = true) {
         if (this.reconnectAlert) {
             this.reconnectAlert.close();
             this.reconnectAlert = null;
@@ -1960,7 +2081,7 @@ class RoomClient {
         this.renderReconnectBanner({
             title: 'Back online',
             message: 'Connection restored.',
-            meta: 'Reloading',
+            meta: reloading ? 'Reloading' : '',
             icon: 'fa-solid fa-wifi',
             state: 'restored',
             showSpinner: false,
@@ -2023,7 +2144,16 @@ class RoomClient {
     }
 
     refreshBrowser() {
-        this.updatePeerInfoInLocalStorage();
+        if (this.peerInfoAtCut) {
+            // As they were before the cut: what was closed since then does not count
+            try {
+                localStorage.setItem('sfu_peer_info', JSON.stringify(this.peerInfoAtCut));
+            } catch (e) {
+                console.warn('Unable to save sfu_peer_info to localStorage:', e);
+            }
+        } else {
+            this.updatePeerInfoInLocalStorage();
+        }
         const reconnectDirectJoinURL = this.getReconnectDirectJoinURL();
         setTimeout(() => {
             runRoomExit(() => {
@@ -2344,12 +2474,15 @@ class RoomClient {
             };
 
             if (audio) {
-                console.log('AUDIO ENABLE OPUS (channelCount: 2)');
+                // TLLM*meet: a voice is mono; nothing is sent during silences (DTX), and a lost packet
+                // is rebuilt from the next one (FEC) rather than heard as a hole
+                console.log('AUDIO ENABLE OPUS (mono voice)');
                 params.codecOptions = {
-                    opusStereo: true,
+                    opusStereo: false,
                     opusDtx: true,
                     opusFec: true,
                     opusNack: true,
+                    opusMaxAverageBitrate: this.sendBitrate.audio,
                 };
             }
 
@@ -2362,7 +2495,7 @@ class RoomClient {
                 params.encodings = encodings;
                 params.codec = codec;
                 params.codecOptions = {
-                    videoGoogleStartBitrate: 1000,
+                    videoGoogleStartBitrate: this.sendBitrate.videoStart,
                 };
             }
 
@@ -2375,7 +2508,7 @@ class RoomClient {
                 params.encodings = encodings;
                 params.codec = codec;
                 params.codecOptions = {
-                    videoGoogleStartBitrate: 1000,
+                    videoGoogleStartBitrate: this.sendBitrate.videoStart,
                 };
             }
 
@@ -3081,7 +3214,7 @@ class RoomClient {
                 console.log('WEBCAM ENCODING: VP9 or AV1 with SVC');
                 encodings = [
                     {
-                        maxBitrate: 5000000,
+                        maxBitrate: this.sendBitrate.camFull,
                         scalabilityMode: this.webcamScalabilityMode || 'L3T3_KEY',
                     },
                 ];
@@ -3090,21 +3223,22 @@ class RoomClient {
                 encodings = [
                     {
                         scaleResolutionDownBy: 1,
-                        maxBitrate: 5000000,
+                        maxBitrate: this.sendBitrate.camFull,
                         scalabilityMode: this.webcamScalabilityMode || 'L1T3',
                     },
                 ];
                 if (this.numSimulcastStreamsWebcam > 1) {
                     encodings.unshift({
                         scaleResolutionDownBy: 2,
-                        maxBitrate: 1000000,
+                        maxBitrate: this.sendBitrate.camMedium,
                         scalabilityMode: this.webcamScalabilityMode || 'L1T3',
                     });
                 }
                 if (this.numSimulcastStreamsWebcam > 2) {
                     encodings.unshift({
                         scaleResolutionDownBy: 4,
-                        maxBitrate: 500000,
+                        maxBitrate: this.sendBitrate.camSmall,
+                        maxFramerate: 15,
                         scalabilityMode: this.webcamScalabilityMode || 'L1T3',
                     });
                 }
@@ -3161,7 +3295,7 @@ class RoomClient {
                 console.log('SCREEN ENCODING: VP9 or AV1 with SVC');
                 encodings = [
                     {
-                        maxBitrate: 5000000,
+                        maxBitrate: this.sendBitrate.screen,
                         scalabilityMode: this.sharingScalabilityMode || 'L3T3',
                         dtx: true,
                     },
@@ -3171,7 +3305,7 @@ class RoomClient {
                 encodings = [
                     {
                         scaleResolutionDownBy: 1,
-                        maxBitrate: 5000000,
+                        maxBitrate: this.sendBitrate.screen,
                         scalabilityMode: this.sharingScalabilityMode || 'L1T3',
                         dtx: true,
                     },
@@ -3179,7 +3313,7 @@ class RoomClient {
                 if (this.numSimulcastStreamsSharing > 1) {
                     encodings.unshift({
                         scaleResolutionDownBy: 2,
-                        maxBitrate: 1000000,
+                        maxBitrate: this.sendBitrate.camMedium,
                         scalabilityMode: this.sharingScalabilityMode || 'L1T3',
                         dtx: true,
                     });
@@ -3187,7 +3321,7 @@ class RoomClient {
                 if (this.numSimulcastStreamsSharing > 2) {
                     encodings.unshift({
                         scaleResolutionDownBy: 4,
-                        maxBitrate: 500000,
+                        maxBitrate: this.sendBitrate.camSmall,
                         scalabilityMode: this.sharingScalabilityMode || 'L1T3',
                         dtx: true,
                     });
@@ -3198,7 +3332,7 @@ class RoomClient {
             encodings = [
                 {
                     scaleResolutionDownBy: 1,
-                    maxBitrate: 5000000,
+                    maxBitrate: this.sendBitrate.screen,
                     dtx: true,
                 },
             ];

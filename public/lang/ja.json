@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "参加リクエストがモデレーターによって承認されました.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "参加リクエストがモデレーターによって拒否されました。ルームが利用可能になったら後で再試行できます.",
         "Your profile": "あなたのプロフィール",
-        "Your recording session will be stored on the server.": "録画データはサーバーに保存されます."
+        "Your recording session will be stored on the server.": "録画データはサーバーに保存されます.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "会議を開始するにはプレゼンターが必要です。後でもう一度参加をお試しください.",

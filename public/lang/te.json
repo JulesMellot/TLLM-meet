@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "మీ చేరిక అభ్యర్థనను మోడరేటర్ ఆమోదించారు.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "మీ చేరిక అభ్యర్థనను మోడరేటర్ తిరస్కరించారు. గది అందుబాటులోకి వస్తే మీరు తర్వాత మళ్లీ ప్రయత్నించవచ్చు.",
         "Your profile": "మీ ప్రొఫైల్",
-        "Your recording session will be stored on the server.": "మీ రికార్డింగ్ సెషన్ సర్వర్‌లో నిల్వ చేయబడుతుంది."
+        "Your recording session will be stored on the server.": "మీ రికార్డింగ్ సెషన్ సర్వర్‌లో నిల్వ చేయబడుతుంది.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "సమావేశాన్ని ప్రారంభించడానికి ప్రెజెంటర్ అవసరం. దయచేసి తర్వాత మళ్లీ చేరడానికి ప్రయత్నించండి.",

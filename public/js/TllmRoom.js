@@ -196,6 +196,8 @@
         watchLayout();
         listenToRoom();
         window.tllmTranscript?.init();
+        // Each picture received at the size of its tile, nothing for what is not visible
+        T.network = window.TllmNetwork?.start(rc);
         T.refreshPeers();
         T.renderBar();
         setInterval(tick, 1000);
@@ -1103,6 +1105,12 @@
             T.refreshPeersSoon();
         });
         rc.socket.on('updatePeerInfo', () => T.refreshPeersSoon());
+        // Someone's connection is cut: they keep their place for a while, their tile says so
+        rc.socket.on('peerAway', (data) => {
+            document
+                .querySelectorAll(`#videoMediaContainer .Camera[data-peer-id="${CSS.escape(data?.peer_id || '')}"]`)
+                .forEach((tile) => tile.classList.toggle('tllm-away', !!data.away));
+        });
         rc.socket.on('sharePermission', (data) => {
             if (!data?.peer_id) return;
             if (data.allowed) T.sharers.add(data.peer_id);

@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "您的加入请求已获主持人批准.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "您的加入请求已被主持人拒绝. 如果房间重新开放，您可以稍后再试. ",
         "Your profile": "您的个人资料",
-        "Your recording session will be stored on the server.": "您的录制内容将保存到服务器上."
+        "Your recording session will be stored on the server.": "您的录制内容将保存到服务器上.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "需要主持人先开始会议. 请稍后再尝试加入. ",

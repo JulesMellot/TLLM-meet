@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "El moderador ha aprobado tu solicitud de entrada.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "El moderador ha rechazado tu solicitud de entrada. Puedes intentarlo de nuevo más tarde si la sala queda disponible.",
         "Your profile": "Tu perfil",
-        "Your recording session will be stored on the server.": "Tu sesión de grabación se almacenará en el servidor."
+        "Your recording session will be stored on the server.": "Tu sesión de grabación se almacenará en el servidor.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "Se necesita un presentador para iniciar la reunión. Intenta entrar de nuevo más tarde.",

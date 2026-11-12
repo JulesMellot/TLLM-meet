@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "Votre demande d'entrée a été approuvée par le modérateur.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "Votre demande d'entrée a été refusée par le modérateur. Vous pourrez réessayer plus tard si la visio redevient disponible.",
         "Your profile": "Votre profil",
-        "Your recording session will be stored on the server.": "Votre session d'enregistrement sera stockée sur le serveur."
+        "Your recording session will be stored on the server.": "Votre session d'enregistrement sera stockée sur le serveur.",
+        "Reconnecting, stay on this page.": "Reconnexion en cours, restez sur cette page.",
+        "Connection restored.": "Connexion rétablie.",
+        "Connection could not be restored.": "La connexion n’a pas pu être rétablie.",
+        "Retrying": "Nouvelle tentative",
+        "Reloading": "Rechargement"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "Un présentateur est nécessaire pour démarrer la visio. Réessayez plus tard.",

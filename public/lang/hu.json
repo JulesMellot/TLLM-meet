@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "A csatlakozási kérelmedet a moderátor jóváhagyta.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "A csatlakozási kérelmedet a moderátor elutasította. Később újra próbálkozhatsz, ha a szoba elérhetővé válik.",
         "Your profile": "A profilod",
-        "Your recording session will be stored on the server.": "A felvételi munkameneted a szerveren lesz tárolva."
+        "Your recording session will be stored on the server.": "A felvételi munkameneted a szerveren lesz tárolva.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "A megbeszélés indításához előadó szükséges. Próbálj meg később újra csatlakozni.",

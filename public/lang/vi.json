@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "Yêu cầu tham gia của bạn đã được người điều hành chấp thuận.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "Yêu cầu tham gia của bạn đã bị người điều hành từ chối. Bạn có thể thử lại sau nếu phòng mở lại.",
         "Your profile": "Hồ sơ của bạn",
-        "Your recording session will be stored on the server.": "Phiên ghi của bạn sẽ được lưu trên máy chủ."
+        "Your recording session will be stored on the server.": "Phiên ghi của bạn sẽ được lưu trên máy chủ.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "Cần có người trình bày để bắt đầu cuộc họp. Vui lòng thử tham gia lại sau.",

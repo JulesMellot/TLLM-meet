@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "Ваш запрос на вход был одобрен модератором.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "Ваш запрос на вход был отклонён модератором. Вы можете повторить попытку позже, если комната станет доступной.",
         "Your profile": "Ваш профиль",
-        "Your recording session will be stored on the server.": "Ваша запись будет сохранена на сервере."
+        "Your recording session will be stored on the server.": "Ваша запись будет сохранена на сервере.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "Для начала встречи требуется ведущий. Попробуйте войти снова позже.",

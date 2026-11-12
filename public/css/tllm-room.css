@@ -228,6 +228,29 @@ body.tllm-room .Camera:has([id$='__audio'].fa-microphone-slash) .username::befor
     margin-right: 6px;
     color: var(--tllm-danger);
 }
+/* Someone whose connection is cut keeps their place for a while (app/src/Resume.js): their tile says so */
+body.tllm-room .Camera.tllm-away video,
+body.tllm-room .Camera.tllm-away img {
+    opacity: 0.35;
+}
+body.tllm-room .Camera.tllm-away::after {
+    content: 'Connexion instable…';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font-family: var(--tllm-font);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
 body.tllm-room .Camera .user-hand {
     aspect-ratio: auto !important;
     gap: 0;

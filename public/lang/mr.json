@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "तुमची सामील होण्याची विनंती मॉडरेटराने मंजूर केली आहे.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "तुमची सामील होण्याची विनंती मॉडरेटराने नाकारली. रूम उपलब्ध झाल्यास तुम्ही नंतर पुन्हा प्रयत्न करू शकता.",
         "Your profile": "तुमचे प्रोफाइल",
-        "Your recording session will be stored on the server.": "तुमचे रेकॉर्डिंग सेशन सर्व्हरवर सेव्ह होईल."
+        "Your recording session will be stored on the server.": "तुमचे रेकॉर्डिंग सेशन सर्व्हरवर सेव्ह होईल.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "मीटिंग सुरू करण्यासाठी प्रस्तुतकर्ता आवश्यक आहे. कृपया नंतर पुन्हा सामील होण्याचा प्रयत्न करा.",

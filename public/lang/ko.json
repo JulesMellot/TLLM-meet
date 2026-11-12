@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "진행자가 참가 요청을 승인했습니다.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "진행자가 참가 요청을 거부했습니다. 방이 사용 가능해지면 나중에 다시 시도할 수 있습니다.",
         "Your profile": "내 프로필",
-        "Your recording session will be stored on the server.": "녹화 세션이 서버에 저장됩니다."
+        "Your recording session will be stored on the server.": "녹화 세션이 서버에 저장됩니다.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "회의를 시작하려면 발표자가 필요합니다. 나중에 다시 참가해 주세요.",

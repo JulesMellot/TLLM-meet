@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "Katılma isteğiniz moderatör tarafından onaylandı.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "Katılma isteğiniz moderatör tarafından reddedildi. Oda uygun hale gelirse daha sonra tekrar deneyebilirsiniz.",
         "Your profile": "Profiliniz",
-        "Your recording session will be stored on the server.": "Kayıt oturumunuz sunucuda saklanacak."
+        "Your recording session will be stored on the server.": "Kayıt oturumunuz sunucuda saklanacak.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "Toplantıyı başlatmak için bir sunumcu gerekli. Lütfen daha sonra yeniden katılmayı deneyin.",

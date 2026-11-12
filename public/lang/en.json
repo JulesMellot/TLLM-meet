@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "Your join request was approved by the moderator.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "Your join request was rejected by the moderator. You can try again later if the room becomes available.",
         "Your profile": "Your profile",
-        "Your recording session will be stored on the server.": "Your recording session will be stored on the server."
+        "Your recording session will be stored on the server.": "Your recording session will be stored on the server.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "A presenter is required to start the meeting. Please try joining again later.",

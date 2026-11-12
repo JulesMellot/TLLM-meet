@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "আপনার যোগদানের অনুরোধ মডারেটর দ্বারা অনুমোদিত হয়েছে.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "আপনার যোগদানের অনুরোধ মডারেটর দ্বারা প্রত্যাখ্যান করা হয়েছে. রুম উপলব্ধ হলে আপনি পরে আবার চেষ্টা করতে পারেন.",
         "Your profile": "আপনার প্রোফাইল",
-        "Your recording session will be stored on the server.": "আপনার রেকর্ডিং সেশন সার্ভারে সংরক্ষিত হবে."
+        "Your recording session will be stored on the server.": "আপনার রেকর্ডিং সেশন সার্ভারে সংরক্ষিত হবে.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "মিটিং শুরু করতে একজন উপস্থাপক প্রয়োজন. অনুগ্রহ করে পরে আবার যোগ দেওয়ার চেষ্টা করুন.",

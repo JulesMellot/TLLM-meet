@@ -177,4 +177,67 @@ describe('test-Peer', () => {
         peer.consumers.size.should.equal(0);
         peer.consumerCreatePromises.size.should.equal(0);
     });
+
+    describe('what the receiver looks at (setConsumerNeed)', () => {
+        const videoConsumer = (type = 'simulcast') => {
+            const calls = [];
+            const consumer = {
+                id: 'video-consumer',
+                kind: 'video',
+                type,
+                closed: false,
+                paused: false,
+                rtpParameters: { encodings: [{ scalabilityMode: 'L3T3' }] },
+                pause: async () => {
+                    consumer.paused = true;
+                    calls.push('pause');
+                },
+                resume: async () => {
+                    consumer.paused = false;
+                    calls.push('resume');
+                },
+                setPreferredLayers: async (layers) => calls.push(layers),
+            };
+            return { consumer, calls };
+        };
+
+        it('sends nothing for a hidden tile, and the right size when it is back', async () => {
+            const peer = createPeer();
+            const { consumer, calls } = videoConsumer();
+            peer.consumers.set(consumer.id, consumer);
+
+            (await peer.setConsumerNeed(consumer.id, -1)).should.be.true();
+            (await peer.setConsumerNeed(consumer.id, -1)).should.be.true();
+            calls.should.eql(['pause']);
+
+            await peer.setConsumerNeed(consumer.id, 0);
+            calls.should.eql(['pause', { spatialLayer: 0, temporalLayer: 2 }, 'resume']);
+
+            // Never more than what the camera sends
+            await peer.setConsumerNeed(consumer.id, 7);
+            calls[calls.length - 1].should.eql({ spatialLayer: 2, temporalLayer: 2 });
+        });
+
+        it('only pauses or resumes a picture sent in one size (a shared screen)', async () => {
+            const peer = createPeer();
+            const { consumer, calls } = videoConsumer('simple');
+            peer.consumers.set(consumer.id, consumer);
+
+            await peer.setConsumerNeed(consumer.id, 1);
+            await peer.setConsumerNeed(consumer.id, -1);
+            await peer.setConsumerNeed(consumer.id, 2);
+            calls.should.eql(['pause', 'resume']);
+        });
+
+        it('never touches a voice, nor a consumer of somebody else', async () => {
+            const peer = createPeer();
+            const { consumer, calls } = videoConsumer();
+            consumer.kind = 'audio';
+            peer.consumers.set(consumer.id, consumer);
+
+            (await peer.setConsumerNeed(consumer.id, -1)).should.be.false();
+            (await peer.setConsumerNeed('unknown', -1)).should.be.false();
+            calls.should.eql([]);
+        });
+    });
 });

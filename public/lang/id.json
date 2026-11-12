@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "Permintaan bergabung Anda disetujui oleh moderator.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "Permintaan bergabung Anda ditolak oleh moderator. Anda dapat mencoba lagi nanti jika ruang tersedia.",
         "Your profile": "Profil Anda",
-        "Your recording session will be stored on the server.": "Sesi perekaman Anda akan disimpan di server."
+        "Your recording session will be stored on the server.": "Sesi perekaman Anda akan disimpan di server.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "Presenter diperlukan untuk memulai rapat. Silakan coba bergabung lagi nanti.",

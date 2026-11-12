@@ -40,19 +40,25 @@ const showDocumentPipBtn = !isEmbedded && 'documentPictureInPicture' in window;
  *
  * @property {string[]} transports - The transport mechanisms to use. Default: ['polling', 'websocket']. Here, only ['websocket'] is used.
  * @property {boolean} reconnection - Whether to automatically reconnect if connection is lost. Default: true.
- * @property {number} reconnectionAttempts - Maximum number of reconnection attempts before giving up. Default: Infinity. Here, set to 10.
- * @property {number} reconnectionDelay - How long to initially wait before attempting a new reconnection (in ms). Default: 1000. Here, set to 3000.
- * @property {number} reconnectionDelayMax - Maximum amount of time to wait between reconnections (in ms). Default: 5000. Here, set to 15000.
- * @property {number} timeout - Connection timeout before an error is emitted (in ms). Default: 20000.
+ * @property {number} reconnectionAttempts - Maximum number of reconnection attempts before giving up. Default: Infinity. Here, set to 60.
+ * @property {number} reconnectionDelay - How long to initially wait before attempting a new reconnection (in ms). Default: 1000. Here, set to 500.
+ * @property {number} reconnectionDelayMax - Maximum amount of time to wait between reconnections (in ms). Default: 5000. Here, set to 4000.
+ * @property {number} timeout - Connection timeout before an error is emitted (in ms). Default: 20000. Here, set to 10000.
  */
 const socket = io({
     transports: ['websocket'],
     reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 3000,
-    reconnectionDelayMax: 15000,
-    timeout: 20000,
+    // TLLM*meet: after a cut the server keeps our place for 45 s (app/src/Resume.js): the first
+    // attempts come fast, then every 4 s for about four minutes
+    reconnectionAttempts: 60,
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 4000,
+    randomizationFactor: 0.3,
+    timeout: 10000,
 });
+
+// TLLM*meet: a closed page says goodbye, so that the server does not keep a place for it
+window.addEventListener('pagehide', (e) => !e.persisted && socket.connected && socket.disconnect());
 
 let survey = {
     enabled: true,
@@ -91,6 +97,10 @@ const _PEER = {
 };
 
 const initUser = document.getElementById('initUser');
+// TLLM*meet: the join form leaves the page once the person is in. This button is hidden again later
+// (roomIsReady, on a phone): without a reference of our own that line failed with "is not defined"
+// and the rest of the room set-up was skipped (seen on phones in the meeting logs).
+const initVideoAudioRefreshButton = document.getElementById('initVideoAudioRefreshButton');
 const initVideoContainerClass = document.querySelector('.init-video-container');
 const bars = document.querySelectorAll('.volume-bar');
 

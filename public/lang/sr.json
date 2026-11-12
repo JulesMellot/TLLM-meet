@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "Vaš zahtev za pridruživanje je odobrio moderator.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "Vaš zahtev za pridruživanje je odbio moderator. Možete pokušati kasnije ako soba postane dostupna.",
         "Your profile": "Vaš profil",
-        "Your recording session will be stored on the server.": "Vaša sesija snimanja biće sačuvana na serveru."
+        "Your recording session will be stored on the server.": "Vaša sesija snimanja biće sačuvana na serveru.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "Za početak sastanka potreban je voditelj. Pokušajte da se pridružite ponovo kasnije.",

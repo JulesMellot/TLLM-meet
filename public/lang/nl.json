@@ -963,7 +963,12 @@
         "Your join request was approved by the moderator.": "Je verzoek om deel te nemen is goedgekeurd door de moderator.",
         "Your join request was rejected by the moderator. You can try again later if the room becomes available.": "Je verzoek om deel te nemen is geweigerd door de moderator. Je kunt het later opnieuw proberen als de ruimte beschikbaar komt.",
         "Your profile": "Je profiel",
-        "Your recording session will be stored on the server.": "Je opnamesessie wordt op de server bewaard."
+        "Your recording session will be stored on the server.": "Je opnamesessie wordt op de server bewaard.",
+        "Reconnecting, stay on this page.": "Reconnecting, stay on this page.",
+        "Connection restored.": "Connection restored.",
+        "Connection could not be restored.": "Connection could not be restored.",
+        "Retrying": "Retrying",
+        "Reloading": "Reloading"
     },
     "dialogs": {
         "A presenter is required to start the meeting. Please try joining again later.": "Er is een presentator nodig om de vergadering te starten. Probeer het later opnieuw.",

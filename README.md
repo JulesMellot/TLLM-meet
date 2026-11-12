@@ -138,7 +138,7 @@ L'admin voit, en bas de l'accueil, le bloc **Serveur** (les modérateurs ne le v
 
 Chaque visio a aussi son **journal**, ouvert depuis l'historique (bouton **Journal**), avec le nombre d'alertes
 et d'erreurs à côté : arrivées et départs (avec le navigateur, le système et la raison du départ : page fermée,
-connexion perdue…), retours après une coupure, réseau coupé ou revenu, partage d'écran, début et fin de la
+connexion perdue…), retours après une coupure (avec ou sans rechargement de la page), réseau coupé ou revenu, partage d'écran, début et fin de la
 transcription, erreurs survenues dans la page de quelqu'un, et les alertes du serveur pendant qu'il traitait la
 demande d'une personne. On peut n'afficher que les problèmes, et télécharger le journal en texte. Il est gardé
 dans `DATA_DIR/journaux`, un fichier par visio, pendant `LOG_RETENTION_DAYS` jours (30 par défaut). Il contient
@@ -151,6 +151,36 @@ que sans aucune visio. Les données échangées sont exactes. L'historique est g
 (les 2 000 dernières visios).
 
 `/healthz` répond `{"ok":true}` quand le serveur et ses workers tournent : c'est le contrôle de santé de Docker.
+
+## Réseau : tenir sur une connexion fragile
+
+Deux choses font qu'une visio tient sur une ligne faible (4G, Wi-Fi partagé, ADSL) : ne pas sortir quelqu'un
+à la moindre coupure, et envoyer le moins de données possible.
+
+**Une coupure n'est pas un départ.** Le son et l'image ne passent pas par la même connexion que le reste
+(arrivées, messages, boutons). Quand cette seconde connexion tombe une ou deux secondes, la personne garde sa
+place pendant `RECONNECT_GRACE_SECONDS` (45 secondes par défaut) : sa page ne se recharge pas, son micro et sa
+caméra restent ouverts, les autres continuent de la voir et de l'entendre si le son et l'image passent encore.
+Au retour, le navigateur reprend là où il en était, reçoit ce qu'il a manqué et relance la connexion du son et
+de l'image sur le nouveau chemin (passage du Wi-Fi à la 4G). Pendant la coupure, sa vignette affiche
+« Connexion instable… » chez les autres. Sans retour dans le délai, la personne sort de la salle, et sa page la
+fait rentrer toute seule dès que le réseau revient, micro et caméra comme avant. Une page fermée est un départ
+immédiat.
+
+**Le moins de données possible.**
+
+- La caméra part en trois tailles (150, 450 et 1 200 kbit/s au plus). Chaque personne ne reçoit, pour chaque
+  vignette, que la taille que cette vignette occupe sur son écran.
+- Une image que personne ne voit n'est pas envoyée : vignette masquée ou hors de l'écran, page en arrière-plan
+  sur un téléphone. Le son continue.
+- La voix part en mono à 32 kbit/s, rien pendant les silences.
+- Ce que le serveur envoie à quelqu'un commence bas et monte tant que sa ligne suit. Rien n'est imposé à une
+  ligne qui ne suit pas : l'image baisse, puis s'arrête, le son reste.
+
+Les plafonds se règlent dans `.env` (`SFU_INITIAL_OUTGOING_BITRATE`, `SFU_MIN_OUTGOING_BITRATE`,
+`SFU_MAX_INCOMING_BITRATE`) ; ceux de la caméra et de l'écran sont dans `public/js/RoomClient.js`
+(`sendBitrate`). Si `app/src/config.js` est monté à la main plutôt que copié depuis `config.template.js`, il
+faut y reporter le bloc `webRtcTransport`.
 
 ## Déploiement (Coolify derrière Cloudflare)
 

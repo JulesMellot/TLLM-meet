@@ -846,7 +846,7 @@ module.exports = {
                     mimeType: 'video/VP8',
                     clockRate: 90000, // Standard video clock rate
                     parameters: {
-                        'x-google-start-bitrate': 1000, // Initial bitrate (kbps)
+                        'x-google-start-bitrate': 300, // Initial bitrate (kbps)
                     },
                 },
 
@@ -858,7 +858,7 @@ module.exports = {
                     clockRate: 90000,
                     parameters: {
                         'profile-id': 0, // Baseline profile
-                        'x-google-start-bitrate': 1000,
+                        'x-google-start-bitrate': 300,
                     },
                 },
 
@@ -869,7 +869,7 @@ module.exports = {
                     clockRate: 90000,
                     parameters: {
                         'profile-id': 2, // Advanced profile
-                        'x-google-start-bitrate': 1000,
+                        'x-google-start-bitrate': 300,
                     },
                 },
 
@@ -882,7 +882,7 @@ module.exports = {
                         'packetization-mode': 1, // Required for WebRTC
                         'profile-level-id': '42e01f', // Baseline 3.1
                         'level-asymmetry-allowed': 1, // Allows different levels
-                        'x-google-start-bitrate': 1000,
+                        'x-google-start-bitrate': 300,
                     },
                 },
 
@@ -895,7 +895,7 @@ module.exports = {
                         'packetization-mode': 1,
                         'profile-level-id': '4d0032', // Main 4.0
                         'level-asymmetry-allowed': 1,
-                        'x-google-start-bitrate': 1000,
+                        'x-google-start-bitrate': 300,
                     },
                 },
             ],
@@ -1018,9 +1018,13 @@ module.exports = {
              * - These values should be tuned based on Node resources
              * - Consider network plugin overhead (Calico, Cilium etc.)
              */
-            initialAvailableOutgoingBitrate: 2500000, // 2.5 Mbps initial bitrate
-            minimumAvailableOutgoingBitrate: 1000000, // 1 Mbps minimum guaranteed
-            maxIncomingBitrate: 3000000, // 3 Mbps max per producer
+            // TLLM*meet: light on the network. What is sent to someone starts low and climbs as their
+            // line proves it can take it; nothing is forced on a line that cannot (the former 1 Mbps
+            // floor saturated weak lines: frozen pictures, then cuts). 0 = no floor (mediasoup's own).
+            initialAvailableOutgoingBitrate: Number(process.env.SFU_INITIAL_OUTGOING_BITRATE) || 600000,
+            minimumAvailableOutgoingBitrate: Number(process.env.SFU_MIN_OUTGOING_BITRATE) || 0,
+            // What one person may send in all: camera in three sizes (1.8 Mbps) or camera and screen
+            maxIncomingBitrate: Number(process.env.SFU_MAX_INCOMING_BITRATE) || 3500000,
 
             /**
              * Data Channel Settings (mediasoup 3.20.0+)

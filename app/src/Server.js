@@ -91,6 +91,7 @@ const { RoomRegistry } = require('./RoomRegistry');
 const { Transcripts } = require('./Transcripts');
 const { Usage } = require('./Usage');
 const { MeetingLog } = require('./MeetingLog');
+const { Resume, takeOverLiveSessions } = require('./Resume');
 const { AsyncLocalStorage } = require('async_hooks');
 const { Moderators, ModeratorError } = require('./Moderators');
 const log = new Logger('Server');
@@ -142,11 +143,30 @@ const corsOptions = {
 
 const server = httpolyglot.createServer(options, app);
 
+// TLLM*meet: someone whose connection drops keeps their place for RECONNECT_GRACE_SECONDS (see
+// Resume.js); 0 goes back to "removed at once, the page reloads".
+const reconnectGraceMs = Math.max(0, Number(process.env.RECONNECT_GRACE_SECONDS ?? 45) || 0) * 1000;
+// Every STATE_BEAT_MS each person gets one tiny event: the browser always holds a recent event
+// number, without which Socket.IO cannot say what was missed during a cut.
+const STATE_BEAT_MS = 20000;
+
 const io = socketIo(server, {
     maxHttpBufferSize: 1e7,
     transports: ['websocket'],
     cors: corsOptions,
+    // A dead connection is noticed in 30 s at most (it was 45 s): the sooner the server knows, the
+    // sooner the person can take their place back
+    pingInterval: 10000,
+    pingTimeout: 20000,
+    ...(reconnectGraceMs > 0 && {
+        connectionStateRecovery: {
+            maxDisconnectionDuration: reconnectGraceMs + 15000,
+            skipMiddlewares: true,
+        },
+    }),
 });
+const resume = new Resume({ graceMs: reconnectGraceMs });
+if (resume.enabled) takeOverLiveSessions(io);
 
 const host = config?.server?.hostUrl || `http://localhost:${config?.server?.listen?.port || 3010}`;
 const trustProxy = config?.server?.trustProxy || false;
@@ -353,6 +373,8 @@ const meetingLog = new MeetingLog({
 meetingLog.purge();
 setInterval(() => meetingLog.purge(), 6 * 3600 * 1000).unref();
 Room.journal = (roomId, level, text, options) => meetingLog.add(roomId, level, text, options);
+// The browser of someone away closed its media connection itself: the page is gone, not the network
+Room.gone = (peerId) => resume.expire(peerId, 'page');
 
 // A meeting starts and ends with its usage record and its log
 function openMeeting(roomId) {
@@ -424,6 +446,7 @@ const LEAVE_REASONS = {
     'client namespace disconnect': ['info', 'départ (page fermée)'],
     'server namespace disconnect': ['info', 'déconnexion par le serveur'],
     'ping timeout': ['warn', 'connexion perdue : le navigateur ne répondait plus'],
+    'forced close': ['warn', 'connexion coupée : le réseau a changé'],
     'transport close': ['warn', 'connexion coupée (réseau ou page fermée brusquement)'],
     'transport error': ['warn', 'connexion coupée : erreur réseau'],
     'parse error': ['error', 'connexion fermée : message illisible'],
@@ -1702,9 +1725,43 @@ function startServer() {
     // SOCKET IO
     // ####################################################
 
-    const PRE_JOIN_EVENTS = new Set(['createRoom', 'join', 'clientError', 'error']);
+    const PRE_JOIN_EVENTS = new Set(['createRoom', 'join', 'resume', 'clientError', 'error']);
+
+    // TLLM*meet: one tiny event to everybody now and then (see STATE_BEAT_MS)
+    if (resume.enabled) {
+        setInterval(() => {
+            for (const room of roomList.values()) room.sendToAll('beat', 0);
+        }, STATE_BEAT_MS).unref();
+    }
 
     io.on('connection', (socket) => {
+        // TLLM*meet: back after a network cut, within the grace period (see Resume.js). Socket.IO gave
+        // this connection the id, the rooms and the missed events of the one that dropped; the person
+        // is still in the meeting with their transports, so nothing is rebuilt.
+        if (socket.recovered) {
+            const back = resume.take(socket.id);
+            if (back && roomList.get(back.state.room_id)?.getPeer(socket.id)) {
+                socket.room_id = back.state.room_id;
+                socket.roomUnlock = back.state.roomUnlock;
+                const peer = roomList.get(socket.room_id).getPeer(socket.id);
+                droppedPeople.get(socket.room_id)?.delete(personKey(peer.peer_info));
+                meetingLog.add(
+                    socket.room_id,
+                    'info',
+                    `retour après ${Math.max(1, Math.round(back.awayMs / 1000))} s de coupure, sans recharger la page`,
+                    { who: peer.peer_name }
+                );
+                roomList.get(socket.room_id).broadCast(socket.id, 'peerAway', { peer_id: socket.id, away: false });
+            }
+        }
+
+        // Did this connection keep its place in the meeting? Asked by the browser when it reconnects:
+        // if not, it joins again from scratch (page reload)
+        socket.on('resume', (_, callback) => {
+            if (typeof callback !== 'function') return;
+            callback({ ok: Boolean(roomExists(socket) && getPeer(socket)) });
+        });
+
         // TLLM*meet: the handler of each event runs with its socket known to Logger.hook (meeting log)
         socket.use((packet, next) => requestContext.run(socket, next));
 
@@ -1849,10 +1906,14 @@ function startServer() {
                 return cb('isBanned');
             }
 
-            const usernameExists = [...room.getPeers().values()].some(
+            // TLLM*meet: the same name is refused, unless it is the same person coming back from a
+            // fresh page: their previous connection is away (network cut) or belongs to the same
+            // browser. That previous one is removed below, once the new one is in.
+            const twin = [...room.getPeers().values()].find(
                 (peer) => peer.id !== socket.id && peer.peer_name === peer_name
             );
-            if (usernameExists) return cb('isNameInUse');
+            const twinIsMe = Boolean(twin && (resume.has(twin.id) || (peer_uuid && twin.peer_uuid === peer_uuid)));
+            if (twin && !twinIsMe) return cb('isNameInUse');
 
             // The admin (or the moderator who owns the room) is always presenter (and cannot be demoted). A guest is presenter only if a
             // presenter promoted this very socket during the meeting (stored server-side).
@@ -1879,6 +1940,10 @@ function startServer() {
             }
 
             room.addPeer(new Peer(socket.id, data));
+            if (twinIsMe && room.getPeer(twin.id)) {
+                // After addPeer: the room never gets empty in between, so it is not closed
+                if (!resume.expire(twin.id, 'rejoined')) io.sockets.sockets.get(twin.id)?.disconnect(true);
+            }
             usage.joined(room.id, room.getPeersCount()); // counted even before the next sample
             const droppedAt = droppedPeople.get(room.id)?.get(personKey(data?.peer_info));
             droppedPeople.get(room.id)?.delete(personKey(data?.peer_info));
@@ -2025,7 +2090,7 @@ function startServer() {
             }
         });
 
-        socket.on('restartIce', async ({ transport_id }, callback) => {
+        socket.on('restartIce', async ({ transport_id, reason }, callback) => {
             if (!roomExists(socket)) {
                 return callback({ error: 'Room not found' });
             }
@@ -2053,9 +2118,12 @@ function startServer() {
                 }
 
                 const iceParameters = await transport.restartIce();
-                meetingLog.add(socket.room_id, 'warn', 'connexion relancée après un problème de réseau', {
-                    who: peerInfo?.peer_name,
-                });
+                // After a cut of the signalling the browser relaunches both by itself: already in the log
+                if (reason !== 'resume') {
+                    meetingLog.add(socket.room_id, 'warn', 'connexion relancée après un problème de réseau', {
+                        who: peerInfo?.peer_name,
+                    });
+                }
 
                 log.debug('ICE Restart successful', { transport_id: transport_id, iceParameters });
 
@@ -2431,6 +2499,28 @@ function startServer() {
                 });
                 callback({ error: error.message });
             }
+        });
+
+        // TLLM*meet: the size each picture needs on this person's screen, or nothing when it is not
+        // visible (public/js/TllmNetwork.js): [{ id, layer }]
+        socket.on('consumerNeeds', async (list, callback) => {
+            const done = typeof callback === 'function' ? callback : () => {};
+            if (!roomExists(socket)) return done({ error: 'Room not found' });
+
+            const peer = getPeer(socket);
+            if (!peer || isPeerInLobby(peer)) return done({ error: 'Peer not found' });
+            if (!Array.isArray(list) || list.length > 300) return done({ error: 'Invalid list' });
+
+            let applied = 0;
+            for (const item of list) {
+                if (typeof item?.id !== 'string') continue;
+                try {
+                    if (await peer.setConsumerNeed(item.id, item.layer)) applied++;
+                } catch (error) {
+                    log.debug('consumerNeeds', { error: error.message });
+                }
+            }
+            done({ applied });
         });
 
         socket.on('getProducers', (data, callback) => {
@@ -4166,47 +4256,73 @@ function startServer() {
             const isPresenter = isPeerPresenter(socket.room_id, socket.id, peer_name, peer_uuid);
 
             log.debug('[Disconnect] - peer name', { peer_name, reason });
+            let dropped = false;
             if (peer) {
                 const [level, why] = LEAVE_REASONS[reason] || ['info', `départ (${reason})`];
                 meetingLog.add(socket.room_id, level, why, { who: peer_name });
-                if (level !== 'info') {
+                // A page that closed (its media connection said goodbye) is a departure, not a cut
+                const pageClosed = Date.now() - (peer.mediaClosedAt || 0) < 10000;
+                dropped = level !== 'info' && !pageClosed;
+                if (dropped) {
                     if (!droppedPeople.has(socket.room_id)) droppedPeople.set(socket.room_id, new Map());
                     droppedPeople.get(socket.room_id).set(personKey(peer.peer_info), Date.now());
                 }
             }
 
-            room.removePeer(socket.id);
-            collab.leave(socket.room_id, socket.id);
+            // TLLM*meet: a cut is not a departure. The person keeps their place (transports, camera,
+            // microphone, role) for the grace period; back in time, nothing has to be rebuilt.
+            const leave = () => {
+                if (roomList.get(socket.room_id) !== room) return; // the meeting ended meanwhile
+                room.removePeer(socket.id);
+                collab.leave(socket.room_id, socket.id);
 
-            // Sockets that never joined (e.g. rejected by a lock) are not announced to the room
-            if (peer) room.broadCast(socket.id, 'removeMe', removeMeData(room, peer_name, isPresenter));
+                // Sockets that never joined (e.g. rejected by a lock) are not announced to the room
+                if (peer) room.broadCast(socket.id, 'removeMe', removeMeData(room, peer_name, isPresenter));
 
-            // Notify main room when a peer leaves a breakout room
-            if (peer && socket.room_id.includes('_breakout_')) {
-                notifyMainRoomBreakoutCountChanged(socket.room_id);
+                // Notify main room when a peer leaves a breakout room
+                if (peer && socket.room_id.includes('_breakout_')) {
+                    notifyMainRoomBreakoutCountChanged(socket.room_id);
+                }
+
+                // Clean up this peer's presenter entry immediately
+                if (socket.room_id in presenters && socket.id in presenters[socket.room_id]) {
+                    delete presenters[socket.room_id][socket.id];
+                }
+
+                // TLLM*meet: no automatic presenter hand-over. Only the admin, or a guest the admin
+                // promoted, is presenter; when they leave nobody inherits the role.
+
+                if (room.getPeersCount() === 0) {
+                    roomList.delete(socket.room_id);
+                    collab.release(socket.room_id);
+                    roomRegistry.closed(socket.room_id);
+                    transcripts.close(socket.room_id);
+                    closeMeeting(socket.room_id);
+
+                    delete presenters[socket.room_id];
+
+                    log.debug('[Disconnect] - Last peer - current presenters grouped by roomId', presenters);
+                }
+
+                socket.room_id = null;
+            };
+
+            const state = { room_id: socket.room_id, roomUnlock: socket.roomUnlock };
+            const kept =
+                dropped &&
+                resume.suspend(socket.id, state, (_, why) => {
+                    const text = {
+                        timeout: `pas de retour après ${Math.round(resume.graceMs / 1000)} s : sortie de la salle`,
+                        page: 'départ (page fermée)',
+                    }[why];
+                    if (text) meetingLog.add(state.room_id, 'info', text, { who: peer_name });
+                    leave();
+                });
+            if (kept) {
+                room.broadCast(socket.id, 'peerAway', { peer_id: socket.id, away: true });
+            } else {
+                leave();
             }
-
-            // Clean up this peer's presenter entry immediately
-            if (socket.room_id in presenters && socket.id in presenters[socket.room_id]) {
-                delete presenters[socket.room_id][socket.id];
-            }
-
-            // TLLM*meet: no automatic presenter hand-over. Only the admin, or a guest the admin
-            // promoted, is presenter; when they leave nobody inherits the role.
-
-            if (room.getPeersCount() === 0) {
-                roomList.delete(socket.room_id);
-                collab.release(socket.room_id);
-                roomRegistry.closed(socket.room_id);
-                transcripts.close(socket.room_id);
-                closeMeeting(socket.room_id);
-
-                delete presenters[socket.room_id];
-
-                log.debug('[Disconnect] - Last peer - current presenters grouped by roomId', presenters);
-            }
-
-            socket.room_id = null;
 
             // Clean up all socket event listeners to prevent memory leaks
             socket.removeAllListeners();
@@ -4504,6 +4620,8 @@ async function gracefulShutdown(signal) {
         server.close(() => {
             log.info('HTTP server closed');
         });
+
+        resume.expireAll();
 
         // 2. Close all active rooms and notify peers
         log.debug(`Closing ${roomList.size} active rooms...`);
