@@ -89,6 +89,7 @@ const { CollabStore } = require('./Collab');
 const { DatePolls, DatePollError } = require('./DatePolls');
 const { RoomRegistry } = require('./RoomRegistry');
 const { Transcripts } = require('./Transcripts');
+const { Summaries } = require('./Summaries');
 const { Usage } = require('./Usage');
 const { MeetingLog } = require('./MeetingLog');
 const { Resume, takeOverLiveSessions } = require('./Resume');
@@ -332,6 +333,15 @@ const transcripts = new Transcripts({
 });
 transcripts.purge();
 setInterval(() => transcripts.purge(), 6 * 3600 * 1000).unref();
+// Minutes written by Claude, for the SUMMARY_USERS accounts only (see Summaries.js)
+const summaries = new Summaries({
+    dir: path.join(dataDir, 'transcriptions'),
+    token: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+    users: process.env.SUMMARY_USERS,
+    model: process.env.SUMMARY_MODEL || 'opus',
+    log,
+});
+if (summaries.enabled) log.info('Comptes rendus Claude activés', { users: [...summaries.users] });
 
 // The speech-to-text server (transcription/) loads its model only when asked and drops it when idle:
 // wake it up when a meeting starts its transcription, and keep it awake while one is running.
@@ -860,6 +870,7 @@ function startServer() {
 
         const rank = (r) => (r.active ? 0 : r.booking && r.booking.start - now < 24 * 3600 * 1000 ? 1 : 2);
         const latest = transcripts.latestByRoom();
+        const minutes = summaries.allowed(admin);
         const visits = usage.byRoom();
         const rooms = Array.from(ids)
             .map((id) => {
@@ -875,7 +886,11 @@ function startServer() {
                     visios: visit ? visit.visios : null,
                     totalMs: visit ? visit.durationMs : null,
                     organizer: organizerOf(owner),
-                    transcript: transcript && { id: transcript.id, status: transcript.status },
+                    transcript: transcript && {
+                        id: transcript.id,
+                        status: transcript.status,
+                        summary: minutes && summaries.has(id, transcript.id) ? true : undefined,
+                    },
                 };
             })
             .sort(
@@ -962,12 +977,57 @@ function startServer() {
     };
 
     app.get('/api/transcriptions/:room', (req, res) => {
-        if (!transcriptOwner(req, res)) return;
+        const admin = transcriptOwner(req, res);
+        if (!admin) return;
+        const room = req.params.room;
+        // The minutes exist only for the SUMMARY_USERS accounts: nobody else learns of them
+        const minutes = summaries.allowed(admin);
         return res.json({
-            room: req.params.room,
+            room,
             retentionDays: transcripts.retentionMs / 86400000,
-            sessions: transcripts.list(req.params.room),
+            summaries: minutes,
+            sessions: transcripts.list(room).map((t) => (minutes ? { ...t, summary: summaries.state(room, t.id) } : t)),
         });
+    });
+
+    // ---------- TLLM*meet: minutes written by Claude (see Summaries.js) ----------
+    const summaryOwner = (req, res) => {
+        const admin = transcriptOwner(req, res);
+        if (!admin) return null;
+        if (!summaries.allowed(admin)) {
+            res.status(404).json({ error: 'not found' });
+            return null;
+        }
+        return admin;
+    };
+
+    app.post('/api/transcriptions/:room/:id/compte-rendu', (req, res) => {
+        if (!summaryOwner(req, res)) return;
+        const { room, id } = req.params;
+        const t = transcripts.read(room, id);
+        if (!t) return res.status(404).json({ error: 'not found' });
+        const status = transcripts.status(room, id);
+        if (status !== 'ready' && status !== 'paused') {
+            return res.status(409).json({ error: 'La transcription n’est pas terminée.', status });
+        }
+        if (!t.lines.length) return res.status(409).json({ error: 'Aucune parole transcrite.' });
+        t.name = roomRegistry.name(room);
+        summaries.generate(room, id, transcripts.toText(t)).catch(() => {});
+        return res.status(202).json({ summary: 'running' });
+    });
+
+    app.get('/transcriptions/:room/:id/compte-rendu.md', (req, res) => {
+        if (!summaryOwner(req, res)) return;
+        const { room, id } = req.params;
+        if (!/^[0-9]{10,16}$/.test(id)) return res.status(404).json({ error: 'not found' });
+        const md = summaries.read(room, id);
+        if (!md) return res.status(404).json({ error: 'not found' });
+        const day = new Intl.DateTimeFormat('fr-CA', { timeZone: meetingTimeZone }).format(new Date(Number(id)));
+        res.set({
+            'Content-Type': 'text/markdown; charset=utf-8',
+            'Content-Disposition': `attachment; filename="compte-rendu-${room}-${day}.md"`,
+        });
+        return res.send(md);
     });
 
     app.get('/transcriptions/:room/:id.txt', (req, res) => {

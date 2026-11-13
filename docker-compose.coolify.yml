@@ -49,6 +49,10 @@ services:
             - WHISPER_MODEL=parakeet
             - WHISPER_LANGUAGE=${TRANSCRIPTION_LANGUAGE:-fr}
             - TRANSCRIPTION_RETENTION_DAYS=${TRANSCRIPTION_RETENTION_DAYS:-30}
+            # Compte rendu par Claude, réservé aux comptes de SUMMARY_USERS (vide : désactivé)
+            - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+            - SUMMARY_USERS=${SUMMARY_USERS:-}
+            - SUMMARY_MODEL=${SUMMARY_MODEL:-opus}
         volumes:
             # Sondages de dates : gardés entre deux déploiements
             - tllm-data:/src/data

@@ -40,6 +40,12 @@ COPY --chown=node:node public ./public
 # Copy config template → config
 COPY --chown=node:node app/src/config.template.js app/src/config.js
 
+# TLLM*meet: the Claude Code CLI writes the meeting minutes (see app/src/Summaries.js).
+# It does nothing until CLAUDE_CODE_OAUTH_TOKEN and SUMMARY_USERS are set.
+ARG CLAUDE_CODE_VERSION=2.1.323
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+
 # TLLM*meet: date polls are written to /src/data (mount a volume there to keep them)
 RUN mkdir -p /src/data && chown node:node /src/data
 ENV DATA_DIR=/src/data

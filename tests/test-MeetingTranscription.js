@@ -21,6 +21,7 @@ const ROOT = path.join(__dirname, '..');
 const PORT = 3700 + Math.floor(Math.random() * 500);
 const BASE = `https://localhost:${PORT}`;
 const ADMIN = { username: 'jules', password: 'S3cret-Pass', displayname: 'Jules' };
+const OTHER = { username: 'marie', password: 'Autre-Pass9', displayname: 'Marie' };
 const ASR_KEY = 'asr-test-key';
 
 function request(method, urlPath, { body, cookie } = {}) {
@@ -122,6 +123,14 @@ describe('Meeting transcription (integration)', function () {
         });
         await new Promise((r) => asr.listen(0, '127.0.0.1', r));
 
+        // Fake Claude Code CLI: answers with minutes made of what it received, and of its token
+        const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'tllm-test-bin-'));
+        fs.writeFileSync(
+            path.join(bin, 'claude'),
+            '#!/bin/sh\nprintf "# Compte rendu\\n\\njeton: %s\\n" "$CLAUDE_CODE_OAUTH_TOKEN"\ncat\n',
+            { mode: 0o755 }
+        );
+
         const configJs = path.join(ROOT, 'app/src/config.js');
         if (!fs.existsSync(configJs)) fs.copyFileSync(path.join(ROOT, 'app/src/config.template.js'), configJs);
         server = spawn(process.execPath, ['app/src/Server.js'], {
@@ -131,7 +140,10 @@ describe('Meeting transcription (integration)', function () {
                 SERVER_LISTEN_PORT: String(PORT),
                 SFU_NUM_WORKERS: '1',
                 JWT_SECRET: crypto.randomBytes(32).toString('hex'),
-                HOST_USERS: `${ADMIN.username}:${ADMIN.password}:${ADMIN.displayname}`,
+                HOST_USERS: `${ADMIN.username}:${ADMIN.password}:${ADMIN.displayname}|${OTHER.username}:${OTHER.password}:${OTHER.displayname}`,
+                PATH: `${bin}:${process.env.PATH}`,
+                CLAUDE_CODE_OAUTH_TOKEN: 'oat-test',
+                SUMMARY_USERS: ADMIN.username,
                 TRUST_PROXY: 'false',
                 DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'tllm-test-data-')),
                 WHISPER_ENABLED: 'true',
@@ -305,6 +317,40 @@ describe('Meeting transcription (integration)', function () {
         const overview = await request('GET', '/api/admin/overview', { cookie });
         const room = overview.json.rooms.find((r) => r.id === roomId);
         assert.deepEqual(room.transcript, { id, status: 'ready' });
+
+        // Minutes by Claude: only the SUMMARY_USERS account knows they exist
+        const other = (
+            await request('POST', '/login', { body: { username: OTHER.username, password: OTHER.password } })
+        ).headers['set-cookie'][0].split(';')[0];
+        const otherList = await request('GET', `/api/transcriptions/${roomId}`, { cookie: other });
+        assert.equal(otherList.status, 200);
+        assert.equal(otherList.json.summaries, false);
+        assert.equal(otherList.json.sessions[0].summary, undefined);
+        const crPath = `/api/transcriptions/${roomId}/${id}/compte-rendu`;
+        assert.equal((await request('POST', crPath, { cookie: other })).status, 404);
+        assert.equal((await request('POST', crPath)).status, 401);
+
+        assert.equal(after.json.summaries, true);
+        assert.equal(after.json.sessions[0].summary, 'none');
+        assert.equal((await request('POST', crPath, { cookie })).status, 202);
+        let state;
+        for (let i = 0; i < 40 && state !== 'ready'; i++) {
+            await wait(100);
+            state = (await request('GET', `/api/transcriptions/${roomId}`, { cookie })).json.sessions[0].summary;
+        }
+        assert.equal(state, 'ready', logs);
+        const mdPath = `/transcriptions/${roomId}/${id}/compte-rendu.md`;
+        assert.equal((await request('GET', mdPath, { cookie: other })).status, 404);
+        const md = await request('GET', mdPath, { cookie });
+        assert.equal(md.status, 200);
+        assert.match(md.headers['content-disposition'], /attachment; filename="compte-rendu-.*\.md"/);
+        assert.match(md.body, /^# Compte rendu\n\njeton: oat-test\n<transcription>\nPoint hebdo\n/);
+        assert.match(md.body, /Jules : On commence \?/);
+        assert.match(md.body, /<\/transcription>\n$/);
+        const withMinutes = await request('GET', '/api/admin/overview', { cookie });
+        assert.equal(withMinutes.json.rooms.find((r) => r.id === roomId).transcript.summary, true);
+        const otherHome = await request('GET', '/api/admin/overview', { cookie: other });
+        assert.equal(otherHome.json.rooms.find((r) => r.id === roomId).transcript.summary, undefined);
 
         // "Serveur" block: admin only; the meeting is in the history with its transcription
         assert.equal((await request('GET', '/api/admin/metrics')).status, 401);

@@ -78,8 +78,55 @@
             link.setAttribute('download', '');
             link.textContent = 'Télécharger (.txt)';
             li.append(link);
+            if (t.summary) li.append(summaryAction(room, t));
         }
         return li;
+    }
+
+    // Minutes written by Claude: the server lists them only for the accounts allowed to see them
+    function summaryAction(room, t) {
+        const base = `/transcriptions/${encodeURIComponent(room)}/${t.id}`;
+        if (t.summary === 'ready') {
+            const link = document.createElement('a');
+            link.className = 'tllm-button is-small is-quiet';
+            link.href = `${base}/compte-rendu.md`;
+            link.setAttribute('download', '');
+            link.textContent = 'Compte rendu (.md)';
+            return link;
+        }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tllm-button is-small is-quiet';
+        if (t.summary === 'running') {
+            btn.disabled = true;
+            btn.textContent = 'Compte rendu en cours…';
+            return btn;
+        }
+        if (!t.lines) {
+            btn.disabled = true;
+            btn.textContent = 'Compte rendu';
+            btn.title = 'Aucune parole transcrite';
+            return btn;
+        }
+        btn.textContent = t.summary === 'failed' ? 'Réessayer le compte rendu' : 'Rédiger le compte rendu';
+        btn.title = 'Claude rédige le compte rendu à partir de la transcription (une à deux minutes)';
+        btn.onclick = () => {
+            btn.disabled = true;
+            btn.textContent = 'Compte rendu en cours…';
+            fetch(`/api${base}/compte-rendu`, { method: 'POST' })
+                .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+                .then(({ ok, body }) => {
+                    if (!ok) throw new Error(body?.error || 'erreur');
+                    polls = 0;
+                    setTimeout(loadTranscripts, 4000);
+                })
+                .catch((err) => {
+                    btn.disabled = false;
+                    btn.textContent = 'Réessayer le compte rendu';
+                    btn.title = err.message;
+                });
+        };
+        return btn;
     }
 
     function loadTranscripts() {
@@ -94,7 +141,8 @@
                 sessions.forEach((t) => list.append(transcriptRow(roomId, t)));
                 $('afterTranscripts').hidden = false;
                 // Not final yet: look again in a moment
-                if (sessions.some((t) => STATUS[t.status]) && polls++ < 60) setTimeout(loadTranscripts, 4000);
+                const waiting = sessions.some((t) => STATUS[t.status] || t.summary === 'running');
+                if (waiting && polls++ < 90) setTimeout(loadTranscripts, 4000);
             })
             .catch(() => {});
     }

@@ -183,6 +183,13 @@
             dl.setAttribute('download', '');
             dl.title = 'Télécharger la transcription de la dernière visio';
             actions.append(dl);
+            if (t.summary) {
+                const cr = el('a', 'tllm-button is-quiet is-small', 'Compte rendu');
+                cr.href = `/transcriptions/${encodeURIComponent(room.id)}/${t.id}/compte-rendu.md`;
+                cr.setAttribute('download', '');
+                cr.title = 'Télécharger le compte rendu de la dernière visio';
+                actions.append(cr);
+            }
         }
         const copyBtn = el('button', 'tllm-button is-quiet is-small', 'Copier le lien');
         copyBtn.type = 'button';

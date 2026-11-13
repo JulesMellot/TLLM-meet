@@ -4,7 +4,8 @@ Visioconférence privée, en français, pour des réunions jusqu'à une trentain
 
 - Seuls l'administrateur et les modérateurs qu'il a invités ouvrent des visios.
 - Les invités rejoignent par lien, sans compte.
-- Ni ChatGPT ni DeepSeek : aucune intégration d'IA conversationnelle.
+- Ni ChatGPT ni DeepSeek : aucune IA conversationnelle dans la visio. Seul l'administrateur peut, s'il l'active,
+  faire rédiger le compte rendu d'une réunion par Claude (voir plus bas).
 
 TLLM\*meet est un fork de [MiroTalk SFU](https://github.com/miroslavpejic85/mirotalksfu) (v2.6.25)
 de Miroslav Pejic, sous licence [AGPL-3.0](LICENSE).
@@ -124,6 +125,35 @@ Le service `transcription` de `docker-compose.coolify.yml` se construit avec l'a
 (environ 1,5 Go) n'est chargé que quand une transcription démarre, et libéré 5 minutes après la dernière phrase
 (`TRANSCRIPTION_IDLE_SECONDS`). Pour s'en passer : `TRANSCRIPTION_ENABLED=false` et retirer le service du fichier. Détails et réglages :
 [`transcription/README.md`](transcription/README.md).
+
+### Compte rendu par Claude (réservé à l'administrateur)
+
+Désactivé par défaut. Une fois activé, seuls les comptes nommés dans `SUMMARY_USERS` (des administrateurs de
+`HOST_USERS`) voient le bouton **Rédiger le compte rendu** à côté d'une transcription terminée, sur la page après la
+visio. Les modérateurs et les invités ne le voient pas, et le serveur leur répond « introuvable ».
+
+Claude reçoit le fichier texte de la transcription et rend un compte rendu en Markdown : en bref, points abordés,
+décisions, actions (qui, quoi, échéance), questions en suspens. Il est gardé à côté de la transcription
+(`<salle>--<id>.md`) et supprimé avec elle. Il se télécharge depuis la page après la visio ou le bouton
+**Compte rendu** de l'accueil.
+
+Le compte rendu utilise votre abonnement Claude (Pro ou Max) à travers Claude Code, installé dans l'image :
+
+1. Sur votre ordinateur, avec Claude Code installé : `claude setup-token`. Il ouvre la connexion à claude.ai et
+   affiche un jeton valable un an.
+2. Dans le `.env` (ou les variables Coolify) :
+
+    ```
+    CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-…
+    SUMMARY_USERS=jules
+    SUMMARY_MODEL=opus
+    ```
+
+3. Redémarrer l'application. Le journal indique « Comptes rendus Claude activés ».
+
+Le texte de la réunion part alors chez Anthropic pour chaque compte rendu demandé (rien n'est envoyé tant que vous ne
+cliquez pas). Claude n'a aucun outil : il lit la transcription et écrit le texte, rien d'autre. Les comptes rendus
+comptent dans les limites d'usage de votre abonnement, comme une conversation sur claude.ai.
 
 ## Serveur : ce qu'utilisent l'application et chaque visio
 

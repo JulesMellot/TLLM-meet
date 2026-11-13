@@ -283,6 +283,7 @@ class Transcripts {
         try {
             fs.unlinkSync(this.file(room, id));
             this.summaries.delete(this.file(room, id));
+            fs.rmSync(path.join(this.dir, `${room}--${id}.md`), { force: true }); // its minutes (Summaries.js)
             return true;
         } catch {
             return false;
@@ -326,7 +327,7 @@ class Transcripts {
         return out.join('\n') + '\n';
     }
 
-    // Files older than the retention period are deleted
+    // Files older than the retention period are deleted, the minutes (.md, see Summaries.js) with them
     purge() {
         if (!this.dir) return 0;
         let removed = 0;
@@ -338,7 +339,7 @@ class Transcripts {
         }
         const limit = this.now() - this.retentionMs;
         for (const f of names) {
-            const m = /--([0-9]{10,16})\.jsonl$/.exec(f);
+            const m = /--([0-9]{10,16})\.(?:jsonl|md)$/.exec(f);
             if (!m || Number(m[1]) >= limit) continue;
             try {
                 fs.unlinkSync(path.join(this.dir, f));
