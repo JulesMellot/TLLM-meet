@@ -57,7 +57,8 @@
 
     const T = (window.tllmRoom = {
         started: false,
-        panel: null, // 'chat' | 'people' | 'polls'
+        panel: null, // 'chat' | 'people' | 'polls', or one of T.panels
+        panels: {}, // panels added by other files: name -> { title(), render(body, foot) } (TllmAgenda.js)
         chat: [], // { sys } or { fromId, fromName, toId, toName, html, time, private, mine }
         unread: 0,
         to: 'all',
@@ -661,6 +662,7 @@
             meeting += item('click:stopRecButton', 'fas fa-circle-stop', "Arrêter l'enregistrement");
         if (isShown('breakoutRoomButton'))
             meeting += item('click:breakoutRoomButton', 'fas fa-people-arrows', 'Salles de sous-groupe');
+        if (T.panels.agenda) meeting += item('panel:agenda', 'fas fa-list-check', 'Ordre du jour');
         meeting += item('settings:', 'fas fa-gear', 'Paramètres');
         html += heading('Réunion') + meeting;
         showPop(anchor, html, { align: 'center', key: 'more' });
@@ -730,6 +732,7 @@
         if (act === 'transcript') return window.tllmTranscript?.toggle();
         if (act === 'captions') return window.tllmTranscript?.toggleCaptions();
         if (act === 'projection') return window.tllmProjection?.toggle();
+        if (act.startsWith('panel:')) return T.togglePanel(act.slice(6));
         if (act === 'leave') return typeof leaveRoom === 'function' && leaveRoom();
         if (act === 'leaveAll') return typeof leaveRoom === 'function' && leaveRoom(true, true);
         if (act.startsWith('pm:')) return startPrivate(act.slice(3));
@@ -815,7 +818,9 @@
             people: `Participants (${T.peers.length})`,
             polls: 'Sondages',
         };
-        $('tllmPanelTitle').textContent = titles[T.panel];
+        const extra = T.panels[T.panel];
+        $('tllmPanelTitle').textContent = extra ? extra.title() : titles[T.panel];
+        if (extra) extra.render($('tllmPanelBody'), $('tllmPanelFoot'));
         if (T.panel === 'chat') renderChat();
         if (T.panel === 'people') renderPeople();
         if (T.panel === 'polls') renderPolls();
@@ -1022,6 +1027,7 @@
                 audio: !!info.peer_audio,
                 video: !!info.peer_video,
                 hand: !!info.peer_hand,
+                handAt: Number(info.peer_hand_at) || 0,
                 presenter: !!info.peer_presenter,
                 you: id === rc.peer_id,
             };
