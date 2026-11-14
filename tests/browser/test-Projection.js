@@ -130,7 +130,10 @@ describe('Presentation mode: a window for the projector (browser)', function () 
         await page.fill('#password', ADMIN.password);
         await page.click('#loginButton');
         await page.waitForURL(`${BASE}/`);
-        const res = await organiser.request.fetch(`${BASE}/admin/rooms`, { method: 'POST', data: { name: 'Projet' } });
+        const res = await organiser.request.fetch(`${BASE}/admin/rooms`, {
+            method: 'POST',
+            data: { name: 'Projet', agenda: [{ title: 'Tour de table', minutes: 5 }] },
+        });
         const room = (await res.json()).room;
         roomId = room.id || room;
 
@@ -250,19 +253,25 @@ describe('Presentation mode: a window for the projector (browser)', function () 
         await until(async () => projector.locator('#hands').isHidden(), 'the hand put down');
     });
 
-    it('runs the agenda: points written, the timer in the meeting and on the projector', async () => {
+    it('runs the agenda prepared with the room: a point added, the timer in the meeting and on the projector', async () => {
         await page.click('#tllmMore');
         await page.getByRole('menuitem', { name: 'Ordre du jour' }).click();
-        const points = [
-            ['Tour de table', '5'],
-            ['Budget', '15'],
-        ];
-        for (const [i, [title, min]] of points.entries()) {
-            await page.fill('#tllmAgendaNew', title);
-            await page.fill('#tllmAgendaNewMin', min);
-            await page.click('#tllmAgendaAdd button[type="submit"]');
-            await page.locator('#tllmAgendaList li').nth(i).waitFor();
-        }
+        // Prepared on the home page with the room
+        await page.locator('#tllmAgendaList li', { hasText: '' }).first().waitFor();
+        assert.equal(
+            await page.locator('#tllmAgendaList input.tllm-agenda-title').first().inputValue(),
+            'Tour de table'
+        );
+        await page.fill('#tllmAgendaNew', 'Budget');
+        await page.fill('#tllmAgendaNewMin', '15');
+        await page.click('#tllmAgendaAdd button[type="submit"]');
+        await page.locator('#tllmAgendaList li').nth(1).waitFor();
+        // The room keeps the point added during the meeting, for the next one
+        const overview = await (await organiser.request.get(`${BASE}/api/admin/overview`)).json();
+        assert.deepEqual(overview.rooms.find((r) => r.id === roomId).agenda, [
+            { title: 'Tour de table', minutes: 5 },
+            { title: 'Budget', minutes: 15 },
+        ]);
         await page.click('#tllmAgendaStart');
         await projector.locator('#agenda #agendaTitle', { hasText: 'Tour de table' }).waitFor();
         assert.equal(await projector.locator('#agendaNum').innerText(), 'Point 1/2');

@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { cleanItems } = require('./Agenda');
 
 const MAX_ROOMS = 500;
 
@@ -24,7 +25,7 @@ class RoomRegistry {
         this.file = file;
         this.now = now;
         this.log = log;
-        this.rooms = new Map(); // id -> { id, name, owner, createdAt, lastOpenedAt, lastClosedAt }
+        this.rooms = new Map(); // id -> { id, name, owner, createdAt, lastOpenedAt, lastClosedAt, agenda }
         this.live = new Map(); // id -> opened at (this process only)
         this.saveTimer = null;
         this.load();
@@ -81,6 +82,22 @@ class RoomRegistry {
         room.name = clean;
         this.save();
         return room;
+    }
+
+    // The agenda prepared for the room ([{ title, minutes }], see Agenda.js), loaded when a meeting
+    // starts in it. An empty list removes it. -> the agenda kept, or null for an unknown room
+    setAgenda(id, items) {
+        const room = this.rooms.get(id);
+        const clean = cleanItems(items);
+        if (!room || !clean) return null;
+        if (clean.length) room.agenda = clean;
+        else delete room.agenda;
+        this.save();
+        return clean;
+    }
+
+    agenda(id) {
+        return this.rooms.get(id)?.agenda || [];
     }
 
     // The organiser deletes a room: it leaves the home, and its link no longer opens it for a moderator

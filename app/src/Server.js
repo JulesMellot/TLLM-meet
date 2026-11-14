@@ -389,7 +389,10 @@ function openMeeting(roomId) {
 // TLLM*meet: phones in the meeting room (see Audience.js)
 const audience = new Audience();
 // TLLM*meet: agenda and timer of each meeting (see Agenda.js)
-const agenda = new Agenda();
+const agenda = new Agenda({
+    load: (roomId) => roomRegistry.agenda(roomId),
+    save: (roomId, items) => roomRegistry.setAgenda(roomId, items),
+});
 
 function closeMeeting(roomId, why = 'plus personne dans la salle') {
     droppedPeople.delete(roomId);
@@ -756,6 +759,8 @@ function startServer() {
         const name = typeof req.body?.name === 'string' ? req.body.name : '';
         const room = makeRoomId(name);
         roomRegistry.remember(room, { name: name.trim() || null, owner: admin.username });
+        // The agenda prepared with the room (optional), loaded when the meeting starts
+        if (Array.isArray(req.body?.agenda)) roomRegistry.setAgenda(room, req.body.agenda);
         res.set('Cache-Control', 'no-store');
         return res.json({ room, url: '/join/' + encodeURIComponent(room) });
     });
@@ -786,6 +791,21 @@ function startServer() {
         const room = roomRegistry.rename(req.params.id, req.body?.name);
         if (!room) return res.status(400).json({ error: 'Donnez un nom à la salle.' });
         return res.json({ id: room.id, name: room.name });
+    });
+
+    // The agenda of a room, prepared before the meeting. During a meeting that has not started it yet,
+    // everyone sees the new points at once.
+    app.put('/api/admin/rooms/:id/agenda', (req, res) => {
+        if (!manageableRoom(req, res)) return;
+        const id = req.params.id;
+        const items = roomRegistry.setAgenda(id, req.body?.items);
+        if (!items) return res.status(400).json({ error: 'Ordre du jour illisible.' });
+        const room = roomList.get(id);
+        if (room && agenda.view(id).current < 0) {
+            agenda.set(id, items);
+            room.sendToAll('agenda', { agenda: agenda.view(id), moved: null });
+        }
+        return res.json({ agenda: items });
     });
 
     app.delete('/api/admin/rooms/:id', (req, res) => {
@@ -934,6 +954,7 @@ function startServer() {
                     visios: visit ? visit.visios : null,
                     totalMs: visit ? visit.durationMs : null,
                     organizer: organizerOf(owner),
+                    agenda: known?.agenda || [],
                     transcript: transcript && { id: transcript.id, status: transcript.status },
                 };
             })

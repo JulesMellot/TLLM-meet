@@ -172,6 +172,9 @@
         }
         text.append(stateLine);
         if (room.organizer) text.append(el('div', 'tllm-room-owner', `Salle de ${room.organizer}`));
+        const planLine = el('div', 'tllm-room-owner tllm-room-plan', planSummary(room.agenda));
+        planLine.hidden = !room.agenda?.length;
+        text.append(planLine);
         li.append(text);
 
         const actions = el('div', 'tllm-room-actions');
@@ -197,7 +200,13 @@
         go.href = url;
         actions.append(copyBtn, go);
         // Rename any room; delete one that is neither under way nor booked by a poll
-        const items = [['Renommer', () => renameRoom(room, nameRow)]];
+        const items = [
+            ['Renommer', () => renameRoom(room, nameRow)],
+            [
+                room.agenda?.length ? 'Modifier l’ordre du jour' : 'Préparer l’ordre du jour',
+                () => editPlan(room, li, planLine),
+            ],
+        ];
         if (kind === 'unused' || kind === 'past')
             items.push(null, ['Supprimer la salle', () => deleteRoom(room), true]);
         actions.append(rowMenu(`Gérer la salle ${room.name}`, items));
@@ -249,6 +258,137 @@
         nameRow.replaceWith(form);
         input.focus();
         input.select();
+    }
+
+    // ---------------- Agenda of a room (see app/src/Agenda.js) ----------------
+
+    // "4 points, 45 min prévues"
+    function planSummary(items) {
+        const list = Array.isArray(items) ? items : [];
+        if (!list.length) return '';
+        const minutes = list.reduce((sum, i) => sum + (Number(i.minutes) || 0), 0);
+        return `Ordre du jour : ${list.length} point${list.length > 1 ? 's' : ''}${minutes ? `, ${minutes} min prévues` : ''}`;
+    }
+
+    // Rows of [title][minutes][×]. Enter in a title goes to the next point (a new one after the last).
+    function planEditor(items = []) {
+        const box = el('div', 'tllm-plan');
+        const list = el('ol', 'tllm-plan-list');
+        const sum = el('p', 'tllm-plan-sum');
+        const add = el('button', 'tllm-button is-quiet is-small', 'Ajouter un point');
+        add.type = 'button';
+
+        const rows = () => [...list.children];
+        const value = () =>
+            rows()
+                .map((li) => ({
+                    title: li.querySelector('.tllm-plan-title').value.trim(),
+                    minutes: Math.max(
+                        0,
+                        Math.min(600, Math.round(Number(li.querySelector('.tllm-plan-min').value) || 0))
+                    ),
+                }))
+                .filter((item) => item.title);
+        const update = () => {
+            rows().forEach((li, i) => {
+                li.querySelector('.tllm-plan-title').setAttribute('aria-label', `Point ${i + 1}`);
+                li.querySelector('.tllm-plan-min').setAttribute('aria-label', `Minutes prévues pour le point ${i + 1}`);
+            });
+            sum.textContent = planSummary(value()).replace('Ordre du jour : ', '') || 'Aucun point pour l’instant.';
+        };
+        function row(item = {}) {
+            const li = el('li', 'tllm-plan-row');
+            const title = el('input', 'tllm-input tllm-plan-title');
+            title.type = 'text';
+            title.maxLength = 120;
+            title.placeholder = 'Un point, par exemple Tour de table';
+            title.value = item.title || '';
+            const min = el('input', 'tllm-input tllm-plan-min');
+            min.type = 'number';
+            min.min = '0';
+            min.max = '600';
+            min.inputMode = 'numeric';
+            min.placeholder = 'min';
+            min.value = item.minutes ? String(item.minutes) : '';
+            const remove = el('button', 'tllm-plan-remove', '×');
+            remove.type = 'button';
+            remove.setAttribute('aria-label', 'Retirer ce point');
+            remove.onclick = () => {
+                li.remove();
+                if (!list.children.length) list.append(row());
+                update();
+            };
+            title.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                const next = li.nextElementSibling || (title.value.trim() && list.appendChild(row()));
+                next?.querySelector('.tllm-plan-title').focus();
+                update();
+            });
+            title.oninput = update;
+            min.oninput = update;
+            li.append(title, min, remove);
+            return li;
+        }
+        (items.length ? items : [{}]).forEach((item) => list.append(row(item)));
+        add.onclick = () => {
+            list.append(row());
+            update();
+            list.lastElementChild.querySelector('.tllm-plan-title').focus();
+        };
+        const foot = el('div', 'tllm-plan-foot');
+        foot.append(add, sum);
+        box.append(list, foot);
+        update();
+        return { el: box, value, focus: () => list.querySelector('.tllm-plan-title')?.focus() };
+    }
+
+    function editPlan(room, li, planLine) {
+        if (li.querySelector('.tllm-plan-edit')) return;
+        const wrap = el('div', 'tllm-plan-edit');
+        const head = el('p', 'tllm-plan-head', `Ordre du jour de « ${room.name} »`);
+        const note = el(
+            'p',
+            'tllm-hint',
+            'Il s’affichera dans la visio et sur le projecteur ; chaque passage à un point sera noté dans la transcription.'
+        );
+        const editor = planEditor(room.agenda || []);
+        const actions = el('div', 'tllm-row');
+        const save = el('button', 'tllm-button is-small', 'Enregistrer');
+        save.type = 'button';
+        const cancel = el('button', 'tllm-button is-quiet is-small', 'Annuler');
+        cancel.type = 'button';
+        actions.append(save, cancel);
+        wrap.append(head, note, editor.el, actions);
+        const done = () => {
+            roomsView.editing = false;
+            wrap.remove();
+        };
+        cancel.onclick = done;
+        save.onclick = async () => {
+            save.disabled = true;
+            try {
+                const data = await modApi('PUT', `/api/admin/rooms/${encodeURIComponent(room.id)}/agenda`, {
+                    items: editor.value(),
+                });
+                room.agenda = data.agenda;
+                planLine.textContent = planSummary(room.agenda);
+                planLine.hidden = !room.agenda.length;
+                done();
+                toast(room.agenda.length ? 'Ordre du jour enregistré' : 'Ordre du jour retiré');
+            } catch (err) {
+                save.disabled = false;
+                if (err.message) toast(err.message);
+            }
+        };
+        wrap.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            e.stopPropagation();
+            done();
+        });
+        roomsView.editing = true;
+        li.append(wrap);
+        editor.focus();
     }
 
     async function deleteRoom(room) {
@@ -727,6 +867,21 @@
 
     $('roomName').addEventListener('input', updatePreview);
 
+    // A new room, with its agenda when there is one
+    let newPlan = null;
+    $('newRoomPlanToggle').addEventListener('click', () => {
+        if (newPlan) {
+            newPlan.el.remove();
+            newPlan = null;
+            $('newRoomPlanToggle').textContent = '+ Préparer un ordre du jour';
+            return;
+        }
+        newPlan = planEditor();
+        $('newRoomPlan').append(newPlan.el);
+        $('newRoomPlanToggle').textContent = 'Sans ordre du jour';
+        newPlan.focus();
+    });
+
     $('newRoomForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const error = $('createRoomError');
@@ -738,7 +893,10 @@
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: $('roomName').value.trim() }),
+                body: JSON.stringify({
+                    name: $('roomName').value.trim(),
+                    agenda: newPlan ? newPlan.value() : undefined,
+                }),
             });
             if (res.status === 401) {
                 window.location.href = '/login';

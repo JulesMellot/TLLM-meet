@@ -662,7 +662,7 @@
             meeting += item('click:stopRecButton', 'fas fa-circle-stop', "Arrêter l'enregistrement");
         if (isShown('breakoutRoomButton'))
             meeting += item('click:breakoutRoomButton', 'fas fa-people-arrows', 'Salles de sous-groupe');
-        if (T.panels.agenda) meeting += item('panel:agenda', 'fas fa-list-check', 'Ordre du jour');
+        if (T.panels.agenda?.visible()) meeting += item('panel:agenda', 'fas fa-list-check', 'Ordre du jour');
         meeting += item('settings:', 'fas fa-gear', 'Paramètres');
         html += heading('Réunion') + meeting;
         showPop(anchor, html, { align: 'center', key: 'more' });

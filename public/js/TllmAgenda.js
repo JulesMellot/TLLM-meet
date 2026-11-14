@@ -274,12 +274,31 @@
     function start() {
         if (A.startedListening || !rc?.socket) return;
         A.startedListening = true;
-        T().panels.agenda = { title: () => 'Ordre du jour', render: () => renderPanel() };
+        T().panels.agenda = {
+            title: () => 'Ordre du jour',
+            render: () => renderPanel(),
+            // In the menu for presenters, and for the others once there is an agenda to read
+            visible: () => amPresenter() || A.items.length > 0,
+        };
         rc.socket.on('agenda', (data) => {
             apply(data?.agenda);
             moved(data?.moved);
         });
-        const ask = () => send({ get: true });
+        // An agenda prepared with the room (home page): presenters are told it is ready, once
+        let told = false;
+        const ask = () =>
+            send({ get: true }).then(() => {
+                if (told || !amPresenter() || !A.items.length || A.started()) return;
+                told = true;
+                const minutes = A.items.reduce((sum, i) => sum + (i.minutes || 0), 0);
+                T()?.bubble?.({
+                    iconCls: 'fas fa-list-check',
+                    title: `Ordre du jour prêt : ${A.items.length} point${A.items.length > 1 ? 's' : ''}`,
+                    text: minutes ? `${minutes} min prévues · ouvrir pour démarrer` : 'Ouvrir pour démarrer',
+                    duration: 10000,
+                    onClick: () => T()?.panel !== 'agenda' && T()?.togglePanel('agenda'),
+                });
+            });
         rc.socket.on('connect', ask); // back after a cut
         ask();
         setInterval(tick, 1000);

@@ -21,7 +21,7 @@ de Miroslav Pejic, sous licence [AGPL-3.0](LICENSE).
 - Mode présentation, pour une réunion mi-salle mi-visio : une seconde fenêtre pour le projecteur (ce qui est
   présenté, les personnes à distance, les sondages en direct, les réactions). Avec le QR code affiché, les
   personnes dans la salle votent, réagissent et posent leurs questions depuis leur téléphone, sans rejoindre la visio.
-- Ordre du jour avec un minuteur par point, affiché dans la visio et sur le projecteur ; chaque passage à un point
+- Ordre du jour préparé avec la salle (à sa création ou plus tard, depuis l'accueil), avec un minuteur par point, affiché dans la visio et sur le projecteur ; chaque passage à un point
   est noté dans la transcription. Les mains levées à distance s'affichent sur le projecteur, dans l'ordre.
 - Caler une réunion : sondage de dates façon Doodle, sans compte, avec abonnement d'agenda.
 - Partage de vidéos et de fichiers pendant la visio.

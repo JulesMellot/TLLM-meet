@@ -33,15 +33,20 @@ function cleanItems(items) {
 }
 
 class Agenda {
-    constructor({ now = () => Date.now() } = {}) {
+    // load(roomId): the agenda prepared for the room, read when its meeting starts (RoomRegistry);
+    // save(roomId, items): called when presenters change the points, so the room keeps them
+    constructor({ now = () => Date.now(), load = () => [], save = () => {} } = {}) {
         this.now = now;
-        this.rooms = new Map(); // room id -> { items, current, since, spent, by }
+        this.load = load;
+        this.store = save;
+        this.rooms = new Map(); // room id -> { items, current, since, spent, finished }
     }
 
     state(roomId) {
         let a = this.rooms.get(roomId);
         if (!a) {
-            a = { items: [], current: -1, since: null, spent: [], finished: false };
+            const items = cleanItems(this.load(roomId)) || [];
+            a = { items, current: -1, since: null, spent: items.map(() => 0), finished: false };
             this.rooms.set(roomId, a);
         }
         return a;
@@ -50,8 +55,7 @@ class Agenda {
     // What everybody sees. elapsedMs: time spent on the point under way, so that the countdown does
     // not depend on each person's clock
     view(roomId) {
-        const a = this.rooms.get(roomId);
-        if (!a) return { items: [], current: -1, elapsedMs: 0, spent: [], finished: false };
+        const a = this.state(roomId);
         return {
             items: a.items.map((i) => ({ ...i })),
             current: a.current,
@@ -78,12 +82,16 @@ class Agenda {
                 a.since = null;
             }
         }
+        this.store(
+            roomId,
+            clean.map((item) => ({ ...item }))
+        );
         return true;
     }
 
     // Move to a point (start, next, back, or any). -> { from, to } (points), or null when nothing moves
     go(roomId, index) {
-        const a = this.rooms.get(roomId);
+        const a = this.state(roomId);
         if (!a || !Number.isInteger(index) || index < 0 || index >= a.items.length || index === a.current) return null;
         const now = this.now();
         const from = a.current;
@@ -96,7 +104,7 @@ class Agenda {
 
     // The meeting is over (the agenda stays, for a look back). -> the point that was under way
     finish(roomId) {
-        const a = this.rooms.get(roomId);
+        const a = this.state(roomId);
         if (!a || a.current < 0) return null;
         const last = a.items[a.current];
         if (a.since) a.spent[a.current] = (a.spent[a.current] || 0) + (this.now() - a.since);

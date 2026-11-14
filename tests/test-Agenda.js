@@ -68,6 +68,20 @@ describe('test-Agenda', () => {
         (agenda.current('r') === null).should.be.true();
     });
 
+    it('starts from the agenda prepared with the room, and gives the room the points changed', () => {
+        const saved = [];
+        const prepared = new Agenda({
+            now: () => now,
+            load: (id) => (id === 'r' ? [{ title: 'Budget', minutes: 15 }] : []),
+            save: (id, list) => saved.push([id, list]),
+        });
+        prepared.view('r').items.should.eql([{ title: 'Budget', minutes: 15 }]);
+        prepared.view('autre').items.should.eql([]);
+        prepared.go('r', 0).to.title.should.equal('Budget');
+        prepared.set('r', [...items]);
+        saved.should.eql([['r', items]]);
+    });
+
     it('forgets the agenda with the meeting', () => {
         agenda.set('r', items);
         agenda.close('r');

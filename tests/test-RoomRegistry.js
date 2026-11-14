@@ -27,6 +27,25 @@ describe('test-RoomRegistry (salles de l’organisateur)', () => {
         assert.equal(r.get('point-k7m2xq').lastClosedAt, 3000);
     });
 
+    it('keeps the agenda prepared for a room, cleaned, and saves it with the room', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tllm-rooms-'));
+        const file = path.join(dir, 'salles.json');
+        const r = new RoomRegistry({ file });
+        assert.equal(r.setAgenda('inconnue', [{ title: 'A' }]), null);
+        r.remember('point-k7m2xq', { name: 'Point', owner: 'jules' });
+        assert.deepEqual(r.setAgenda('point-k7m2xq', [{ title: ' Budget ', minutes: '15' }, { title: '' }]), [
+            { title: 'Budget', minutes: 15 },
+        ]);
+        assert.equal(r.setAgenda('point-k7m2xq', 'nope'), null);
+        r.saveNow();
+        const again = new RoomRegistry({ file });
+        assert.deepEqual(again.agenda('point-k7m2xq'), [{ title: 'Budget', minutes: 15 }]);
+        again.setAgenda('point-k7m2xq', []);
+        assert.deepEqual(again.agenda('point-k7m2xq'), []);
+        assert.equal('agenda' in again.get('point-k7m2xq'), false);
+        fs.rmSync(dir, { recursive: true, force: true });
+    });
+
     it('lists the most recently used rooms of an owner first', () => {
         let now = 0;
         const r = new RoomRegistry({ now: () => ++now });
