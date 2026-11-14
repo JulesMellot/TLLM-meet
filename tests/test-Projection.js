@@ -2,7 +2,7 @@
 
 require('should');
 
-const { arrange, fitGrid, pollToShow, pollBars } = require('../public/js/TllmProjection');
+const { arrange, fitGrid, pollToShow, pollBars, handQueue } = require('../public/js/TllmProjection');
 
 describe('test-Projection', () => {
     const cam = (peerId, extra = {}) => ({ key: `${peerId}-cam`, peerId, screen: false, ...extra });
@@ -77,6 +77,32 @@ describe('test-Projection', () => {
         pollBars({ ...poll, hideResults: false, counts: [0, 0] })
             .rows.map((r) => r.pct)
             .should.eql([0, 0]);
+    });
+
+    it('keeps who raised their hand beside what is presented, the first raised first', () => {
+        const tiles = [
+            screen('me', 1),
+            cam('a'),
+            cam('b', { hand: true, handAt: 20 }),
+            cam('c', { hand: true, handAt: 10 }),
+        ];
+        const spoke = new Map([['a', 99]]);
+        const { people } = arrange({ tiles, me: 'me', spoke, sideMax: 2 });
+        people.map((t) => t.peerId).should.eql(['b', 'c']);
+    });
+
+    it('lists the raised hands of the others in the order they went up', () => {
+        const peers = [
+            { id: 'me', name: 'Moi', hand: true, handAt: 1 },
+            { id: 'a', name: 'Ana', hand: true, handAt: 30 },
+            { id: 'b', name: 'Bob', hand: false },
+            { id: 'c', name: 'Chloé', hand: true, handAt: 20 },
+            { id: 'd', name: 'Dan', hand: true }, // raised before the server kept the time
+        ];
+        handQueue(peers, 'me')
+            .map((h) => h.name)
+            .should.eql(['Chloé', 'Ana', 'Dan']);
+        handQueue(undefined, 'me').should.eql([]);
     });
 
     it('finds the largest tiles for the grid', () => {

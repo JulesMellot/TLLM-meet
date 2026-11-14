@@ -72,6 +72,9 @@ module.exports = class Peer {
                 this.peer_info.peer_screen = data.status;
                 break;
             case 'hand':
+                // TLLM*meet: when the hand went up, for the order in which people speak (projector)
+                if (data.status && !this.peer_hand) this.peer_info.peer_hand_at = Date.now();
+                if (!data.status) this.peer_info.peer_hand_at = null;
                 this.peer_info.peer_hand = data.status;
                 this.peer_hand = data.status;
                 break;

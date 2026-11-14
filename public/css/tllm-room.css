@@ -2205,3 +2205,119 @@ body.tllm-panel-open .tllm-board {
         right: calc(4px + env(safe-area-inset-right, 0px)) !important;
     }
 }
+
+/* ---------- Agenda (TllmAgenda.js) ---------- */
+.tllm-top-btn.tllm-agenda-chip {
+    max-width: 340px;
+}
+.tllm-agenda-chip .tllm-lbl {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tllm-agenda-chip b {
+    font-variant-numeric: tabular-nums;
+}
+.tllm-agenda-chip.is-over b {
+    color: #ff8a8d;
+}
+.tllm-agenda {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.tllm-agenda li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 6px 8px;
+    border-radius: var(--tllm-radius-sm);
+}
+.tllm-agenda li + li {
+    margin-top: 2px;
+}
+.tllm-agenda li.is-current {
+    background: var(--tllm-accent-soft);
+    box-shadow: inset 3px 0 0 var(--tllm-accent);
+}
+.tllm-agenda li.is-done .tllm-agenda-title {
+    color: var(--tllm-text-2);
+}
+.tllm-agenda-num {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--tllm-surface-3);
+    font-size: 12px;
+    font-weight: 600;
+}
+.tllm-agenda li.is-current .tllm-agenda-num {
+    background: var(--tllm-accent);
+    color: var(--tllm-accent-ink);
+}
+.tllm-agenda-title {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.tllm-agenda input,
+.tllm-agenda-add input {
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid var(--tllm-border);
+    border-radius: var(--tllm-radius-sm);
+    background: var(--tllm-surface-2);
+    color: var(--tllm-text);
+    font: 14px var(--tllm-font);
+}
+.tllm-agenda-min,
+#tllmAgendaNewMin {
+    flex: none;
+    width: 52px;
+}
+.tllm-agenda-time:empty {
+    display: none;
+}
+.tllm-agenda-time {
+    flex: none;
+    min-width: 46px;
+    text-align: right;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--tllm-text-2);
+}
+.tllm-agenda li.is-current .tllm-agenda-time {
+    color: var(--tllm-text);
+    font-weight: 600;
+}
+.tllm-agenda li.is-over .tllm-agenda-time {
+    color: #ff8a8d;
+}
+.tllm-agenda-acts {
+    flex: none;
+    display: flex;
+}
+.tllm-agenda-acts .tllm-icon-btn {
+    width: 28px;
+    height: 28px;
+}
+.tllm-agenda-add {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+.tllm-agenda-add #tllmAgendaNew {
+    flex: 1;
+    min-width: 0;
+}
+.tllm-foot-actions button.tllm-primary {
+    border: 0;
+    background: var(--tllm-accent);
+    color: var(--tllm-accent-ink);
+    font-weight: 600;
+}

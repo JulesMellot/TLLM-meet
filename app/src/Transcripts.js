@@ -104,6 +104,22 @@ class Transcripts {
         return session;
     }
 
+    // The meeting moves to a point of its agenda (Agenda.js): a mark in the file, kept even while
+    // the transcription is paused. Nothing when the room has no transcription.
+    section(room, { index, total, title, by } = {}) {
+        const session = this.live.get(room);
+        if (!session || session.closedAt || !Number.isInteger(index)) return false;
+        this.write(session, {
+            ev: 'section',
+            at: this.now(),
+            index,
+            total: Number.isInteger(total) ? total : undefined,
+            title: String(title || '').slice(0, 120),
+            by: by ? String(by).slice(0, MAX_NAME) : undefined,
+        });
+        return true;
+    }
+
     // The room closed: the file is final once the last sentences are recognised
     close(room) {
         const session = this.live.get(room);
@@ -307,6 +323,18 @@ class Transcripts {
             'Transcription automatique : elle peut contenir des erreurs.',
             '',
         ];
+        // The agenda, as it went: each point, when it started and for how long
+        const sections = t.marks.filter((m) => m.ev === 'section' && m.title);
+        const point = (m) => `Point ${m.index + 1}${m.total ? '/' + m.total : ''} : ${m.title}`;
+        if (sections.length) {
+            out.push('Ordre du jour :');
+            sections.forEach((m, i) => {
+                const until = i + 1 < sections.length ? sections[i + 1].at : end;
+                const min = Math.max(0, Math.round((until - m.at) / 60000));
+                out.push(`- ${clock(m.at)} ${point(m)} (${min} min)`);
+            });
+            out.push('');
+        }
         // Pauses, in their place among the sentences: a stop followed by a start
         const marks = t.marks.filter((m) => m.ev === 'stop' || m.ev === 'start');
         const pauses = [];
@@ -317,6 +345,7 @@ class Transcripts {
         const mark = (at, text) => ({ at, line: `[${timecode(at - t.startedAt)}] — ${text} —` });
         const events = [
             ...t.lines.map((l) => ({ at: l.t, line: `[${timecode(l.t - t.startedAt)}] ${l.who} : ${l.text}` })),
+            ...sections.map((m) => ({ at: m.at, line: `[${timecode(m.at - t.startedAt)}] ══ ${point(m)} ══` })),
             ...pauses.flatMap((p) => [
                 mark(p.from, `Transcription en pause à ${clock(p.from)}`),
                 mark(p.to, `Transcription reprise à ${clock(p.to)}`),

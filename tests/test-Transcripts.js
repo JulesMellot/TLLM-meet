@@ -28,6 +28,32 @@ describe('test-Transcripts (transcription des réunions)', () => {
         assert.equal(timecode(-10), '00:00:00');
     });
 
+    it('marks the points of the agenda among the sentences, and sums them up at the top', () => {
+        const room = 'salle-k7m2xq';
+        assert.equal(t.section(room, { index: 0, total: 2, title: 'Rien' }), false); // no transcription
+        t.start(room, { name: 'Point hebdo', by: 'Jules' });
+        t.section(room, { index: 0, total: 2, title: 'Budget', by: 'Jules' });
+        t.add(t.begin(room), { name: 'Marie', text: 'On est à 80 %.', at: START + 60000 });
+        now = START + 12 * 60000;
+        t.section(room, { index: 1, total: 2, title: 'Planning', by: 'Jules' });
+        t.add(t.begin(room), { name: 'Jules', text: 'Livraison en mars.', at: START + 13 * 60000 });
+        now = START + 20 * 60000;
+        t.stop(room);
+        const [session] = t.list(room);
+        const text = t.toText(t.read(room, session.id));
+        assert.match(
+            text,
+            /Ordre du jour :\n- 14:02 Point 1\/2 : Budget \(12 min\)\n- 14:14 Point 2\/2 : Planning \(8 min\)/
+        );
+        const body = text.split('\n').filter((l) => l.startsWith('['));
+        assert.deepEqual(body, [
+            '[00:00:00] ══ Point 1/2 : Budget ══',
+            '[00:01:00] Marie : On est à 80 %.',
+            '[00:12:00] ══ Point 2/2 : Planning ══',
+            '[00:13:00] Jules : Livraison en mars.',
+        ]);
+    });
+
     it('accepts only plain room ids (no breakout rooms, no paths)', () => {
         assert.ok(isRoomId('point-hebdo-k7m2xq'));
         assert.ok(!isRoomId('point_breakout_1'));
