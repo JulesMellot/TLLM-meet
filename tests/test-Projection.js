@@ -2,7 +2,7 @@
 
 require('should');
 
-const { arrange, fitGrid } = require('../public/js/TllmProjection');
+const { arrange, fitGrid, pollToShow, pollBars } = require('../public/js/TllmProjection');
 
 describe('test-Projection', () => {
     const cam = (peerId, extra = {}) => ({ key: `${peerId}-cam`, peerId, screen: false, ...extra });
@@ -35,6 +35,48 @@ describe('test-Projection', () => {
         ]);
         const { people } = arrange({ tiles, me: 'me', spoke, sideMax: 3 });
         people.map((t) => t.peerId).should.eql(['a', 'b', 'e']);
+    });
+
+    it('puts a poll before anything presented, with the people beside', () => {
+        const poll = { id: 'p1' };
+        const { main, people } = arrange({ tiles: [screen('me', 1), cam('ana')], content: 'board', poll, me: 'me' });
+        main.should.eql({ kind: 'poll', poll });
+        people.map((t) => t.peerId).should.eql(['ana']);
+    });
+
+    it('shows the latest open poll, then the results for a minute after the close', () => {
+        const a = { id: 'a', closed: true };
+        const b = { id: 'b', closed: false };
+        const c = { id: 'c', closed: true };
+        pollToShow([a, b, c], new Map(), 0).should.equal(b);
+        (pollToShow([], new Map(), 0) === null).should.be.true();
+        // c closed while projecting, at 1000
+        const closedAt = new Map([
+            ['a', 0],
+            ['c', 1000],
+        ]);
+        pollToShow([a, c], closedAt, 30000).should.equal(c);
+        (pollToShow([a, c], closedAt, 61001) === null).should.be.true();
+        // Already closed when the projection opened: not shown again
+        (pollToShow([a], new Map([['a', 0]]), 5000) === null).should.be.true();
+    });
+
+    it('keeps the results hidden on the projector until the close when the poll hides them', () => {
+        // A presenter's view carries the counts even then
+        const poll = { options: ['Oui', 'Non'], counts: [3, 1], hideResults: true, closed: false };
+        pollBars(poll).should.eql({
+            hidden: true,
+            rows: [
+                { option: 'Oui', count: null, pct: 0 },
+                { option: 'Non', count: null, pct: 0 },
+            ],
+        });
+        pollBars({ ...poll, closed: true })
+            .rows.map((r) => r.pct)
+            .should.eql([75, 25]);
+        pollBars({ ...poll, hideResults: false, counts: [0, 0] })
+            .rows.map((r) => r.pct)
+            .should.eql([0, 0]);
     });
 
     it('finds the largest tiles for the grid', () => {

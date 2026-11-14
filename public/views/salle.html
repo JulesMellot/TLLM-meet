@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="robots" content="noindex" />
+        <title id="title">Dans la salle · TLLM*meet</title>
+        <link id="icon" rel="icon" href="../images/logo.svg" />
+        <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
+        <meta id="description" name="description" content="TLLM*meet, visioconférence privée." />
+        <link rel="stylesheet" href="../css/tllm-pages.css" />
+        <script defer src="../js/Brand.js"></script>
+        <script defer src="/socket.io/socket.io.js"></script>
+        <script defer src="../js/TllmSalle.js"></script>
+    </head>
+    <body class="tllm-page tllm-salle">
+        <header class="tllm-bar">
+            <span class="tllm-mark">TLLM<span class="tllm-ast">*</span>meet</span>
+        </header>
+        <main class="tllm-main">
+            <div class="tllm-solo">
+                <!-- No key: the page was not opened from the QR code -->
+                <section id="noKey" hidden>
+                    <h1>Dans la salle</h1>
+                    <p class="tllm-lead">Scannez le QR code affiché sur l’écran de la salle de réunion.</p>
+                </section>
+
+                <section id="enter" hidden>
+                    <p class="tllm-salle-kicker">Vous êtes dans la salle</p>
+                    <h1 id="enterRoom"></h1>
+                    <p class="tllm-lead">
+                        Votez aux sondages, réagissez et posez vos questions depuis votre téléphone, sans rejoindre la
+                        visio : ni caméra, ni micro.
+                    </p>
+                    <form class="tllm-form" id="enterForm">
+                        <label class="tllm-field"
+                            >Votre prénom
+                            <input class="tllm-input" id="enterName" autocomplete="given-name" maxlength="40" required
+                        /></label>
+                        <p class="tllm-error" id="enterError" role="alert"></p>
+                        <button class="tllm-button" type="submit" id="enterButton">Entrer</button>
+                    </form>
+                </section>
+
+                <section id="inside" hidden>
+                    <div>
+                        <p class="tllm-salle-kicker">
+                            <span class="tllm-salle-dot" aria-hidden="true"></span>
+                            <span id="insideStatus">Connecté</span> · <span id="insideName"></span>
+                        </p>
+                        <h1 id="insideRoom"></h1>
+                    </div>
+
+                    <section class="tllm-salle-block" aria-labelledby="pollsTitle">
+                        <h2 id="pollsTitle">Sondages</h2>
+                        <div id="polls"></div>
+                    </section>
+
+                    <section class="tllm-salle-block" aria-labelledby="reactTitle">
+                        <h2 id="reactTitle">Réagir</h2>
+                        <p class="tllm-hint">Votre réaction s’affiche sur l’écran de la salle et dans la visio.</p>
+                        <div class="tllm-salle-reactions" id="reactions"></div>
+                    </section>
+
+                    <section class="tllm-salle-block" aria-labelledby="askTitle">
+                        <h2 id="askTitle">Poser une question</h2>
+                        <form id="askForm" class="tllm-salle-ask">
+                            <textarea
+                                class="tllm-input"
+                                id="askText"
+                                rows="3"
+                                maxlength="500"
+                                placeholder="Votre question, envoyée à la réunion avec votre prénom"
+                                aria-label="Votre question"
+                            ></textarea>
+                            <p class="tllm-error" id="askError" role="alert"></p>
+                            <button class="tllm-button" type="submit" id="askButton">Envoyer la question</button>
+                        </form>
+                    </section>
+                </section>
+
+                <section id="ended" hidden>
+                    <h1>La réunion est terminée</h1>
+                    <p class="tllm-lead" id="endedText">Merci d’avoir participé.</p>
+                </section>
+            </div>
+        </main>
+        <div class="tllm-salle-toast" id="toast" role="status" aria-live="polite" hidden></div>
+    </body>
+</html>

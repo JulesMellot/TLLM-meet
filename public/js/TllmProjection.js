@@ -10,7 +10,12 @@
  *  - what is presented, big: the whiteboard or the shared notes when they are open, otherwise the
  *    latest screen shared (one's own included);
  *  - beside it, the people who are not in the room, the ones speaking first;
- *  - with nothing presented, those people in a grid; alone, the link to join.
+ *  - with nothing presented, those people in a grid; alone, the link to join;
+ *  - a poll, big, while it is open and for a minute after it closes (results kept hidden when the
+ *    poll hides them until the close), with the QR code to vote from a phone;
+ *  - always, a small QR code: the people in the room vote, react and ask a question from their
+ *    phone without joining the video call (app/src/Audience.js, public/views/salle.html);
+ *  - the reactions, from the video call and from the room.
  * One's own camera is left out: the room already sees the person. The window plays no sound
  * (the meeting window does) and receives nothing more: it shows the pictures the meeting already has.
  */
@@ -20,12 +25,13 @@
     // WHAT THE PROJECTOR SHOWS (no browser needed: tested in tests/test-Projection.js)
     // ####################################################
 
-    // tiles: [{ key, peerId, screen, since }]; content: 'board' | 'notes' | null
-    function arrange({ tiles, content = null, me, spoke = new Map(), sideMax = 4 }) {
+    // tiles: [{ key, peerId, screen, since }]; content: 'board' | 'notes' | null; poll: the poll to show
+    function arrange({ tiles, content = null, poll = null, me, spoke = new Map(), sideMax = 4 }) {
         const people = tiles.filter((t) => !t.screen && t.peerId !== me);
         const screens = tiles.filter((t) => t.screen);
         let main = null;
-        if (content) main = { kind: content };
+        if (poll) main = { kind: 'poll', poll };
+        else if (content) main = { kind: content };
         else if (screens.length) {
             const latest = screens.reduce((a, b) => ((b.since || 0) > (a.since || 0) ? b : a));
             main = { kind: 'screen', tile: latest };
@@ -49,7 +55,32 @@
         return best;
     }
 
-    const api = { arrange, fitGrid };
+    // The poll to show: the latest one open, or the latest closed less than a minute ago.
+    // closedAt: poll id -> when it was seen closed (0: already closed when the projection opened)
+    const RESULTS_MS = 60000;
+    function pollToShow(polls, closedAt, now) {
+        const list = Array.isArray(polls) ? polls : [];
+        for (let i = list.length - 1; i >= 0; i--) if (!list[i].closed) return list[i];
+        const last = list[list.length - 1];
+        const at = last ? closedAt.get(last.id) : 0;
+        return at && now - at < RESULTS_MS ? last : null;
+    }
+
+    // Bars of a poll on the projector. A presenter's own view carries the counts even when they are
+    // hidden from the participants until the close: the room is the participants.
+    function pollBars(poll) {
+        const hidden = !poll.counts || (poll.hideResults && !poll.closed);
+        const total = hidden ? 0 : poll.counts.reduce((a, b) => a + b, 0);
+        return {
+            hidden,
+            rows: poll.options.map((option, i) => {
+                const count = hidden ? null : poll.counts[i] || 0;
+                return { option, count, pct: hidden || !total ? 0 : Math.round((count / total) * 100) };
+            }),
+        };
+    }
+
+    const api = { arrange, fitGrid, pollToShow, pollBars };
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api;
         return;
@@ -65,8 +96,10 @@
     const P = (root.tllmProjection = { win: null, ...api });
     const spoke = new Map(); // peer id -> last time heard
     const since = new Map(); // tile key -> first time seen
+    const closedAt = new Map(); // poll id -> when it was seen closed
     let boardStream = null;
     let listening = false;
+    let audience = null; // { url, qr, count, name }
 
     P.isOpen = () => !!P.win && !P.win.closed;
     P.toggle = () => (P.isOpen() ? P.close() : P.open());
@@ -103,7 +136,10 @@
             return;
         }
         P.win = win;
+        closedAt.clear();
+        (root.tllmRoom?.polls || []).forEach((p) => p.closed && closedAt.set(p.id, 0));
         build(win);
+        askAudience();
         if (!target && root.screen?.isExtended) {
             try {
                 target = await otherScreen(); // the browser asks once
@@ -141,7 +177,58 @@
         if (listening || !rc?.socket) return;
         listening = true;
         rc.socket.on('audioVolume', (data) => data?.peer_id && spoke.set(data.peer_id, Date.now()));
+        rc.socket.on('audienceCount', (data) => audience && (audience.count = Number(data?.count) || 0));
+        rc.socket.on('connect', () => P.isOpen() && askAudience()); // the key may have changed meanwhile
+        // Reactions, from the video call and from the room, float on the projector too
+        const react = rc.handleRoomEmoji;
+        rc.handleRoomEmoji = function (cmd) {
+            react.call(this, cmd);
+            if (P.isOpen()) floatReaction(P.win.document, cmd);
+        };
         root.addEventListener('pagehide', () => P.isOpen() && P.win.close());
+    }
+
+    // The link for the phones of the room, and its QR code
+    function askAudience() {
+        rc.socket.emit('audienceKey', null, (answer) => {
+            if (!answer?.key) return;
+            const url = `${location.origin}/salle/${encodeURIComponent(rc.room_id)}#${answer.key}`;
+            let qr = '';
+            try {
+                qr = new root.QRious({ value: url, size: 600, level: 'M', background: '#ffffff' }).toDataURL();
+            } catch {
+                /* no QR library: the link is written instead */
+            }
+            audience = { url, qr, count: answer.count || 0, name: answer.name || rc.room_id };
+            if (!P.isOpen()) return;
+            const doc = P.win.document;
+            doc.querySelectorAll('.qr').forEach((img) => {
+                img.src = qr;
+                img.hidden = !qr;
+            });
+            doc.querySelectorAll('.qr-link').forEach(
+                (el) => (el.textContent = url.replace(/^https?:\/\//, '').split('#')[0])
+            );
+            doc.getElementById('waitRoom').textContent = audience.name;
+            doc.getElementById('footRoom').textContent = audience.name;
+            doc.title = `Projection · ${audience.name}`;
+        });
+    }
+
+    function floatReaction(doc, cmd) {
+        const host = doc.getElementById('reactions');
+        if (!host || !cmd?.emoji) return;
+        const el = doc.createElement('span');
+        el.className = 'float';
+        const emoji = doc.createElement('b');
+        emoji.textContent = cmd.emoji;
+        const who = doc.createElement('small');
+        who.textContent = String(cmd.peer_name || '');
+        el.append(emoji, who);
+        el.style.left = `${4 + Math.random() * 30}%`;
+        host.appendChild(el);
+        setTimeout(() => el.remove(), 3200);
+        while (host.children.length > 30) host.firstElementChild.remove();
     }
 
     // "Projection en cours" in the top strip of the meeting, to stop it from there
@@ -183,17 +270,23 @@ ${icons ? `<link rel="stylesheet" href="${icons}">` : ''}
 <style>${CSS.replace('/*TOKENS*/', tokens())}</style></head>
 <body class="is-wait">
 <main id="stage"><video id="mainVideo" autoplay playsinline muted></video><div id="notes"><div class="ql-editor"></div></div>
+<section id="poll"><div class="poll-body"><p class="poll-kicker"><span id="pollState"></span><span id="pollClock"></span></p>
+<h2 id="pollQuestion"></h2><div id="pollRows"></div><p id="pollTotal"></p></div>
+<aside class="poll-qr"><img class="qr" alt="" hidden><b>Votez avec votre téléphone</b><span class="qr-link"></span></aside></section>
 <p id="mainLabel"></p></main>
 <aside id="people"></aside>
 <section id="wait"><h1 id="waitRoom"></h1><p>Pour rejoindre la visio :</p><p id="waitLink"></p></section>
-<footer id="foot"><span id="footRoom"></span><span id="footRec" hidden><i class="fas fa-circle"></i> Enregistrement</span><span id="footClock"></span></footer>
+<footer id="foot"><span id="footRoom"></span><span id="footRec" hidden><i class="fas fa-circle"></i> Enregistrement</span><span id="footClock"></span>
+<span id="footPhone"><span><b>Dans la salle ?</b> Votez, réagissez, posez vos questions<small id="footCount"></small></span><img class="qr" alt="" hidden></span></footer>
+<div id="reactions"></div>
 <button type="button" id="hint"><i class="fas fa-expand"></i><span></span></button>
 </body></html>`);
         doc.close();
-        doc.title = `Projection · ${rc.room_id || ''}`;
-        doc.getElementById('waitRoom').textContent = rc.room_id || '';
+        const roomName = audience?.name || rc.room_id || '';
+        doc.title = `Projection · ${roomName}`;
+        doc.getElementById('waitRoom').textContent = roomName;
         doc.getElementById('waitLink').textContent = `${location.host}/join/${rc.room_id || ''}`;
-        doc.getElementById('footRoom').textContent = rc.room_id || '';
+        doc.getElementById('footRoom').textContent = roomName;
 
         const fullscreen = () => {
             if (doc.fullscreenElement) doc.exitFullscreen?.();
@@ -291,7 +384,10 @@ ${icons ? `<link rel="stylesheet" href="${icons}">` : ''}
         if (!body || typeof rc === 'undefined' || !rc) return;
         const now = Date.now();
         const content = presented();
-        const { main, people } = arrange({ tiles: collect(), content, me: rc.peer_id, spoke });
+        const polls = root.tllmRoom?.polls || [];
+        polls.forEach((p) => p.closed && !closedAt.has(p.id) && closedAt.set(p.id, now));
+        const poll = pollToShow(polls, closedAt, now);
+        const { main, people } = arrange({ tiles: collect(), content, poll, me: rc.peer_id, spoke });
 
         body.className = body.className.replace(/\bis-(wait|grid|stage)\b/g, '').trim();
         body.classList.add(main ? 'is-stage' : people.length ? 'is-grid' : 'is-wait');
@@ -300,9 +396,14 @@ ${icons ? `<link rel="stylesheet" href="${icons}">` : ''}
         const video = doc.getElementById('mainVideo');
         const notes = doc.getElementById('notes');
         const label = doc.getElementById('mainLabel');
-        video.hidden = !main || main.kind === 'notes';
+        video.hidden = !main || main.kind === 'notes' || main.kind === 'poll';
         notes.hidden = main?.kind !== 'notes';
-        if (main?.kind === 'screen') {
+        doc.getElementById('poll').hidden = main?.kind !== 'poll';
+        if (main?.kind === 'poll') {
+            setStream(video, null);
+            renderPoll(doc, main.poll, now);
+            label.textContent = '';
+        } else if (main?.kind === 'screen') {
             setStream(video, main.tile.stream);
             label.textContent =
                 main.tile.peerId === rc.peer_id ? '' : `Écran partagé par ${main.tile.name || 'un participant'}`;
@@ -368,10 +469,41 @@ ${icons ? `<link rel="stylesheet" href="${icons}">` : ''}
 
         const recording = (root.tllmRoom?.recordingBy?.size || 0) > 0 || !!(rc.isRecording && rc.isRecording());
         doc.getElementById('footRec').hidden = !recording;
+        // The poll shows its own, bigger QR code
+        doc.getElementById('footPhone').hidden = !audience || main?.kind === 'poll';
+        doc.getElementById('footCount').textContent = audience?.count
+            ? ` · ${audience.count} connecté${audience.count > 1 ? 's' : ''}`
+            : '';
         doc.getElementById('footClock').textContent = new Date().toLocaleTimeString('fr-FR', {
             hour: '2-digit',
             minute: '2-digit',
         });
+    }
+
+    function renderPoll(doc, poll, now) {
+        const { hidden, rows } = pollBars(poll);
+        doc.getElementById('pollState').textContent = poll.closed ? 'Sondage terminé' : 'Sondage en cours';
+        const left = poll.endsAt && !poll.closed ? Math.max(0, Math.round((poll.endsAt - now) / 1000)) : null;
+        doc.getElementById('pollClock').textContent =
+            left == null ? '' : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+        doc.getElementById('pollQuestion').textContent = poll.question;
+        const host = doc.getElementById('pollRows');
+        while (host.children.length > rows.length) host.lastElementChild.remove();
+        rows.forEach((row, i) => {
+            let el = host.children[i];
+            if (!el) {
+                el = doc.createElement('div');
+                el.className = 'row';
+                el.innerHTML = '<span class="bar"></span><span class="opt"></span><span class="val"></span>';
+                host.appendChild(el);
+            }
+            el.querySelector('.opt').textContent = row.option;
+            el.querySelector('.val').textContent = hidden ? '' : `${row.pct} %`;
+            el.querySelector('.bar').style.width = `${row.pct}%`;
+        });
+        const votes = `${poll.total} vote${poll.total > 1 ? 's' : ''}`;
+        doc.getElementById('pollTotal').textContent = hidden ? `${votes} · résultats à la clôture` : votes;
+        doc.querySelector('.poll-qr').hidden = poll.closed || !audience;
     }
 
     const CSS = `
@@ -413,6 +545,27 @@ body.is-wait #wait{grid-column:1/3;grid-row:1;display:flex;flex-direction:column
 #footRoom{font-weight:600;color:var(--text,#e9ebed)}
 #footRec{color:#ff8a8d}#footRec i{font-size:10px}
 #footClock{margin-left:auto}
+#poll{width:100%;height:100%;display:flex;gap:4vw;align-items:center;padding:4vh 4vw;background:var(--surface,#1a1d20);border-radius:var(--radius,10px)}
+.poll-body{flex:1;min-width:0}
+.poll-kicker{display:flex;gap:16px;margin:0 0 12px;color:var(--accent,#4c8dff);font-weight:600;font-size:clamp(16px,1.6vw,28px);font-variant-numeric:tabular-nums}
+#pollQuestion{margin:0 0 3vh;font-size:clamp(28px,3.4vw,64px);line-height:1.15;font-weight:600;overflow-wrap:anywhere}
+#pollRows{display:flex;flex-direction:column;gap:1.4vh}
+#pollRows .row{position:relative;display:flex;justify-content:space-between;gap:16px;padding:1.4vh 1.4vw;border-radius:var(--radius,10px);background:var(--surface-2,#23272b);overflow:hidden;font-size:clamp(18px,2vw,38px)}
+#pollRows .bar{position:absolute;inset:0 auto 0 0;background:var(--accent,#4c8dff);opacity:.35;transition:width .5s}
+#pollRows .opt,#pollRows .val{position:relative;overflow-wrap:anywhere}
+#pollRows .val{flex:none;font-weight:600;font-variant-numeric:tabular-nums}
+#pollTotal{margin:2vh 0 0;color:var(--text-2,#a9afb5);font-size:clamp(16px,1.5vw,28px)}
+.poll-qr{flex:none;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;font-size:clamp(16px,1.4vw,26px)}
+.poll-qr img{width:clamp(180px,22vw,440px);aspect-ratio:1;border-radius:var(--radius,10px);background:#fff;padding:10px}
+.qr-link{color:var(--text-2,#a9afb5);font-size:.75em}
+#footPhone{display:flex;align-items:center;gap:12px;text-align:right}
+#footPhone small{color:var(--text-2,#a9afb5);font-size:inherit}
+#footPhone img{width:110px;height:110px;background:#fff;padding:4px;border-radius:6px}
+#reactions{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+.float{position:absolute;bottom:90px;display:flex;flex-direction:column;align-items:center;animation:rise 3.2s ease-out forwards}
+.float b{font-size:clamp(40px,4vw,80px);line-height:1}
+.float small{padding:2px 8px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;font-size:clamp(12px,1vw,18px)}
+@keyframes rise{0%{transform:translateY(0);opacity:0}10%{opacity:1}80%{opacity:1}100%{transform:translateY(-55vh);opacity:0}}
 #hint{position:fixed;left:50%;bottom:56px;transform:translateX(-50%);display:flex;gap:10px;align-items:center;max-width:calc(100% - 32px);
   padding:12px 20px;border:0;border-radius:999px;background:var(--accent,#4c8dff);color:#fff;font:inherit;font-size:16px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35)}
 body.is-full #hint{display:none}

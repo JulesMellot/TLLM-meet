@@ -897,7 +897,9 @@
                 const who = m.mine ? 'Vous' : m.fromName;
                 const tag = m.private
                     ? `<span class="tllm-private-tag">Privé${m.mine ? ' · à ' + esc(m.toName) : ''}</span>`
-                    : '';
+                    : m.question
+                      ? `<span class="tllm-private-tag">Question · dans la salle</span>`
+                      : '';
                 return `<div class="tllm-msg${m.private ? ' tllm-private' : ''}">
                     <div class="tllm-msg-meta"><span class="tllm-who">${esc(who)}</span>${tag}<span>${esc(m.time)}</span></div>
                     <div class="tllm-msg-txt">${m.html}</div>
@@ -1063,7 +1065,8 @@
         body.innerHTML = `
             <input class="tllm-search" id="tllmSearch" type="search" placeholder="Rechercher" aria-label="Rechercher un participant" value="${esc(T.filter || '')}">
             ${hands.length ? `<p class="tllm-section">Main levée (${hands.length})</p>${hands.map(row).join('')}` : ''}
-            <p class="tllm-section">Dans la visio (${rest.length})</p>${rest.map(row).join('')}`;
+            <p class="tllm-section">Dans la visio (${rest.length})</p>${rest.map(row).join('')}
+            ${T.audienceCount ? `<p class="tllm-section">Dans la salle, par téléphone (${T.audienceCount})</p><p class="tllm-empty tllm-audience-note">Ils votent, réagissent et posent leurs questions depuis le QR code du mode présentation.</p>` : ''}`;
         const newSearch = $('tllmSearch');
         newSearch.oninput = (e) => {
             T.filter = e.target.value;
@@ -1145,6 +1148,31 @@
             if (T.panel) renderPanel();
         });
         rc.socket.on('setVideoOff', () => T.refreshPeersSoon());
+
+        // The meeting room, from phones (presentation mode QR code, app/src/Audience.js)
+        rc.socket.on('audienceCount', (data) => {
+            T.audienceCount = Number(data?.count) || 0;
+            if (T.panel === 'people') renderPeople();
+        });
+        rc.socket.on('audienceQuestion', (data) => {
+            if (!data?.text) return;
+            T.chat.push({
+                fromName: String(data.name || '?'),
+                html: esc(data.text).replace(/\n/g, '<br>'),
+                time: now(),
+                question: true,
+            });
+            if (T.panel === 'chat') return renderChatList();
+            T.unread++;
+            T.renderBar();
+            bubble({
+                name: data.name,
+                title: `Question de ${data.name} (salle)`,
+                text: data.text,
+                duration: 8000,
+                onClick: () => T.panel !== 'chat' && T.togglePanel('chat'),
+            });
+        });
     }
 
     // ---------------- Polls ----------------

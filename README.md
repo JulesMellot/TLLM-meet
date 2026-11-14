@@ -18,6 +18,9 @@ de Miroslav Pejic, sous licence [AGPL-3.0](LICENSE).
 - Notes partagées : plusieurs personnes écrivent en même temps, avec les curseurs de chacun ; export PDF ou texte.
 - Tableau blanc : dessin à plusieurs, formes, texte, post-it, images et PDF, zoom au doigt ; export PNG ou PDF.
 - Notes et tableau sont gardés par le serveur : les retardataires les retrouvent.
+- Mode présentation, pour une réunion mi-salle mi-visio : une seconde fenêtre pour le projecteur (ce qui est
+  présenté, les personnes à distance, les sondages en direct, les réactions). Avec le QR code affiché, les
+  personnes dans la salle votent, réagissent et posent leurs questions depuis leur téléphone, sans rejoindre la visio.
 - Caler une réunion : sondage de dates façon Doodle, sans compte, avec abonnement d'agenda.
 - Partage de vidéos et de fichiers pendant la visio.
 - Salle d'attente, verrouillage de la visio, mot de passe optionnel.

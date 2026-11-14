@@ -2057,3 +2057,206 @@ select.tllm-input {
         display: none;
     }
 }
+
+/* ---------- A phone in the meeting room (/salle/<room>, TllmSalle.js) ---------- */
+
+.tllm-salle .tllm-solo {
+    padding-block: 3vh 24px;
+}
+
+.tllm-salle-kicker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+    font-weight: 600;
+    color: var(--ink-2);
+}
+
+.tllm-salle-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--free);
+}
+
+.tllm-salle.is-offline .tllm-salle-dot {
+    background: var(--soon);
+}
+
+.tllm-salle-block {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.tllm-salle-block h2 {
+    margin: 0;
+}
+
+.tllm-salle-block .tllm-hint {
+    margin: 0;
+}
+
+.tllm-salle-poll {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    background: var(--panel);
+    border-radius: var(--r);
+}
+
+.tllm-salle-poll + .tllm-salle-poll {
+    margin-top: 12px;
+}
+
+.tllm-salle-poll.is-closed {
+    opacity: 0.85;
+}
+
+.tllm-salle-poll-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.tllm-salle-poll h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.tllm-salle-tag {
+    flex: none;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--live-ink);
+    background: var(--live);
+}
+
+.is-closed .tllm-salle-tag {
+    color: var(--done-ink);
+    background: var(--done);
+}
+
+.tllm-salle-option {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 52px;
+    padding: 10px 14px;
+    overflow: hidden;
+    font: inherit;
+    font-size: 1.05rem;
+    text-align: left;
+    color: var(--ink);
+    background: var(--panel-2);
+    border: 2px solid transparent;
+    border-radius: var(--r);
+    cursor: pointer;
+    isolation: isolate;
+}
+
+/* The share of the votes, behind the text */
+.tllm-salle-option::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: -1;
+    width: var(--pct, 0%);
+    background: var(--rule);
+    transition: width 0.3s;
+}
+
+.tllm-salle-option.is-mine {
+    border-color: var(--act);
+}
+
+.tllm-salle-option.is-mine::before {
+    background: color-mix(in srgb, var(--act) 22%, transparent);
+}
+
+.tllm-salle-option[disabled] {
+    cursor: default;
+}
+
+.tllm-salle-option-label {
+    overflow-wrap: anywhere;
+}
+
+.tllm-salle-option-value {
+    flex: none;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.tllm-salle-reactions {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.tllm-salle-reactions button {
+    min-height: 56px;
+    font-size: 1.7rem;
+    background: var(--panel);
+    border: 0;
+    border-radius: var(--r);
+    cursor: pointer;
+}
+
+.tllm-salle-reactions button.is-sent {
+    animation: tllm-salle-pop 0.35s;
+}
+
+@keyframes tllm-salle-pop {
+    50% {
+        transform: scale(1.18);
+    }
+}
+
+.tllm-salle-ask {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tllm-salle-ask textarea {
+    min-height: 96px;
+    padding: 12px 14px;
+    font: inherit;
+    resize: vertical;
+}
+
+.tllm-salle-toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    padding: 12px 18px;
+    font-weight: 600;
+    color: var(--act-ink);
+    background: var(--act);
+    border-radius: var(--r);
+    transform: translateX(-50%);
+}
+
+.tllm-salle-toast[hidden] {
+    display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tllm-salle-option::before {
+        transition: none;
+    }
+    .tllm-salle-reactions button.is-sent {
+        animation: none;
+    }
+}
