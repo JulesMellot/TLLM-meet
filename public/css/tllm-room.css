@@ -600,6 +600,11 @@ body.tllm-room .Camera .user-hand {
     color: var(--tllm-text-2);
     line-height: 1.5;
 }
+.tllm-empty.tllm-audience-note {
+    margin: 4px 10px 12px;
+    text-align: left;
+    font-size: 13px;
+}
 .tllm-foot-note {
     margin: 0;
     font-size: 12px;

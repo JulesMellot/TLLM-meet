@@ -87,6 +87,7 @@ const RoomPassword = require('./RoomPassword');
 const HtmlInjector = require('./HtmlInjector');
 const { CollabStore } = require('./Collab');
 const { DatePolls, DatePollError } = require('./DatePolls');
+const { Audience } = require('./Audience');
 const { RoomRegistry } = require('./RoomRegistry');
 const { Transcripts } = require('./Transcripts');
 const { Usage } = require('./Usage');
@@ -283,6 +284,7 @@ const views = {
     rdvAdmin: path.join(__dirname, '../../', 'public/views/rdvAdmin.html'),
     after: path.join(__dirname, '../../', 'public/views/after.html'),
     invitation: path.join(__dirname, '../../', 'public/views/invitation.html'),
+    salle: path.join(__dirname, '../../', 'public/views/salle.html'),
 };
 
 const filesPath = [
@@ -295,6 +297,7 @@ const filesPath = [
     views.rdvAdmin,
     views.after,
     views.invitation,
+    views.salle,
 ];
 
 const htmlInjector = new HtmlInjector(filesPath, config.ui.brand);
@@ -382,8 +385,12 @@ function openMeeting(roomId) {
     meetingLog.start(roomId, meeting.startedAt);
     meetingLog.add(roomId, 'info', 'Visio ouverte');
 }
+// TLLM*meet: phones in the meeting room (see Audience.js)
+const audience = new Audience();
+
 function closeMeeting(roomId, why = 'plus personne dans la salle') {
     droppedPeople.delete(roomId);
+    for (const id of audience.close(roomId)) io.to(id).emit('audienceEnded');
     meetingLog.add(roomId, 'info', `Visio terminée : ${why}`);
     usage.close(roomId, { logs: meetingLog.end(roomId) });
 }
@@ -1040,6 +1047,12 @@ function startServer() {
         if (!transcriptOwner(req, res)) return;
         if (!transcripts.remove(req.params.room, req.params.id)) return res.status(404).json({ error: 'not found' });
         return res.json({ ok: true });
+    });
+
+    // From a phone in the meeting room: vote, react, ask (see Audience.js). The key is in the #fragment.
+    app.get('/salle/:id', (req, res) => {
+        if (!Validator.isValidRoomName(req.params.id)) return res.status(404).sendFile(views.notFound);
+        return htmlInjector.injectHtml(views.salle, res);
     });
 
     // After leaving a call (see TllmRoom.js)
@@ -1773,7 +1786,18 @@ function startServer() {
     // SOCKET IO
     // ####################################################
 
-    const PRE_JOIN_EVENTS = new Set(['createRoom', 'join', 'resume', 'clientError', 'error']);
+    // The phones of the meeting room never join: their events check their own membership (Audience.js)
+    const PRE_JOIN_EVENTS = new Set([
+        'createRoom',
+        'join',
+        'resume',
+        'clientError',
+        'error',
+        'audienceJoin',
+        'audienceVote',
+        'audienceReact',
+        'audienceQuestion',
+    ]);
 
     // TLLM*meet: one tiny event to everybody now and then (see STATE_BEAT_MS)
     if (resume.enabled) {
@@ -4221,6 +4245,85 @@ function startServer() {
             if (input && room.editPoll(ref, input.question, input.options)) sendPolls(room);
         });
 
+        // TLLM*meet: the meeting room, from phones (see Audience.js). The QR code of the projector carries
+        // the key; any participant may show it, the phones can only vote, react and ask.
+        socket.on('audienceKey', (_, cb) => {
+            if (typeof cb !== 'function' || !roomExists(socket)) return;
+            cb({
+                key: audience.key(socket.room_id),
+                count: audience.count(socket.room_id),
+                name: roomRegistry.name(socket.room_id),
+            });
+        });
+
+        const audienceCount = (roomId) =>
+            roomList.get(roomId)?.sendToAll('audienceCount', { count: audience.count(roomId) });
+        const inAudience = () => {
+            const found = audience.find(socket.id);
+            const room = found && roomList.get(found.roomId);
+            return room ? { ...found, room } : null;
+        };
+
+        socket.on('audienceJoin', (data, cb) => {
+            if (typeof cb !== 'function') return;
+            if (roomExists(socket)) return cb({ error: 'Déjà dans la visio.' });
+            const roomId = typeof data?.room_id === 'string' ? data.room_id : '';
+            const room = roomList.get(roomId);
+            if (!room) {
+                audience.leave(socket.id);
+                return cb({ error: 'Aucune réunion en cours dans cette salle.', ended: true });
+            }
+            const { member, error } = audience.join(roomId, socket.id, data);
+            if (error) return cb({ error });
+            log.debug('[Audience] join', { room: roomId, name: member.name });
+            cb({
+                ok: true,
+                name: roomRegistry.name(roomId),
+                polls: room.pollsView(member.voterId, false),
+            });
+            audienceCount(roomId);
+        });
+
+        socket.on('audienceVote', (data) => {
+            const found = inAudience();
+            if (!found || !data || typeof data !== 'object') return;
+            const choices = Array.isArray(data.options) ? data.options : null;
+            if (!choices || choices.length > 10 || choices.some((c) => typeof c !== 'string')) return;
+            if (typeof data.pollId !== 'string') return;
+            if (found.room.votePoll(data.pollId, found.member.voterId, `${found.member.name} (salle)`, choices))
+                sendPolls(found.room);
+        });
+
+        socket.on('audienceReact', (data) => {
+            const found = inAudience();
+            const emoji = found && audience.react(found.member, data?.emoji);
+            if (!emoji) return;
+            found.room.sendToAll('cmd', {
+                type: 'roomEmoji',
+                peer_name: `${found.member.name} (salle)`,
+                peer_id: null,
+                emoji,
+                shortcodes: '',
+                broadcast: true,
+            });
+        });
+
+        socket.on('audienceQuestion', (data, cb) => {
+            const reply = typeof cb === 'function' ? cb : () => {};
+            const found = inAudience();
+            if (!found) return reply({ error: 'Vous n’êtes plus connecté à la réunion.' });
+            const { text, error } = audience.question(found.member, data?.text);
+            if (error) return reply({ error });
+            found.room.sendToAll('audienceQuestion', { name: found.member.name, text, at: Date.now() });
+            meetingLog.add(found.roomId, 'info', 'question posée depuis la salle', { who: found.member.name });
+            reply({ ok: true });
+        });
+
+        socket.on('disconnect', () => {
+            const roomId = audience.leave(socket.id);
+            if (roomId) audienceCount(roomId);
+        });
+
         // TLLM*meet: a presenter allows (or no longer allows) one participant to share
         socket.on('setSharePermission', (dataObject) => {
             if (!roomExists(socket)) return;
@@ -4587,6 +4690,12 @@ function startServer() {
                 peer.peer_info?.peer_uuid ?? peer.peer_uuid
             );
             room.sendTo(peerId, 'updatePolls', room.pollsView(peerId, presenter));
+        }
+        // The phones of the meeting room see what a participant sees
+        if (onlyPeerId) return;
+        for (const id of audience.sockets(room.id)) {
+            const found = audience.find(id);
+            if (found) io.to(id).emit('updatePolls', room.pollsView(found.member.voterId, false));
         }
     }
 

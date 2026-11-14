@@ -4,6 +4,7 @@
  * TLLM*meet - browser test: presentation mode. The organiser opens the projector window from the
  * "Plus" menu: it shows the people at a distance (not the organiser), then the whiteboard and the
  * notes big with those people beside, and closes from the top strip of the meeting.
+ * From a phone in the room (the QR code of the projector), someone votes, reacts and asks a question.
  * Run: npm run test:browser (needs "npx playwright install chromium" once).
  */
 
@@ -33,6 +34,9 @@ describe('Presentation mode: a window for the projector (browser)', function () 
     let guest;
     let page;
     let projector;
+    let phone;
+    let other;
+    let roomId;
     let failed = false;
     const pageErrors = [];
 
@@ -127,11 +131,11 @@ describe('Presentation mode: a window for the projector (browser)', function () 
         await page.waitForURL(`${BASE}/`);
         const res = await organiser.request.fetch(`${BASE}/admin/rooms`, { method: 'POST', data: { name: 'Projet' } });
         const room = (await res.json()).room;
-        const roomId = room.id || room;
+        roomId = room.id || room;
 
         await page.goto(`${BASE}/join/?room=${roomId}&name=Jules&audio=0&video=1&notify=0`);
         await page.waitForFunction(() => window.tllmRoom?.started, null, { timeout: 30000 });
-        const other = await guest.newPage();
+        other = await guest.newPage();
         await other.goto(`${BASE}/join/?room=${roomId}&name=Camille&audio=0&video=1&notify=0`);
         await other.waitForFunction(() => window.tllmRoom?.started, null, { timeout: 30000 });
 
@@ -165,10 +169,88 @@ describe('Presentation mode: a window for the projector (browser)', function () 
         await until(async () => (await state()).layout === 'is-grid', 'back to the grid');
     });
 
+    it('lets a phone of the room in with the QR code link only', async () => {
+        await projector.locator('#footPhone img.qr').waitFor();
+        assert.match(await projector.locator('#footPhone img.qr').getAttribute('src'), /^data:image\/png/);
+        const { key } = await page.evaluate(() => new Promise((r) => rc.socket.emit('audienceKey', null, r)));
+
+        const phoneContext = await browser.newContext({
+            ignoreHTTPSErrors: true,
+            locale: 'fr-FR',
+            viewport: { width: 390, height: 844 },
+            isMobile: true,
+            hasTouch: true,
+        });
+        phone = await phoneContext.newPage();
+        phone.on('pageerror', (err) => pageErrors.push(err));
+
+        await phone.goto(`${BASE}/salle/${roomId}#wrong-key`);
+        await phone.fill('#enterName', 'Léa');
+        await phone.click('#enterButton');
+        await phone.locator('#enterError', { hasText: 'QR code' }).waitFor();
+
+        await phone.goto(`${BASE}/salle/${roomId}#${key}`);
+        await phone.reload(); // a fragment change alone does not load the page again
+        await phone.fill('#enterName', 'Léa');
+        await phone.click('#enterButton');
+        await phone.locator('#inside').waitFor();
+        await phone.locator('#polls', { hasText: 'Aucun sondage' }).waitFor();
+        await page.waitForFunction(() => window.tllmRoom.audienceCount === 1);
+        await projector.locator('#footCount', { hasText: '1 connecté' }).waitFor();
+    });
+
+    it('shows a poll on the projector, and the phone votes in it', async () => {
+        await page.evaluate(() =>
+            rc.socket.emit('createPoll', { question: 'On décale la réunion ?', options: ['Oui', 'Non'] })
+        );
+        await until(async () => !(await projector.locator('#poll').isHidden()), 'the poll on the projector');
+        assert.equal(await projector.locator('#pollQuestion').innerText(), 'On décale la réunion ?');
+        assert.deepEqual((await state()).people, ['Camille']);
+        await projector.locator('.poll-qr img.qr').waitFor();
+
+        await phone.getByRole('button', { name: /Oui/ }).click();
+        await projector.locator('#pollTotal', { hasText: '1 vote' }).waitFor();
+        assert.equal(await projector.locator('#pollRows .row .val').first().innerText(), '100 %');
+        const voters = await page.evaluate(() => window.tllmRoom.polls[0].voters.map((v) => v.name));
+        assert.deepEqual(voters, ['Léa (salle)']);
+
+        // Tapped again: the vote is withdrawn
+        await phone.getByRole('button', { name: /Oui/ }).click();
+        await projector.locator('#pollTotal', { hasText: '0 vote' }).waitFor();
+        await phone.getByRole('button', { name: /Non/ }).click();
+        await projector.locator('#pollTotal', { hasText: '1 vote' }).waitFor();
+
+        const pollId = await page.evaluate(() => window.tllmRoom.polls[0].id);
+        await page.evaluate((id) => rc.socket.emit('closePoll', { pollId: id }), pollId);
+        await projector.locator('#pollState', { hasText: 'Sondage terminé' }).waitFor();
+        await phone.locator('.tllm-salle-poll.is-closed').waitFor();
+    });
+
+    it('sends reactions to the projector and questions to the meeting', async () => {
+        await phone.getByRole('button', { name: 'Réagir 👏' }).click();
+        await projector.locator('#reactions .float', { hasText: 'Léa (salle)' }).waitFor();
+
+        await phone.fill('#askText', 'Et le budget 2027 ?');
+        await phone.click('#askButton');
+        await phone.locator('#toast', { hasText: 'Question envoyée' }).waitFor();
+        await page.waitForFunction(() =>
+            window.tllmRoom.chat.some((m) => m.question && m.fromName === 'Léa' && m.html.includes('budget 2027'))
+        );
+        // Too soon for another one
+        await phone.fill('#askText', 'Encore une');
+        await phone.click('#askButton');
+        await phone.locator('#askError', { hasText: 'Attendez' }).waitFor();
+    });
+
     it('stops from the top strip of the meeting', async () => {
         await page.click('#tllmProjecting');
         await until(async () => projector.isClosed(), 'the window closed');
         assert.equal(await page.locator('#tllmProjecting').count(), 0);
         assert.deepEqual(pageErrors.map(String), []);
+    });
+
+    it('tells the phones when the meeting ends', async () => {
+        for (const p of [page, other]) await p.evaluate(() => rc.socket.emit('exitRoom', null, () => {}));
+        await phone.locator('#ended').waitFor();
     });
 });
