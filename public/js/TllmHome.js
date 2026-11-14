@@ -125,7 +125,7 @@
     // ---------- rooms: under way, coming, never opened, past ----------
 
     const PAST_PAGE = 8;
-    const roomsView = { query: '', shown: PAST_PAGE };
+    const roomsView = { query: '', shown: PAST_PAGE, editing: false };
 
     const fold = (str) =>
         String(str || '')
@@ -146,7 +146,8 @@
         li.append(el('span', 'tllm-room-tab'));
 
         const text = el('div');
-        text.append(el('div', 'tllm-room-name-row', room.name));
+        const nameRow = el('div', 'tllm-room-name-row', room.name);
+        text.append(nameRow);
         const stateLine = el('div', 'tllm-room-state');
         if (kind === 'live') {
             stateLine.append(el('strong', '', room.since ? `En cours depuis ${minutesSince(room.since)}` : 'En cours'));
@@ -195,8 +196,69 @@
         );
         go.href = url;
         actions.append(copyBtn, go);
+        // Rename any room; delete one that is neither under way nor booked by a poll
+        const items = [['Renommer', () => renameRoom(room, nameRow)]];
+        if (kind === 'unused' || kind === 'past')
+            items.push(null, ['Supprimer la salle', () => deleteRoom(room), true]);
+        actions.append(rowMenu(`Gérer la salle ${room.name}`, items));
         li.append(actions);
         return li;
+    }
+
+    // Inline: the name becomes a field. Enter saves, Escape gives up
+    function renameRoom(room, nameRow) {
+        const form = el('form', 'tllm-room-rename');
+        const input = el('input', 'tllm-input');
+        input.type = 'text';
+        input.maxLength = 120;
+        input.value = room.name;
+        input.required = true;
+        input.setAttribute('aria-label', 'Nouveau nom de la salle');
+        const save = el('button', 'tllm-button is-small', 'Enregistrer');
+        save.type = 'submit';
+        const cancel = el('button', 'tllm-button is-quiet is-small', 'Annuler');
+        cancel.type = 'button';
+        form.append(input, save, cancel);
+        const done = () => {
+            roomsView.editing = false;
+            form.replaceWith(nameRow);
+        };
+        cancel.onclick = done;
+        input.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            e.stopPropagation();
+            done();
+        });
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = input.value.trim();
+            if (!name || name === room.name) return done();
+            save.disabled = true;
+            try {
+                const data = await modApi('PATCH', `/api/admin/rooms/${encodeURIComponent(room.id)}`, { name });
+                room.name = data.name;
+                nameRow.textContent = data.name;
+                done();
+                toast('Salle renommée. Le lien ne change pas.');
+            } catch (err) {
+                save.disabled = false;
+                if (err.message) toast(err.message);
+            }
+        });
+        roomsView.editing = true;
+        nameRow.replaceWith(form);
+        input.focus();
+        input.select();
+    }
+
+    async function deleteRoom(room) {
+        const lines = [`Supprimer la salle « ${room.name} » ?`, '', 'Le lien ne permettra plus d’y entrer.'];
+        if (room.transcript) lines.push('Ses transcriptions sont effacées aussi.');
+        if (!window.confirm(lines.join('\n'))) return;
+        await modApi('DELETE', `/api/admin/rooms/${encodeURIComponent(room.id)}`);
+        state.overview.rooms = state.overview.rooms.filter((r) => r.id !== room.id);
+        renderRooms(state.overview.rooms);
+        toast('Salle supprimée');
     }
 
     function section(title, count, cls = '') {
@@ -411,7 +473,8 @@
             state.overview = data;
             state.timeZone = data.timeZone || state.timeZone;
             tick();
-            renderRooms(data.rooms);
+            // Not under the organiser's hands: a name being edited, a room menu open
+            if (!roomsView.editing && !$('rooms').querySelector('.tllm-menu[open]')) renderRooms(data.rooms);
             renderAgenda(data.agenda);
             renderPolls(data.polls);
         } catch {

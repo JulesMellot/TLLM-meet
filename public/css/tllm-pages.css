@@ -1012,6 +1012,19 @@ select.tllm-input {
     gap: 8px;
 }
 
+/* A room being renamed: the name becomes a field */
+.tllm-room-rename {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.tllm-room-rename .tllm-input {
+    flex: 1 1 200px;
+    min-width: 0;
+}
+
 .tllm-agenda {
     padding: 0 22px 12px;
 }

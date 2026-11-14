@@ -44,6 +44,19 @@ describe('test-RoomRegistry (salles de l’organisateur)', () => {
         assert.equal(r.recent(null, 0).length, 23);
     });
 
+    it('renames a room without changing its link, and forgets a deleted one', () => {
+        const r = new RoomRegistry();
+        r.remember('point-k7m2xq', { name: 'Point', owner: 'jules' });
+        assert.equal(r.rename('point-k7m2xq', '  Point du lundi  ').name, 'Point du lundi');
+        assert.equal(r.rename('point-k7m2xq', '   '), null);
+        assert.equal(r.rename('inconnue', 'X'), null);
+        assert.equal(r.name('point-k7m2xq'), 'Point du lundi');
+        assert.equal(r.forget('point-k7m2xq'), true);
+        assert.equal(r.get('point-k7m2xq'), null);
+        assert.equal(r.forget('point-k7m2xq'), false);
+        assert.deepEqual(r.recent('jules'), []);
+    });
+
     it('keeps the rooms in a file', () => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tllm-rooms-'));
         const file = path.join(dir, 'salles.json');

@@ -73,6 +73,24 @@ class RoomRegistry {
         return room;
     }
 
+    // The organiser renames a room: only the name shown changes, the link stays the same
+    rename(id, name) {
+        const room = this.rooms.get(id);
+        const clean = typeof name === 'string' ? name.trim().slice(0, 120) : '';
+        if (!room || !clean) return null;
+        room.name = clean;
+        this.save();
+        return room;
+    }
+
+    // The organiser deletes a room: it leaves the home, and its link no longer opens it for a moderator
+    forget(id) {
+        if (!this.rooms.delete(id)) return false;
+        this.live.delete(id);
+        this.save();
+        return true;
+    }
+
     trim() {
         if (this.rooms.size <= MAX_ROOMS) return;
         const oldest = Array.from(this.rooms.values()).sort((a, b) => this.lastUse(a) - this.lastUse(b));
