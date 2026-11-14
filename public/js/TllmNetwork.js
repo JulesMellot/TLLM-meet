@@ -7,6 +7,8 @@
 // on this screen: a small tile in a grid gets the small one, someone pinned gets the whole one.
 // A picture nobody can see (tile hidden or out of the screen, page in the background) is not
 // sent at all: the sound goes on, the picture comes back as soon as it is visible again.
+// A voice turned down to zero on this screen (speaker volume or that person's volume) is not
+// sent either, and comes back as soon as the volume is raised.
 // On a phone on 4G with eight people this divides what is downloaded by five to ten.
 
 (function (root) {
@@ -54,11 +56,25 @@
                 view.documentPictureInPicture?.window
             );
 
+        // Sound off on this screen: the speaker volume at zero, or this voice at zero
+        function silenced(id) {
+            if (rc.masterOutputVolume === 0) return true;
+            const volume = doc.getElementById(id)?.dataset?.peerVolume;
+            return volume !== undefined && Number(volume) === 0;
+        }
+
         function needs() {
             const map = new Map();
             const all = wantsAll();
             for (const [id, consumer] of rc.consumers) {
-                if (consumer.kind !== 'video' || consumer.closed || !rc.resumedConsumers.has(id)) continue;
+                if (consumer.closed || !rc.resumedConsumers.has(id)) continue;
+                if (consumer.kind === 'audio') {
+                    // A voice turned down to nothing here is not sent; it comes back with the volume
+                    if (!all && silenced(id)) map.set(id, OFF);
+                    else if (told.has(id)) map.set(id, 2);
+                    continue;
+                }
+                if (consumer.kind !== 'video') continue;
                 if (all) map.set(id, 2);
                 else map.set(id, doc.hidden ? OFF : layerFor(drawnHeight(doc.getElementById(id), view)));
             }

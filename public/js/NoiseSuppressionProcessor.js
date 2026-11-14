@@ -10,12 +10,19 @@ class WasmModuleInitializer {
         this.Module = null;
     }
 
-    async initSyncModule(jsContent) {
+    // TLLM*meet: two variants. The full one (RnnoiseSync.js) carries its binary inside; the light
+    // one (RnnoiseLight.js, for slow connections) gets its .wasm bytes from the page, as wasmBinary.
+    async initSyncModule(jsContent, wasmBinary = null) {
         try {
             if (!jsContent) throw new Error('Missing sync module JS content');
 
-            const createFunction = new Function(jsContent + '; return createRNNWasmModuleSync;')();
-            this.Module = await createFunction();
+            if (wasmBinary) {
+                const createFunction = new Function(jsContent + '; return createRNNWasmModule;')();
+                this.Module = await createFunction({ wasmBinary });
+            } else {
+                const createFunction = new Function(jsContent + '; return createRNNWasmModuleSync;')();
+                this.Module = await createFunction();
+            }
 
             if (this.Module.ready) {
                 await this.Module.ready;
@@ -175,6 +182,8 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
         super();
         this.initialized = false;
         this.enabled = false;
+        // TLLM*meet: microphone muted, nothing is sent: no noise suppression to compute
+        this.muted = false;
         this._destroyed = false;
         this.sampleRate = sampleRate || 48000;
 
@@ -194,11 +203,11 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
     setupMessageHandler() {
         this.port.onmessage = async (event) => {
             if (this._destroyed) return;
-            const { type, jsContent, enabled } = event.data;
+            const { type, jsContent, wasmBinary, enabled, muted } = event.data;
             switch (type) {
                 case 'sync-module':
                     try {
-                        const module = await this.wasmInitializer.initSyncModule(jsContent);
+                        const module = await this.wasmInitializer.initSyncModule(jsContent, wasmBinary);
                         if (this._destroyed) return;
                         this.contextManager = new RNNoiseContextManager(module);
                         this.initialized = true;
@@ -210,6 +219,11 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
                     break;
                 case 'enable':
                     this.enabled = enabled;
+                    break;
+                case 'mute':
+                    this.muted = !!muted;
+                    // Back from mute: start on a fresh frame, not on what was heard before
+                    this.frameBuffer = new AudioFrameBuffer();
                     break;
                 case 'destroy':
                     this.destroy();
@@ -227,8 +241,8 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
         const output = outputs[0]?.[0];
         if (!output) return true;
 
-        // Always fill output with something valid
-        if (!input || input.length === 0) {
+        // Always fill output with something valid (silence while muted: the network model is not run)
+        if (!input || input.length === 0 || this.muted) {
             output.fill(0); // Silence if no input
             return true;
         }

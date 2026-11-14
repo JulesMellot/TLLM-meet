@@ -132,6 +132,36 @@ describe('test-TllmNetwork', () => {
         sent[0][1].map((need) => need.layer).should.eql([2, 2, 2]);
     });
 
+    it('stops a voice turned down to zero here, and asks for it again when turned back up', async () => {
+        const { rc, view, doc, sent } = makePage({ small: 180 });
+        rc.consumers = new Map([['voice', { kind: 'audio', closed: false }]]);
+        const voice = { dataset: { peerVolume: '1' } };
+        doc.getElementById = (id) => (id === 'voice' ? voice : null);
+        const network = start(rc, { view });
+
+        // Heard normally: nothing to say to the server
+        await network.sync();
+        sent.length.should.equal(0);
+
+        voice.dataset.peerVolume = '0';
+        await network.sync();
+        sent[0][1].should.eql([{ id: 'voice', layer: OFF }]);
+
+        voice.dataset.peerVolume = '0.5';
+        await network.sync();
+        sent[1][1].should.eql([{ id: 'voice', layer: 2 }]);
+
+        rc.masterOutputVolume = 0;
+        await network.sync();
+        sent[2][1].should.eql([{ id: 'voice', layer: OFF }]);
+
+        // A page in the background still hears everyone
+        rc.masterOutputVolume = 1;
+        doc.hidden = true;
+        await network.sync();
+        sent[3][1].should.eql([{ id: 'voice', layer: 2 }]);
+    });
+
     it('asks again when the server did not answer', async () => {
         const { rc, view, sent } = makePage({ small: 180, large: 600, hidden: 0 });
         let fail = true;

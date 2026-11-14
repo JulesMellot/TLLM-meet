@@ -1,5 +1,112 @@
 'use strict';
 
+// TLLM*meet: which noise suppressor to download, and downloading it once.
+//
+// The full RNNoise (RnnoiseSync.js) is 3.2 MB compressed: on a phone in 4G it delays the microphone
+// and eats the data plan. The light one (sfu/RnnoiseLight.*, the original RNNoise model) is about
+// 100 KB; it suppresses less, so the browser's own noise suppression runs with it.
+// - the full one is already in the browser cache (a previous visit): full, it costs nothing
+// - slow or metered connection (mobile network, data saver, 3G or less, under 5 Mbit/s): light
+// - browsers that do not say (Safari, Firefox): the speed measured on this page's own scripts
+// The URLs come from Room.html, versioned by HtmlInjector (cached for good).
+const TllmRnnoise = (function (root) {
+    const SLOW_MBPS = 5;
+    const FULL_CACHED_KEY = 'tllm.rnnoise.full';
+    let chosen = null;
+    let loading = null;
+
+    const url = (id, fallback) => root.document?.getElementById(id)?.href || fallback;
+    const fullUrl = () => url('rnnoiseFull', '../js/RnnoiseSync.js');
+
+    function storage(write) {
+        try {
+            if (write === undefined) return root.localStorage.getItem(FULL_CACHED_KEY);
+            root.localStorage.setItem(FULL_CACHED_KEY, write);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Mbit/s measured on the page's own scripts downloaded just now (not from the cache), or null.
+    // They arrive in parallel: the bytes are divided by the time from the first to the last one.
+    function measuredMbps(perf, origin = root.location?.origin) {
+        let bytes = 0;
+        let start = Infinity;
+        let end = 0;
+        for (const e of perf?.getEntriesByType?.('resource') || []) {
+            if (!e.transferSize || e.transferSize < 20000 || (origin && !e.name.startsWith(origin))) continue;
+            if (!(e.responseEnd > e.responseStart)) continue;
+            bytes += e.transferSize;
+            start = Math.min(start, e.responseStart);
+            end = Math.max(end, e.responseEnd);
+        }
+        if (bytes < 50000 || !(end > start)) return null;
+        return (bytes * 8) / ((end - start) * 1000);
+    }
+
+    function choose({ connection, perf, userAgent, fullCached } = {}) {
+        if (fullCached) return 'full';
+        if (connection) {
+            if (connection.saveData) return 'light';
+            if (connection.type === 'cellular') return 'light';
+            if (connection.effectiveType && connection.effectiveType !== '4g') return 'light';
+            if (connection.downlink > 0) return connection.downlink < SLOW_MBPS ? 'light' : 'full';
+        }
+        const mbps = measuredMbps(perf);
+        if (mbps !== null) return mbps < SLOW_MBPS ? 'light' : 'full';
+        // Nothing known: a phone is probably on a mobile network
+        return /Mobi|Android|iPhone|iPad/i.test(userAgent || '') ? 'light' : 'full';
+    }
+
+    function variant() {
+        if (!chosen) {
+            chosen = choose({
+                connection: root.navigator?.connection,
+                perf: root.performance,
+                userAgent: root.navigator?.userAgent,
+                fullCached: storage() === fullUrl(),
+            });
+            console.info('RNNoise variant', chosen);
+        }
+        return chosen;
+    }
+
+    async function fetchOk(target, read) {
+        const response = await fetch(target);
+        if (!response.ok) throw new Error('Failed to load ' + target);
+        return response[read]();
+    }
+
+    // { jsContent, wasmBinary } (wasmBinary only for the light one); downloaded once
+    function load() {
+        if (!loading) {
+            loading = (async () => {
+                if (variant() === 'light') {
+                    const [jsContent, wasmBinary] = await Promise.all([
+                        fetchOk(url('rnnoiseLight', '../sfu/RnnoiseLight.js'), 'text'),
+                        fetchOk(url('rnnoiseLightWasm', '../sfu/RnnoiseLight.wasm'), 'arrayBuffer'),
+                    ]);
+                    return { jsContent, wasmBinary };
+                }
+                const jsContent = await fetchOk(fullUrl(), 'text');
+                storage(fullUrl());
+                return { jsContent, wasmBinary: null };
+            })();
+            loading.catch(() => (loading = null));
+        }
+        return loading;
+    }
+
+    // Downloaded while the page opens, so the microphone does not wait for it
+    function prefetch() {
+        load().catch((error) => console.warn('RNNoise prefetch failed', error));
+    }
+
+    return { choose, measuredMbps, variant, load, prefetch };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+if (typeof module !== 'undefined' && module.exports) module.exports = TllmRnnoise;
+
 // Handle UI updates and interactions
 class UIManager {
     constructor(elements) {
@@ -74,13 +181,8 @@ class WasmLoader {
 
             this.uiManager.updateStatus('📦 Loading RNNoise sync module...', 'info');
 
-            const jsResponse = await fetch('../js/RnnoiseSync.js');
-
-            if (!jsResponse.ok) {
-                throw new Error('Failed to load rnnoise-sync.js');
-            }
-
-            const jsContent = await jsResponse.text();
+            // TLLM*meet: full or light variant, usually already downloaded while the page opened
+            const { jsContent, wasmBinary } = await TllmRnnoise.load();
             this.uiManager.updateStatus('📦 Sending sync module to worklet...', 'info');
 
             const node = this.getWorkletNode();
@@ -89,10 +191,16 @@ class WasmLoader {
                 throw new Error('Worklet node changed during WASM loading');
             }
 
-            node.port.postMessage({
-                type: 'sync-module',
-                jsContent: jsContent,
-            });
+            // A copy of the binary is handed over, the downloaded one is kept for the next microphone
+            const binary = wasmBinary ? wasmBinary.slice(0) : null;
+            node.port.postMessage(
+                {
+                    type: 'sync-module',
+                    jsContent: jsContent,
+                    wasmBinary: binary,
+                },
+                binary ? [binary] : []
+            );
 
             this.uiManager.updateStatus('📦 Sync module sent to worklet', 'info');
         } catch (error) {
@@ -114,6 +222,7 @@ class RNNoiseProcessor {
         this.isProcessing = false;
         this.noiseSuppressionEnabled = false;
         this.cancelInitialization = null;
+        this.muted = false;
 
         this.initializeUI();
         this.initializeDependencies();
@@ -254,6 +363,7 @@ class RNNoiseProcessor {
 
             this.sourceNode.connect(this.workletNode);
             this.workletNode.connect(this.destinationNode);
+            if (this.muted) this.setMuted(true);
 
             this.isProcessing = true;
             this.uiManager.updateUI(this.isProcessing, this.noiseSuppressionEnabled);
@@ -316,6 +426,16 @@ class RNNoiseProcessor {
         this.uiManager.updateStatus('🛑 Audio processing stopped', 'info');
     }
 
+    // TLLM*meet: while the microphone is muted the worklet outputs silence without running RNNoise
+    // (the heaviest audio work of the page, for a track that sends nothing). The audio context keeps
+    // running, so unmuting never depends on the browser allowing it to restart.
+    setMuted(muted) {
+        this.muted = !!muted;
+        try {
+            this.workletNode?.port?.postMessage({ type: 'mute', muted: this.muted });
+        } catch (e) {}
+    }
+
     setNoiseSuppression(enabled) {
         this.noiseSuppressionEnabled = enabled;
 
@@ -336,4 +456,13 @@ class RNNoiseProcessor {
     toggleNoiseSuppression() {
         this.setNoiseSuppression(!this.noiseSuppressionEnabled);
     }
+}
+
+// TLLM*meet: the noise suppressor is downloaded once the page has loaded, before the microphone needs it
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('load', () => {
+        if (typeof BUTTONS !== 'undefined' && BUTTONS.settings?.customNoiseSuppression === false) return;
+        if (!RNNoiseProcessor.isSupported()) return;
+        TllmRnnoise.prefetch();
+    });
 }

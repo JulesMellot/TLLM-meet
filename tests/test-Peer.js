@@ -229,15 +229,22 @@ describe('test-Peer', () => {
             calls.should.eql(['pause', 'resume']);
         });
 
-        it('never touches a voice, nor a consumer of somebody else', async () => {
+        it('stops a voice turned down to zero, without touching its layers', async () => {
             const peer = createPeer();
             const { consumer, calls } = videoConsumer();
             consumer.kind = 'audio';
             peer.consumers.set(consumer.id, consumer);
 
-            (await peer.setConsumerNeed(consumer.id, -1)).should.be.false();
+            (await peer.setConsumerNeed(consumer.id, -1)).should.be.true();
+            (await peer.setConsumerNeed(consumer.id, -1)).should.be.true();
+            (await peer.setConsumerNeed(consumer.id, 2)).should.be.true();
+            (await peer.setConsumerNeed(consumer.id, 2)).should.be.true();
+            calls.should.eql(['pause', 'resume']);
+        });
+
+        it('never touches a consumer of somebody else', async () => {
+            const peer = createPeer();
             (await peer.setConsumerNeed('unknown', -1)).should.be.false();
-            calls.should.eql([]);
         });
     });
 });
