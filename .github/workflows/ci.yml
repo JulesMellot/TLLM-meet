@@ -1,22 +1,114 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+    push:
+        branches: [main]
+    pull_request:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+# A new push to the same PR cancels the run still going on the previous one.
+concurrency:
+    group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
 
 jobs:
-  test:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
+    test:
+        name: Tests (Node 24)
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: npm
 
-      - run: npm ci
-      - run: cp app/src/config.template.js app/src/config.js
-      - run: npm test
+            # postinstall rebuilds public/sfu/MediasoupClient.js from the locked mediasoup-client
+            - run: npm ci
 
+            - name: Bundles in the repository match their sources
+              run: |
+                  npm run build:collab
+                  git diff --stat --exit-code -- public/sfu/MediasoupClient.js public/sfu/TllmCollabLib.js \
+                    || { echo "::error::A bundle in public/sfu is out of date: run 'npm run build:mediasoup-client' / 'npm run build:collab' and commit the result."; exit 1; }
+
+            - run: cp app/src/config.template.js app/src/config.js
+            - run: npm test
+
+    format:
+        name: Formatting (files changed by the PR)
+        if: github.event_name == 'pull_request'
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v5
+              with:
+                  fetch-depth: 0
+
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: npm
+
+            # Only the files the PR touches: older files that were never formatted do not block it.
+            - name: Prettier --check
+              env:
+                  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+              run: |
+                  mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA"...HEAD)
+                  if [ ${#files[@]} -eq 0 ]; then echo "No changed files."; exit 0; fi
+                  npx --yes prettier@$(node -p "require('./package.json').devDependencies.prettier") \
+                    --check --ignore-unknown "${files[@]}" \
+                    || { echo "::error::Run 'npx prettier --write <file>' on the files above and commit."; exit 1; }
+
+    docker:
+        name: Docker image builds and starts
+        runs-on: ubuntu-24.04
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v5
+
+            - uses: docker/setup-buildx-action@v3
+
+            - uses: docker/build-push-action@v6
+              with:
+                  context: .
+                  load: true
+                  push: false
+                  tags: tllm-meet:ci
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+
+            - name: Start the container and wait for /healthz
+              run: |
+                  docker run -d --name tllm-meet -p 3010:3010 \
+                    -e JWT_SECRET="$(openssl rand -hex 32)" \
+                    -e HOST_USERS="ci:ci-password-$(openssl rand -hex 8):CI" \
+                    tllm-meet:ci
+                  for i in $(seq 1 60); do
+                    if curl -fsS http://127.0.0.1:3010/healthz; then echo; echo "Healthy after ${i}s"; break; fi
+                    if [ "$(docker inspect -f '{{.State.Running}}' tllm-meet)" != "true" ]; then echo "::error::The container stopped."; break; fi
+                    sleep 1
+                  done
+                  curl -fsS -o /dev/null http://127.0.0.1:3010/healthz
+                  curl -fsS -o /dev/null -w "/ -> %{http_code}\n" http://127.0.0.1:3010/
+                  curl -fsS -o /dev/null -w "/login -> %{http_code}\n" http://127.0.0.1:3010/login
+
+            - name: Container logs
+              if: always()
+              run: docker logs tllm-meet 2>&1 | tail -200 || true
+
+    transcription:
+        name: Transcription server (Python syntax)
+        runs-on: ubuntu-24.04
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v5
+            - uses: actions/setup-python@v6
+              with:
+                  python-version: '3.12'
+            - run: python -m py_compile transcription/server.py
