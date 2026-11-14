@@ -5,6 +5,7 @@
  * "Plus" menu: it shows the people at a distance (not the organiser), then the whiteboard and the
  * notes big with those people beside, and closes from the top strip of the meeting.
  * From a phone in the room (the QR code of the projector), someone votes, reacts and asks a question.
+ * A hand raised at a distance and the agenda with its timer show on the projector.
  * Run: npm run test:browser (needs "npx playwright install chromium" once).
  */
 
@@ -240,6 +241,44 @@ describe('Presentation mode: a window for the projector (browser)', function () 
         await phone.fill('#askText', 'Encore une');
         await phone.click('#askButton');
         await phone.locator('#askError', { hasText: 'Attendez' }).waitFor();
+    });
+
+    it('shows the hand raised at a distance on the projector', async () => {
+        await other.click('#tllmHand');
+        await projector.locator('#hands #handList li', { hasText: 'Camille' }).waitFor();
+        await other.click('#tllmHand');
+        await until(async () => projector.locator('#hands').isHidden(), 'the hand put down');
+    });
+
+    it('runs the agenda: points written, the timer in the meeting and on the projector', async () => {
+        await page.click('#tllmMore');
+        await page.getByRole('menuitem', { name: 'Ordre du jour' }).click();
+        const points = [
+            ['Tour de table', '5'],
+            ['Budget', '15'],
+        ];
+        for (const [i, [title, min]] of points.entries()) {
+            await page.fill('#tllmAgendaNew', title);
+            await page.fill('#tllmAgendaNewMin', min);
+            await page.click('#tllmAgendaAdd button[type="submit"]');
+            await page.locator('#tllmAgendaList li').nth(i).waitFor();
+        }
+        await page.click('#tllmAgendaStart');
+        await projector.locator('#agenda #agendaTitle', { hasText: 'Tour de table' }).waitFor();
+        assert.equal(await projector.locator('#agendaNum').innerText(), 'Point 1/2');
+        assert.equal(await projector.locator('#agendaNext').innerText(), 'Ensuite : Budget');
+        assert.match(await projector.locator('#agendaClock').innerText(), /^0[45]:[0-5]\d$/);
+        // Camille, who does not lead, sees the point under way too
+        await other.locator('#tllmAgendaChip', { hasText: 'Tour de table' }).waitFor();
+
+        await page.click('#tllmAgendaNext');
+        await projector.locator('#agendaTitle', { hasText: 'Budget' }).waitFor();
+        await other.locator('#tllmAgendaChip', { hasText: '2/2 · Budget' }).waitFor();
+        await page.waitForFunction(() => window.tllmRoom.chat.some((m) => m.sys === 'Point 2/2 : Budget'));
+
+        await page.click('#tllmAgendaFinish');
+        await until(async () => projector.locator('#agenda').isHidden(), 'the agenda over');
+        assert.equal(await other.locator('#tllmAgendaChip').count(), 0);
     });
 
     it('stops from the top strip of the meeting', async () => {

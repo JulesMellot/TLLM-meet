@@ -15,7 +15,10 @@
  *    poll hides them until the close), with the QR code to vote from a phone;
  *  - always, a small QR code: the people in the room vote, react and ask a question from their
  *    phone without joining the video call (app/src/Audience.js, public/views/salle.html);
- *  - the reactions, from the video call and from the room.
+ *  - the reactions, from the video call and from the room;
+ *  - the raised hands of the people at a distance, in the order they were raised (and those people
+ *    beside what is presented first);
+ *  - the point of the agenda under way and its timer (TllmAgenda.js).
  * One's own camera is left out: the room already sees the person. The window plays no sound
  * (the meeting window does) and receives nothing more: it shows the pictures the meeting already has.
  */
@@ -37,9 +40,15 @@
             main = { kind: 'screen', tile: latest };
         }
         if (!main) return { main, people };
-        // Beside what is presented: the last ones who spoke, in the order of the meeting
+        // Beside what is presented: who raised their hand, then the last ones who spoke, in the order
+        // of the meeting
         const recent = [...people]
-            .sort((a, b) => (spoke.get(b.peerId) || 0) - (spoke.get(a.peerId) || 0))
+            .sort(
+                (a, b) =>
+                    Number(!!b.hand) - Number(!!a.hand) ||
+                    (a.hand ? (a.handAt || 0) - (b.handAt || 0) : 0) ||
+                    (spoke.get(b.peerId) || 0) - (spoke.get(a.peerId) || 0)
+            )
             .slice(0, sideMax);
         return { main, people: people.filter((t) => recent.includes(t)) };
     }
@@ -80,7 +89,15 @@
         };
     }
 
-    const api = { arrange, fitGrid, pollToShow, pollBars };
+    // The raised hands of the others, the first raised first
+    function handQueue(peers, me) {
+        return (Array.isArray(peers) ? peers : [])
+            .filter((p) => p.hand && p.id !== me)
+            .sort((a, b) => (a.handAt || Infinity) - (b.handAt || Infinity))
+            .map((p) => ({ id: p.id, name: p.name, handAt: p.handAt || 0 }));
+    }
+
+    const api = { arrange, fitGrid, pollToShow, pollBars, handQueue };
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api;
         return;
@@ -269,6 +286,8 @@
 ${icons ? `<link rel="stylesheet" href="${icons}">` : ''}
 <style>${CSS.replace('/*TOKENS*/', tokens())}</style></head>
 <body class="is-wait">
+<header id="agenda" hidden><span id="agendaNum"></span><span id="agendaTitle"></span><span id="agendaNext"></span><b id="agendaClock"></b></header>
+<aside id="hands" hidden><p><i class="fas fa-hand"></i> Mains levées</p><ol id="handList"></ol></aside>
 <main id="stage"><video id="mainVideo" autoplay playsinline muted></video><div id="notes"><div class="ql-editor"></div></div>
 <section id="poll"><div class="poll-body"><p class="poll-kicker"><span id="pollState"></span><span id="pollClock"></span></p>
 <h2 id="pollQuestion"></h2><div id="pollRows"></div><p id="pollTotal"></p></div>
@@ -357,6 +376,7 @@ ${icons ? `<link rel="stylesheet" href="${icons}">` : ''}
                 since: since.get(key),
                 audio: peer ? peer.audio : true,
                 hand: !!peer?.hand,
+                handAt: peer?.handAt || 0,
             });
         });
         for (const key of since.keys()) if (!tiles.has(key)) since.delete(key);
@@ -469,6 +489,8 @@ ${icons ? `<link rel="stylesheet" href="${icons}">` : ''}
 
         const recording = (root.tllmRoom?.recordingBy?.size || 0) > 0 || !!(rc.isRecording && rc.isRecording());
         doc.getElementById('footRec').hidden = !recording;
+        renderAgenda(doc);
+        renderHands(doc, now);
         // The poll shows its own, bigger QR code
         doc.getElementById('footPhone').hidden = !audience || main?.kind === 'poll';
         doc.getElementById('footCount').textContent = audience?.count
@@ -477,6 +499,40 @@ ${icons ? `<link rel="stylesheet" href="${icons}">` : ''}
         doc.getElementById('footClock').textContent = new Date().toLocaleTimeString('fr-FR', {
             hour: '2-digit',
             minute: '2-digit',
+        });
+    }
+
+    function renderAgenda(doc) {
+        const point = root.tllmAgenda?.now?.();
+        const bar = doc.getElementById('agenda');
+        bar.hidden = !point;
+        doc.body.classList.toggle('has-agenda', !!point);
+        if (!point) return;
+        doc.getElementById('agendaNum').textContent = `Point ${point.index + 1}/${point.total}`;
+        doc.getElementById('agendaTitle').textContent = point.title;
+        doc.getElementById('agendaNext').textContent = point.next ? `Ensuite : ${point.next}` : '';
+        const clockEl = doc.getElementById('agendaClock');
+        clockEl.textContent = point.text;
+        bar.classList.toggle('is-over', point.over);
+        // The last minute of a point: the timer warns before it is over
+        bar.classList.toggle('is-soon', point.left != null && point.left >= 0 && point.left < 60000);
+    }
+
+    function renderHands(doc, now) {
+        const queue = handQueue(root.tllmRoom?.peers, rc.peer_id);
+        doc.getElementById('hands').hidden = !queue.length;
+        const list = doc.getElementById('handList');
+        while (list.children.length > queue.length) list.lastElementChild.remove();
+        queue.forEach((hand, i) => {
+            let li = list.children[i];
+            if (!li) {
+                li = doc.createElement('li');
+                li.innerHTML = '<span class="who"></span><span class="since"></span>';
+                list.appendChild(li);
+            }
+            li.querySelector('.who').textContent = hand.name;
+            const min = hand.handAt ? Math.floor((now - hand.handAt) / 60000) : 0;
+            li.querySelector('.since').textContent = min >= 1 ? `${min} min` : '';
         });
     }
 
@@ -511,17 +567,17 @@ ${icons ? `<link rel="stylesheet" href="${icons}">` : ''}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden}
 body{background:var(--bg,#121416);color:var(--text,#e9ebed);font-family:var(--font,system-ui,sans-serif);
-  display:grid;grid-template-columns:1fr auto;grid-template-rows:1fr auto;gap:16px;padding:16px;cursor:default}
+  display:grid;grid-template-columns:1fr auto;grid-template-rows:auto 1fr auto;gap:16px;padding:16px;cursor:default}
 body.is-idle.is-full{cursor:none}
 [hidden]{display:none!important}
-#stage{grid-column:1;grid-row:1;position:relative;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center}
+#stage{grid-column:1;grid-row:2;position:relative;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center}
 #mainVideo{width:100%;height:100%;object-fit:contain;border-radius:var(--radius,10px)}
 #notes{width:100%;height:100%;overflow:hidden;background:#fff;color:#1d1d1f;border-radius:var(--radius,10px)}
 #notes .ql-editor{max-width:1100px;margin:0 auto;padding:48px 64px;font-size:clamp(20px,2.2vw,34px);line-height:1.5}
 #notes img{max-width:100%}
 #notes .ql-editor :is(h1,h2,h3){line-height:1.2}
 #mainLabel{position:absolute;left:12px;top:12px;margin:0;padding:6px 12px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;font-size:15px}
-#people{grid-column:2;grid-row:1;display:flex;flex-direction:column;justify-content:center;gap:12px;width:clamp(200px,19vw,360px);min-height:0}
+#people{grid-column:2;grid-row:2;display:flex;flex-direction:column;justify-content:center;gap:12px;width:clamp(200px,19vw,360px);min-height:0}
 #wait{display:none}
 .tile{position:relative;flex:none;width:100%;aspect-ratio:16/9;background:var(--surface,#1a1d20);border-radius:var(--radius,10px);overflow:hidden;outline:3px solid transparent;outline-offset:-3px;transition:outline-color .2s}
 .tile.speaking{outline-color:var(--accent,#4c8dff)}
@@ -537,11 +593,11 @@ body.is-grid #people{grid-column:1/3;width:auto;flex-flow:row wrap;align-content
 body.is-grid .tile{width:var(--w,320px);height:var(--h,180px);aspect-ratio:auto}
 body.is-grid .name{font-size:clamp(14px,1.4vw,24px)}
 body.is-wait #stage,body.is-wait #people{display:none}
-body.is-wait #wait{grid-column:1/3;grid-row:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+body.is-wait #wait{grid-column:1/3;grid-row:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
 #wait h1{margin:0 0 24px;font-size:clamp(32px,5vw,80px);font-weight:600}
 #wait p{margin:4px;font-size:clamp(18px,2vw,32px);color:var(--text-2,#a9afb5)}
 #waitLink{color:var(--text,#e9ebed)!important;font-weight:600}
-#foot{grid-column:1/3;grid-row:2;display:flex;gap:16px;align-items:center;color:var(--text-2,#a9afb5);font-size:15px}
+#foot{grid-column:1/3;grid-row:3;display:flex;gap:16px;align-items:center;color:var(--text-2,#a9afb5);font-size:15px}
 #footRoom{font-weight:600;color:var(--text,#e9ebed)}
 #footRec{color:#ff8a8d}#footRec i{font-size:10px}
 #footClock{margin-left:auto}
@@ -566,6 +622,19 @@ body.is-wait #wait{grid-column:1/3;grid-row:1;display:flex;flex-direction:column
 .float b{font-size:clamp(40px,4vw,80px);line-height:1}
 .float small{padding:2px 8px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;font-size:clamp(12px,1vw,18px)}
 @keyframes rise{0%{transform:translateY(0);opacity:0}10%{opacity:1}80%{opacity:1}100%{transform:translateY(-55vh);opacity:0}}
+#agenda{grid-column:1/3;grid-row:1;display:flex;align-items:baseline;gap:20px;padding:12px 20px;border-radius:var(--radius,10px);background:var(--surface,#1a1d20);font-size:clamp(18px,1.7vw,32px)}
+#agendaNum{flex:none;color:var(--accent,#4c8dff);font-weight:600}
+#agendaTitle{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#agendaNext{flex:none;max-width:30%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2,#a9afb5);font-size:.75em}
+#agendaClock{flex:none;font-size:1.5em;font-variant-numeric:tabular-nums;line-height:1}
+#agenda.is-soon #agendaClock{color:#ffd166}
+#agenda.is-over #agendaClock{color:#ff8a8d}
+#hands{position:fixed;top:16px;right:16px;z-index:2;min-width:220px;max-width:min(380px,30vw);padding:14px 18px;border-radius:var(--radius,10px);background:rgba(20,22,24,.92);box-shadow:0 6px 18px rgba(0,0,0,.4);color:#fff;font-size:clamp(16px,1.3vw,26px)}
+body.has-agenda #hands{top:96px}
+#hands p{margin:0 0 8px;font-weight:600;color:#ffd166}
+#handList{margin:0;padding-left:1.4em}
+#handList li{padding:2px 0}
+#handList li .since{margin-left:10px;color:#a9afb5;font-size:.8em}
 #hint{position:fixed;left:50%;bottom:56px;transform:translateX(-50%);display:flex;gap:10px;align-items:center;max-width:calc(100% - 32px);
   padding:12px 20px;border:0;border-radius:999px;background:var(--accent,#4c8dff);color:#fff;font:inherit;font-size:16px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35)}
 body.is-full #hint{display:none}
