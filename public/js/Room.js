@@ -432,7 +432,11 @@ let quill = null;
 // INIT ROOM
 // ####################################################
 
+// TLLM*meet: the themes are asked for while the socket connects, not after
+let themesReady = null;
+
 document.addEventListener('DOMContentLoaded', function () {
+    themesReady = getThemes();
     initCursorLightEffect();
     initDocumentListener();
     socket.once('connect', () => {
@@ -466,7 +470,7 @@ function initDocumentListener() {
 }
 
 async function initClient() {
-    await getThemes();
+    await (themesReady || getThemes());
     setTheme();
 
     // Transcription
@@ -1506,7 +1510,17 @@ async function whoAreYou() {
             usernameEmoji.classList.add('hidden');
         }
         if (initStream && !joinRoomWithScreen) {
-            await stopTracks(initStream);
+            // TLLM*meet: the preview camera goes on into the meeting instead of being opened again
+            // (not when a virtual background runs on the preview: stopping it could end the camera)
+            const keep =
+                window.TllmWarm &&
+                !virtualBackgroundBlurLevel &&
+                !virtualBackgroundSelectedImage &&
+                !virtualBackgroundTransparent;
+            initStream
+                .getTracks()
+                .forEach((track) => (keep && track.kind === 'video' ? TllmWarm.put(track) : track.stop()));
+            initVideo.srcObject = null;
             elemDisplay('initVideo', false);
             initVideoContainerShow(false);
         }
@@ -3284,8 +3298,13 @@ async function changeCamera(deviceId) {
             aspectRatio: 1.777,
         },
     };
-    await navigator.mediaDevices
-        .getUserMedia(videoConstraints)
+    // TLLM*meet: the camera opened by the permission request, when it is this one (TllmWarm.js)
+    const keptCamera = window.TllmWarm ? await TllmWarm.take('video', videoConstraints.video) : null;
+    await (
+        keptCamera
+            ? Promise.resolve(new MediaStream([keptCamera]))
+            : navigator.mediaDevices.getUserMedia(videoConstraints)
+    )
         .then(async (camStream) => {
             initVideo.srcObject = camStream;
             initStream = camStream;

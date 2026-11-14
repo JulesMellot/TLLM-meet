@@ -2316,6 +2316,9 @@ class RoomClient {
             console.log('11 ----> START SCREEN MEDIA');
         }
 
+        // TLLM*meet: a camera or microphone kept for the meeting and not used (camera off on entry...)
+        window.TllmWarm?.clear();
+
         console.log('[startLocalMedia] - PRODUCER LABEL', this.producerLabel);
     }
 
@@ -2386,9 +2389,19 @@ class RoomClient {
             if (init) {
                 stream = initStream;
             } else {
-                stream = screen
-                    ? await navigator.mediaDevices.getDisplayMedia(mediaConstraints)
-                    : await navigator.mediaDevices.getUserMedia(mediaConstraints);
+                // TLLM*meet: the camera of the preview / the microphone already open, when they fit (TllmWarm.js)
+                const kept =
+                    !screen && !swapCamera && window.TllmWarm
+                        ? await TllmWarm.take(
+                              audio ? 'audio' : 'video',
+                              audio ? mediaConstraints.audio : mediaConstraints.video
+                          )
+                        : null;
+                stream = kept
+                    ? new MediaStream([kept])
+                    : screen
+                      ? await navigator.mediaDevices.getDisplayMedia(mediaConstraints)
+                      : await navigator.mediaDevices.getUserMedia(mediaConstraints);
 
                 // Handle Virtual Background and Blur using MediaPipe
                 if (video && isMediaStreamTrackAndTransformerSupported) {
@@ -2472,6 +2485,10 @@ class RoomClient {
                     mediaType: type,
                 },
             };
+
+            // TLLM*meet: a muted microphone sends nothing at all (no silence packets), the
+            // track is put back on the connection when it is unmuted
+            if (audio) params.zeroRtpOnPause = true;
 
             if (audio) {
                 // TLLM*meet: a voice is mono; nothing is sent during silences (DTX), and a lost packet
@@ -3067,7 +3084,11 @@ class RoomClient {
 
     getAudioConstraints(deviceId) {
         // If custom RNNoise is enabled but not supported, fall back to built-in WebRTC noise suppression
-        const useBuiltInNoiseSuppression = !BUTTONS.settings.customNoiseSuppression || !this.isRNNoiseSupported;
+        // TLLM*meet: the light RNNoise (slow connections) suppresses less, the browser's helps it
+        const useBuiltInNoiseSuppression =
+            !BUTTONS.settings.customNoiseSuppression ||
+            !this.isRNNoiseSupported ||
+            (typeof TllmRnnoise !== 'undefined' && TllmRnnoise.variant() === 'light');
 
         const audioConstraints = {
             echoCancellation: true,
@@ -3693,6 +3714,8 @@ class RoomClient {
 
         const producer_id = this.producerLabel.get(type);
         this.producers.get(producer_id).pause();
+        // TLLM*meet: a muted microphone does not need its noise suppressed
+        if (type === mediaType.audio) this.RNNoiseProcessor?.setMuted?.(true);
 
         try {
             const response = await this.socket.request('pauseProducer', { producer_id, type });
@@ -3722,6 +3745,7 @@ class RoomClient {
         }
 
         const producer_id = this.producerLabel.get(type);
+        if (type === mediaType.audio) this.RNNoiseProcessor?.setMuted?.(false);
         this.producers.get(producer_id).resume();
 
         try {
@@ -11274,6 +11298,8 @@ class RoomClient {
             }
             audioPlayer.dataset.peerVolume = volume;
             this.applyOutputVolume(audioPlayer);
+            // TLLM*meet: a voice at zero is no longer received (TllmNetwork.js), tell the server now
+            window.tllmRoom?.network?.sync?.();
         }
     }
 
@@ -11290,6 +11316,8 @@ class RoomClient {
         const value = Number(volume);
         this.masterOutputVolume = Math.min(1, Math.max(0, isNaN(value) ? 1 : value));
         this.getOutputAudioElements().forEach((elem) => this.applyOutputVolume(elem));
+        // TLLM*meet: speakers at zero, the voices are no longer received (TllmNetwork.js)
+        window.tllmRoom?.network?.sync?.();
     }
 
     applyOutputVolume(audioPlayer) {

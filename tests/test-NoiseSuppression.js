@@ -400,3 +400,82 @@ describe('RoomClient RNNoise lifecycle', () => {
         assert.equal(client.producerTransport.produce.called, false);
     });
 });
+
+describe('RNNoise variant for the connection (TllmRnnoise)', () => {
+    const { context } = createProcessorEnvironment();
+    const R = vm.runInContext('TllmRnnoise', context);
+    const desktop = 'Mozilla/5.0 (X11; Linux x86_64) Chrome/130';
+    const phone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148';
+    // Scripts of the page downloaded in parallel: [bytes, start ms, end ms]
+    const perf = (...entries) => ({
+        getEntriesByType: () =>
+            entries.map(([transferSize, responseStart, responseEnd], i) => ({
+                name: `https://meet.example/js/${i}.js`,
+                transferSize,
+                responseStart,
+                responseEnd,
+            })),
+    });
+
+    it('takes the full one when it is already in the cache, whatever the connection', () => {
+        assert.equal(R.choose({ fullCached: true, connection: { type: 'cellular' } }), 'full');
+    });
+
+    it('takes the light one on a mobile network, with the data saver, or on a slow line', () => {
+        assert.equal(R.choose({ connection: { type: 'cellular', effectiveType: '4g' } }), 'light');
+        assert.equal(R.choose({ connection: { saveData: true, effectiveType: '4g' } }), 'light');
+        assert.equal(R.choose({ connection: { effectiveType: '3g' } }), 'light');
+        assert.equal(R.choose({ connection: { effectiveType: '4g', downlink: 2.5 } }), 'light');
+        assert.equal(R.choose({ connection: { effectiveType: '4g', downlink: 10 } }), 'full');
+    });
+
+    it('measures the speed when the browser does not tell (Safari, Firefox)', () => {
+        // 300 KB in 100 ms, in parallel: 24 Mbit/s
+        const fast = perf([100000, 0, 100], [100000, 10, 90], [100000, 20, 100]);
+        assert.equal(Math.round(R.measuredMbps(fast, 'https://meet.example')), 24);
+        assert.equal(R.choose({ perf: fast, userAgent: phone }), 'full');
+        // 300 KB in 1.2 s: 2 Mbit/s
+        const slow = perf([100000, 0, 1200], [100000, 0, 1100], [100000, 100, 1000]);
+        assert.equal(R.choose({ perf: slow, userAgent: desktop }), 'light');
+    });
+
+    it('ignores what came from the cache, then guesses from the device', () => {
+        const cached = perf([0, 0, 5], [0, 0, 5]);
+        assert.equal(R.measuredMbps(cached), null);
+        assert.equal(R.choose({ perf: cached, userAgent: phone }), 'light');
+        assert.equal(R.choose({ perf: cached, userAgent: desktop }), 'full');
+    });
+});
+
+describe('RNNoise light variant in the worklet', () => {
+    const sfu = (file) => fs.readFileSync(path.join(__dirname, '..', 'public/sfu', file));
+
+    it('starts from the .wasm handed over, suppresses, and computes nothing while muted', async () => {
+        const { processor, messages } = createWorklet();
+        await processor.port.onmessage({
+            data: {
+                type: 'sync-module',
+                jsContent: sfu('RnnoiseLight.js').toString('utf8'),
+                wasmBinary: new Uint8Array(sfu('RnnoiseLight.wasm')).buffer,
+            },
+        });
+        assert.equal(messages.filter((m) => m.type === 'wasm-ready').length, 1);
+        await processor.port.onmessage({ data: { type: 'enable', enabled: true } });
+
+        const input = Float32Array.from({ length: 128 }, (_, i) => Math.sin(i / 3) * 0.1);
+        const output = new Float32Array(128);
+        for (let i = 0; i < 20; i++) processor.process([[input]], [[output]]);
+        assert.ok(output.every(Number.isFinite));
+
+        const processFrame = sinon.spy(processor.contextManager, 'processFrame');
+        await processor.port.onmessage({ data: { type: 'mute', muted: true } });
+        const muted = new Float32Array(128).fill(1);
+        for (let i = 0; i < 10; i++) processor.process([[input]], [[muted]]);
+        assert.ok(muted.every((v) => v === 0));
+        assert.equal(processFrame.called, false);
+
+        await processor.port.onmessage({ data: { type: 'mute', muted: false } });
+        for (let i = 0; i < 10; i++) processor.process([[input]], [[output]]);
+        assert.equal(processFrame.called, true);
+    });
+});

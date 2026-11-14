@@ -63,11 +63,17 @@
         }
     }
 
-    // A track from the single request, or a new request (device list refreshed later on)
+    // A track from the single request, or a new request (device list refreshed later on).
+    // The track itself stays open for the preview, the meter and the meeting (TllmWarm.js); the device
+    // listing gets a copy, which it stops, without closing the device.
     async function streamFor(kind) {
         const index = granted.findIndex((track) => track.kind === kind);
         if (index >= 0) {
             const [track] = granted.splice(index, 1);
+            if (window.TllmWarm && track.clone) {
+                TllmWarm.put(track);
+                return new MediaStream([track.clone()]);
+            }
             return new MediaStream([track]);
         }
         return navigator.mediaDevices.getUserMedia({ [kind]: true });
@@ -90,8 +96,8 @@
     initEnumerateAudioDevices = async function () {
         try {
             const stream = await streamFor('audio');
+            // (no level indicator here: the listing stops this stream, it starts with the meeting's microphone)
             await enumerateAudioDevices(stream);
-            await getMicrophoneVolumeIndicator(stream);
             isAudioAllowed = true;
             media.audio = 'ok';
         } catch (err) {
@@ -401,9 +407,13 @@
         let stream;
         try {
             const deviceId = $('initMicrophoneSelect')?.value;
-            stream = await navigator.mediaDevices.getUserMedia({
-                audio: deviceId ? { deviceId: { exact: deviceId } } : true,
-            });
+            // A copy of the microphone already open, when it is this one (TllmWarm.js)
+            const kept = window.TllmWarm?.peek('audio', deviceId || null);
+            stream = kept
+                ? new MediaStream([kept.clone()])
+                : await navigator.mediaDevices.getUserMedia({
+                      audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+                  });
         } catch {
             return;
         }

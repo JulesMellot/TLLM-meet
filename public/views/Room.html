@@ -15,11 +15,7 @@
             name="viewport"
             content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"
         />
-        <meta
-            id="description"
-            name="description"
-            content="TLLM*meet, visioconférence privée."
-        />
+        <meta id="description" name="description" content="TLLM*meet, visioconférence privée." />
 
         <!-- https://ogp.me -->
 
@@ -60,7 +56,10 @@
         <!--  pickr  https://github.com/simonwep/pickr -->
 
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr@1.10.2/dist/themes/classic.min.css" />
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr@1.10.2/dist/themes/monolith.min.css" />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@simonwep/pickr@1.10.2/dist/themes/monolith.min.css"
+        />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr@1.10.2/dist/themes/nano.min.css" />
 
         <!-- Highlight  https://github.com/highlightjs/highlight.js -->
@@ -120,6 +119,12 @@
         <script defer src="https://cdn.jsdelivr.net/npm/gifler@0.1.0/gifler.min.js"></script>
         <script defer src="https://cdn.jsdelivr.net/npm/xss@1.0.15/dist/xss.min.js"></script>
 
+        <!-- TLLM*meet: the two noise suppressors (full 3 MB, light 100 KB). Nothing is fetched here:
+             NodeProcessor.js picks one for the connection and reads its versioned URL -->
+        <link id="rnnoiseFull" href="../js/RnnoiseSync.js" />
+        <link id="rnnoiseLight" href="../sfu/RnnoiseLight.js" />
+        <link id="rnnoiseLightWasm" href="../sfu/RnnoiseLight.wasm" />
+
         <script defer src="/socket.io/socket.io.js"></script>
         <script defer src="../sfu/MediasoupClient.js"></script>
         <script defer src="../sfu/TllmCollabLib.js"></script>
@@ -133,6 +138,7 @@
         <script defer src="../js/VideoGrid.js"></script>
         <script defer src="../js/VirtualBackground.js"></script>
         <script defer src="../js/NodeProcessor.js"></script>
+        <script defer src="../js/TllmWarm.js"></script>
         <script defer src="../js/FixWebmDuration.js"></script>
         <script defer src="../js/WakeLock.js"></script>
         <script defer src="../js/RoomTemplate.js"></script>
@@ -457,7 +463,9 @@
                         >
                             Réunion
                         </div>
-                        <button id="raiseHandButton" class="hidden"><i class="fas fa-hand-paper"></i> Lever la main</button>
+                        <button id="raiseHandButton" class="hidden">
+                            <i class="fas fa-hand-paper"></i> Lever la main
+                        </button>
                         <button id="lowerHandButton" class="hidden">
                             <i id="lowerHandIcon" class="fas fa-hand-paper"></i> Baisser la main
                         </button>

@@ -442,11 +442,20 @@ module.exports = class Peer {
     }
 
     // TLLM*meet: what the receiver looks at (public/js/TllmNetwork.js). layer -1: the picture is not
-    // visible, nothing is sent; 0, 1, 2: the size its tile needs (quarter, half, whole picture)
+    // visible (or the voice is turned down to zero), nothing is sent; 0, 1, 2: the size its tile
+    // needs (quarter, half, whole picture)
     async setConsumerNeed(consumer_id, layer) {
         const consumer = this.getConsumer(consumer_id);
-        if (!consumer || consumer.closed || consumer.kind !== 'video') return false;
+        if (!consumer || consumer.closed) return false;
         const want = Number.isInteger(layer) ? layer : 2;
+
+        // A voice: -1 when its volume is at zero on this screen, anything else to hear it again
+        if (consumer.kind === 'audio') {
+            if (want < 0 && !consumer.paused) await consumer.pause();
+            if (want >= 0 && consumer.paused) await consumer.resume();
+            return true;
+        }
+        if (consumer.kind !== 'video') return false;
 
         if (want < 0) {
             if (!consumer.paused) await consumer.pause();

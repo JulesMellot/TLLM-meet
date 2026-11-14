@@ -3,6 +3,11 @@ class VolumeProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
         this.silenceThreshold = 0.01;
+        // TLLM*meet: one message every 50 ms (the loudest block), not one per 128 samples
+        // (about 375 a second, each redrawing the level bars on the main thread)
+        this.intervalSec = 0.05;
+        this.lastSent = 0;
+        this.peak = 0;
     }
 
     process(inputs, outputs, parameters) {
@@ -24,11 +29,17 @@ class VolumeProcessor extends AudioWorkletProcessor {
         const rms = Math.sqrt(sum / inputData.length);
         const volume = Math.max(0, Math.min(1, rms * 10));
 
+        if (volume > this.peak) this.peak = volume;
+        if (currentTime - this.lastSent < this.intervalSec) return true;
+        this.lastSent = currentTime;
+        const peak = this.peak;
+        this.peak = 0;
+
         // Only send if not silent
-        if (volume > this.silenceThreshold) {
+        if (peak > this.silenceThreshold) {
             this.port.postMessage({
                 type: 'volumeIndicator',
-                volume: volume,
+                volume: peak,
             });
         }
 
