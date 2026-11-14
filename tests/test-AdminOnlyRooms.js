@@ -828,6 +828,82 @@ describe('Only the admin can create a meeting (integration)', function () {
             assert.equal((await api('DELETE', other, adminCookie)).status, 200);
         });
 
+        it('refuses to delete a room while a meeting is under way in it or in one of its breakout rooms', async () => {
+            const del = (room) =>
+                request('DELETE', `/api/admin/rooms/${encodeURIComponent(room)}`, { cookie: modCookie });
+            const room = (await request('POST', '/admin/rooms', { body: { name: 'En direct' }, cookie: modCookie }))
+                .json.room;
+            const host = await connect(modCookie);
+            sockets.push(host);
+            const hostInfo = peerInfo('Camille');
+            const token = (await createToken(room, modCookie)).json.token;
+            await joinRoom(host, room, hostInfo, token);
+
+            const busy = await del(room);
+            assert.equal(busy.status, 409, busy.body);
+            assert.match(busy.json.error, /visio est en cours/);
+            const asAdmin = await request('DELETE', `/api/admin/rooms/${encodeURIComponent(room)}`, {
+                cookie: adminCookie,
+            });
+            assert.equal(asAdmin.status, 409, 'the admin is refused too');
+
+            // The main room empties but a breakout room still runs: still under way
+            const breakout = `${room}_breakout_1`;
+            host.emit('breakoutRoom', {
+                peer_name: hostInfo.peer_name,
+                peer_uuid: hostInfo.peer_uuid,
+                mainRoom: room,
+                assignments: [{ peerId: 'nobody', breakoutRoom: breakout }],
+            });
+            await wait(200);
+            const guest = await connect();
+            sockets.push(guest);
+            await joinRoom(guest, breakout, peerInfo('Dana'), (await createToken(breakout)).json.token);
+            host.close();
+            await wait(500);
+            assert.equal((await request('POST', '/isRoomActive', { body: { roomId: room } })).json.message, false);
+            assert.equal((await del(room)).status, 409, 'a breakout room is still live');
+
+            guest.close();
+            await wait(500);
+            assert.equal((await del(room)).status, 200, 'once everybody left, the room can go');
+        });
+
+        it('refuses to delete a room a date poll booked, until the poll is deleted', async () => {
+            const day = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
+            const created = await request('POST', '/api/rdv', {
+                cookie: modCookie,
+                body: {
+                    title: 'Revue trimestrielle',
+                    duration: 60,
+                    slots: [
+                        { date: day, time: '10:00' },
+                        { date: day, time: '14:00' },
+                    ],
+                },
+            });
+            assert.equal(created.status, 200, created.body);
+            const pollId = created.json.id;
+            assert.equal(
+                (await request('POST', `/api/rdv/${pollId}/fix`, { cookie: modCookie, body: { slot: 0 } })).status,
+                200
+            );
+            const list = await request('GET', '/api/rdv', { cookie: modCookie });
+            const room = list.json.polls.find((p) => p.id === pollId).fixed.room;
+            assert.ok(room, 'the fixed date reserved a room');
+
+            for (const cookie of [modCookie, adminCookie]) {
+                const res = await request('DELETE', `/api/admin/rooms/${encodeURIComponent(room)}`, { cookie });
+                assert.equal(res.status, 409, res.body);
+                assert.match(res.json.error, /« Revue trimestrielle » a fixé une date/);
+            }
+            assert.equal((await request('GET', `/api/room/${room}`)).json.name, 'Revue trimestrielle');
+
+            assert.equal((await request('DELETE', `/api/rdv/${pollId}`, { cookie: modCookie })).status, 200);
+            const res = await request('DELETE', `/api/admin/rooms/${encodeURIComponent(room)}`, { cookie: modCookie });
+            assert.equal(res.status, 200, res.body);
+        });
+
         it('makes the moderator presenter in their rooms only, and the admin presenter everywhere', async () => {
             const modSocket = await connect(modCookie);
             const adminSocket = await connect(adminCookie);

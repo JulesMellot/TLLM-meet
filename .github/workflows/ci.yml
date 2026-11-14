@@ -39,6 +39,47 @@ jobs:
             - run: cp app/src/config.template.js app/src/config.js
             - run: npm test
 
+    browser:
+        name: Browser tests (Chromium)
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v5
+
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: npm
+
+            - run: npm ci
+
+            - name: Cache the Playwright browser
+              id: pw-cache
+              uses: actions/cache@v4
+              with:
+                  path: ~/.cache/ms-playwright
+                  key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+            # The system libraries Chromium needs are installed every time; the browser only when not cached
+            - run: npx playwright install --with-deps chromium
+              if: steps.pw-cache.outputs.cache-hit != 'true'
+            - run: npx playwright install-deps chromium
+              if: steps.pw-cache.outputs.cache-hit == 'true'
+
+            - run: cp app/src/config.template.js app/src/config.js
+            - run: npm run test:browser
+              env:
+                  BROWSER_ARTIFACTS: ${{ runner.temp }}/browser-artifacts
+
+            - name: Screenshots and trace of the failed tests
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: browser-test-failures
+                  path: ${{ runner.temp }}/browser-artifacts
+                  if-no-files-found: ignore
+                  retention-days: 7
+
     format:
         name: Formatting (files changed by the PR)
         if: github.event_name == 'pull_request'
