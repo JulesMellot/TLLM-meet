@@ -2260,3 +2260,115 @@ select.tllm-input {
         animation: none;
     }
 }
+
+/* ---------- Agenda of a room, prepared on the home (TllmHome.js) ---------- */
+
+.tllm-new-plan {
+    padding: 0 22px 12px;
+}
+
+.tllm-link-button {
+    padding: 0;
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--act);
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.tllm-link-button:hover {
+    text-decoration: underline;
+}
+
+.tllm-plan {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.tllm-plan-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding-left: 22px;
+}
+
+.tllm-plan-row {
+    padding-left: 4px;
+    color: var(--ink-3);
+}
+
+.tllm-plan-row::marker {
+    font-weight: 600;
+}
+
+.tllm-plan-row > * {
+    vertical-align: middle;
+}
+
+.tllm-plan-title {
+    width: calc(100% - 128px);
+    min-height: 40px;
+}
+
+.tllm-plan-min {
+    width: 76px;
+    min-height: 40px;
+    margin-left: 6px;
+    padding: 0 8px;
+}
+
+.tllm-plan-remove {
+    width: 32px;
+    height: 32px;
+    margin-left: 4px;
+    font-size: 1.3rem;
+    line-height: 1;
+    color: var(--ink-3);
+    background: none;
+    border: 0;
+    border-radius: var(--r);
+    cursor: pointer;
+}
+
+.tllm-plan-remove:hover {
+    color: var(--ink);
+    background: var(--panel-2);
+}
+
+.tllm-plan-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+}
+
+.tllm-plan-sum {
+    margin: 0;
+    font-size: 0.92rem;
+    color: var(--ink-2);
+}
+
+.tllm-plan-edit {
+    grid-column: 2 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 16px;
+    background: var(--panel-2);
+    border-radius: var(--r);
+}
+
+.tllm-plan-edit .tllm-hint {
+    margin: 0;
+}
+
+.tllm-plan-head {
+    margin: 0;
+    font-weight: 600;
+}

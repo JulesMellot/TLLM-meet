@@ -88,6 +88,7 @@ const HtmlInjector = require('./HtmlInjector');
 const { CollabStore } = require('./Collab');
 const { DatePolls, DatePollError } = require('./DatePolls');
 const { Audience } = require('./Audience');
+const { Agenda, pointLabel } = require('./Agenda');
 const { RoomRegistry } = require('./RoomRegistry');
 const { Transcripts } = require('./Transcripts');
 const { Usage } = require('./Usage');
@@ -387,10 +388,16 @@ function openMeeting(roomId) {
 }
 // TLLM*meet: phones in the meeting room (see Audience.js)
 const audience = new Audience();
+// TLLM*meet: agenda and timer of each meeting (see Agenda.js)
+const agenda = new Agenda({
+    load: (roomId) => roomRegistry.agenda(roomId),
+    save: (roomId, items) => roomRegistry.setAgenda(roomId, items),
+});
 
 function closeMeeting(roomId, why = 'plus personne dans la salle') {
     droppedPeople.delete(roomId);
     for (const id of audience.close(roomId)) io.to(id).emit('audienceEnded');
+    agenda.close(roomId);
     meetingLog.add(roomId, 'info', `Visio terminée : ${why}`);
     usage.close(roomId, { logs: meetingLog.end(roomId) });
 }
@@ -752,6 +759,8 @@ function startServer() {
         const name = typeof req.body?.name === 'string' ? req.body.name : '';
         const room = makeRoomId(name);
         roomRegistry.remember(room, { name: name.trim() || null, owner: admin.username });
+        // The agenda prepared with the room (optional), loaded when the meeting starts
+        if (Array.isArray(req.body?.agenda)) roomRegistry.setAgenda(room, req.body.agenda);
         res.set('Cache-Control', 'no-store');
         return res.json({ room, url: '/join/' + encodeURIComponent(room) });
     });
@@ -782,6 +791,21 @@ function startServer() {
         const room = roomRegistry.rename(req.params.id, req.body?.name);
         if (!room) return res.status(400).json({ error: 'Donnez un nom à la salle.' });
         return res.json({ id: room.id, name: room.name });
+    });
+
+    // The agenda of a room, prepared before the meeting. During a meeting that has not started it yet,
+    // everyone sees the new points at once.
+    app.put('/api/admin/rooms/:id/agenda', (req, res) => {
+        if (!manageableRoom(req, res)) return;
+        const id = req.params.id;
+        const items = roomRegistry.setAgenda(id, req.body?.items);
+        if (!items) return res.status(400).json({ error: 'Ordre du jour illisible.' });
+        const room = roomList.get(id);
+        if (room && agenda.view(id).current < 0) {
+            agenda.set(id, items);
+            room.sendToAll('agenda', { agenda: agenda.view(id), moved: null });
+        }
+        return res.json({ agenda: items });
     });
 
     app.delete('/api/admin/rooms/:id', (req, res) => {
@@ -930,6 +954,7 @@ function startServer() {
                     visios: visit ? visit.visios : null,
                     totalMs: visit ? visit.durationMs : null,
                     organizer: organizerOf(owner),
+                    agenda: known?.agenda || [],
                     transcript: transcript && { id: transcript.id, status: transcript.status },
                 };
             })
@@ -4061,6 +4086,12 @@ function startServer() {
             const active = dataObject?.active === true;
             if (active) {
                 transcripts.start(room.id, { name: roomRegistry.name(room.id), by });
+                // Started in the middle of a point of the agenda: the transcription says which one
+                const point = agenda.current(room.id);
+                if (point) {
+                    const total = agenda.view(room.id).items.length;
+                    transcripts.section(room.id, { index: point.index, total, title: point.title });
+                }
                 warmTranscription();
             } else {
                 transcripts.stop(room.id, { by });
@@ -4243,6 +4274,44 @@ function startServer() {
             const input = parsePollInput(data);
             const ref = typeof data?.pollId === 'string' ? data.pollId : data?.index;
             if (input && room.editPoll(ref, input.question, input.options)) sendPolls(room);
+        });
+
+        // TLLM*meet: the agenda (see Agenda.js). Everyone reads it; presenters write the points and move
+        // from one to the next. { get } | { items: [{ title, minutes }] } | { go: index } | { finish }
+        socket.on('agenda', (data, callback) => {
+            const done = typeof callback === 'function' ? callback : () => {};
+            if (!roomExists(socket)) return done({ error: 'Room not found' });
+            const room = getRoom(socket);
+            const peer = getPeer(socket);
+            if (!peer || isPeerInLobby(peer)) return done({ error: 'Peer not found' });
+            if (!data || typeof data !== 'object' || data.get) return done({ agenda: agenda.view(room.id) });
+            if (!isSocketPresenter(socket, room))
+                return done({ error: 'Seuls les présentateurs changent l’ordre du jour.' });
+
+            const by = peer.peer_info?.peer_name ?? peer.peer_name;
+            let moved = null;
+            if (Array.isArray(data.items)) {
+                if (!agenda.set(room.id, data.items)) return done({ error: 'invalid' });
+            } else if (Number.isInteger(data.go)) {
+                const step = agenda.go(room.id, data.go);
+                if (!step) return done({ agenda: agenda.view(room.id) });
+                const total = agenda.view(room.id).items.length;
+                moved = { index: step.to.index, title: step.to.title, by };
+                transcripts.section(room.id, { index: step.to.index, total, title: step.to.title, by });
+                meetingLog.add(room.id, 'info', `passe au ${pointLabel(step.to.index, total, step.to.title)}`, {
+                    who: by,
+                });
+            } else if (data.finish === true) {
+                const last = agenda.finish(room.id);
+                if (!last) return done({ agenda: agenda.view(room.id) });
+                moved = { finished: true, by };
+                meetingLog.add(room.id, 'info', 'termine l’ordre du jour', { who: by });
+            } else {
+                return done({ error: 'invalid' });
+            }
+            const view = agenda.view(room.id);
+            room.sendToAll('agenda', { agenda: view, moved });
+            done({ agenda: view });
         });
 
         // TLLM*meet: the meeting room, from phones (see Audience.js). The QR code of the projector carries

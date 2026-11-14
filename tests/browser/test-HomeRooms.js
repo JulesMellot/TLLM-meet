@@ -1,7 +1,8 @@
 'use strict';
 
 /**
- * TLLM*meet - browser test: the organiser renames and deletes rooms from the home page.
+ * TLLM*meet - browser test: the organiser renames and deletes rooms from the home page, and prepares
+ * their agenda.
  * Starts the real server, drives Chromium with Playwright, and checks what the organiser sees.
  * Run: npm run test:browser (needs "npx playwright install chromium" once).
  */
@@ -254,6 +255,49 @@ describe('Home page: rename and delete rooms (browser)', function () {
         const menu = await openMenu('Revue trimestrielle');
         await menu.getByRole('button', { name: 'Renommer' }).waitFor();
         assert.equal(await menu.getByRole('button', { name: 'Supprimer la salle' }).count(), 0);
+    });
+
+    it('prepares the agenda of an existing room, and keeps it after a reload', async () => {
+        const id = await newRoom('Comité');
+        await page.reload();
+        await (await openMenu('Comité')).getByRole('button', { name: 'Préparer l’ordre du jour' }).click();
+        const editor = row('Comité').locator('.tllm-plan-edit');
+        await editor.getByRole('textbox', { name: 'Point 1' }).fill('Tour de table');
+        await editor.getByRole('spinbutton', { name: 'Minutes prévues pour le point 1' }).fill('5');
+        await editor.getByRole('textbox', { name: 'Point 1' }).press('Enter'); // a new point
+        await editor.getByRole('textbox', { name: 'Point 2' }).fill('Budget');
+        await editor.getByRole('spinbutton', { name: 'Minutes prévues pour le point 2' }).fill('15');
+        await editor.getByRole('button', { name: 'Enregistrer' }).click();
+        await toast().filter({ hasText: 'Ordre du jour enregistré' }).waitFor();
+        await row('Comité').locator('.tllm-room-plan', { hasText: '2 points, 20 min prévues' }).waitFor();
+
+        await page.reload();
+        await row('Comité').locator('.tllm-room-plan', { hasText: '2 points, 20 min prévues' }).waitFor();
+        const overview = (await api('GET', '/api/admin/overview')).json;
+        assert.deepEqual(overview.rooms.find((r) => r.id === id).agenda, [
+            { title: 'Tour de table', minutes: 5 },
+            { title: 'Budget', minutes: 15 },
+        ]);
+        // Opened again, the points are there; all removed, the agenda goes
+        await (await openMenu('Comité')).getByRole('button', { name: 'Modifier l’ordre du jour' }).click();
+        await editor.getByRole('textbox', { name: 'Point 2' }).waitFor();
+        for (let i = 0; i < 2; i++) await editor.getByRole('button', { name: 'Retirer ce point' }).first().click();
+        await editor.getByRole('button', { name: 'Enregistrer' }).click();
+        await toast().filter({ hasText: 'Ordre du jour retiré' }).waitFor();
+        assert.equal(await row('Comité').locator('.tllm-room-plan').isHidden(), true);
+    });
+
+    it('creates a room with its agenda from the home', async () => {
+        await page.fill('#roomName', 'Revue projet');
+        await page.click('#newRoomPlanToggle');
+        await page.getByRole('textbox', { name: 'Point 1' }).fill('Avancement');
+        await page.getByRole('spinbutton', { name: 'Minutes prévues pour le point 1' }).fill('10');
+        await page.click('#createRoomButton');
+        await page.waitForURL(/\/join\//); // the room opens right away
+        const overview = (await api('GET', '/api/admin/overview')).json;
+        const room = overview.rooms.find((r) => r.name === 'Revue projet');
+        assert.deepEqual(room.agenda, [{ title: 'Avancement', minutes: 10 }]);
+        await page.goto(`${BASE}/`);
     });
 
     it('ran without JavaScript errors in the page', () => {
