@@ -803,6 +803,31 @@ describe('Only the admin can create a meeting (integration)', function () {
             assert.equal((await request('GET', `/api/room/${modRoom}`)).json.organizer, 'Camille');
         });
 
+        it('lets a moderator rename and delete their own rooms only; the admin manages every room', async () => {
+            const api = (method, room, cookie, body) =>
+                request(method, `/api/admin/rooms/${encodeURIComponent(room)}`, { cookie, body });
+            const spare = (await request('POST', '/admin/rooms', { body: { name: 'Brouillon' }, cookie: modCookie }))
+                .json.room;
+            assert.equal((await api('PATCH', spare, null, { name: 'X' })).status, 401);
+            assert.equal((await api('PATCH', adminRoom, modCookie, { name: 'Volé' })).status, 404);
+            assert.equal((await api('DELETE', adminRoom, modCookie)).status, 404);
+            assert.equal((await api('PATCH', spare, modCookie, { name: '  ' })).status, 400);
+            const renamed = await api('PATCH', spare, modCookie, { name: 'Atelier bis' });
+            assert.equal(renamed.status, 200, renamed.body);
+            assert.equal((await request('GET', `/api/room/${spare}`)).json.name, 'Atelier bis');
+            assert.equal((await api('PATCH', spare, adminCookie, { name: 'Atelier ter' })).status, 200);
+
+            assert.equal((await api('DELETE', spare, modCookie)).status, 200);
+            const view = await request('GET', '/api/admin/overview', { cookie: modCookie });
+            assert.ok(!view.json.rooms.some((r) => r.id === spare));
+            assert.equal((await createToken(spare, modCookie)).status, 403, 'the link no longer opens it');
+            assert.equal((await api('DELETE', spare, modCookie)).status, 404);
+
+            const other = (await request('POST', '/admin/rooms', { body: { name: 'Autre' }, cookie: modCookie })).json
+                .room;
+            assert.equal((await api('DELETE', other, adminCookie)).status, 200);
+        });
+
         it('makes the moderator presenter in their rooms only, and the admin presenter everywhere', async () => {
             const modSocket = await connect(modCookie);
             const adminSocket = await connect(adminCookie);

@@ -749,6 +749,54 @@ function startServer() {
         return res.json({ room, url: '/join/' + encodeURIComponent(room) });
     });
 
+    // Organiser home, "⋯" of a room: rename or delete it. An admin manages every room, a moderator their own
+    const manageableRoom = (req, res) => {
+        const admin = adminAuth.fromRequest(req);
+        res.set('Cache-Control', 'no-store');
+        if (!admin) {
+            res.status(401).json({ error: 'unauthorized' });
+            return null;
+        }
+        const id = req.params.id;
+        if (
+            !Validator.isValidRoomName(id) ||
+            id.includes('_breakout_') ||
+            !roomRegistry.get(id) ||
+            !ownsRoom(admin, id)
+        ) {
+            res.status(404).json({ error: 'Salle introuvable.' });
+            return null;
+        }
+        return admin;
+    };
+
+    app.patch('/api/admin/rooms/:id', (req, res) => {
+        if (!manageableRoom(req, res)) return;
+        const room = roomRegistry.rename(req.params.id, req.body?.name);
+        if (!room) return res.status(400).json({ error: 'Donnez un nom à la salle.' });
+        return res.json({ id: room.id, name: room.name });
+    });
+
+    app.delete('/api/admin/rooms/:id', (req, res) => {
+        const admin = manageableRoom(req, res);
+        if (!admin) return;
+        const id = req.params.id;
+        const live = Array.from(roomList.keys()).some((r) => r === id || r.startsWith(`${id}_breakout_`));
+        if (live) return res.status(409).json({ error: 'La visio est en cours : attendez qu’elle se termine.' });
+        const booking = roomBooking(id);
+        if (booking) {
+            return res.status(409).json({
+                error: `Le sondage « ${booking.title} » a fixé une date dans cette salle. Supprimez d’abord le sondage.`,
+            });
+        }
+        // Its transcriptions go with it: nobody could reach them from the home any more
+        let transcriptions = 0;
+        for (const t of transcripts.ids(id)) if (transcripts.remove(id, t)) transcriptions++;
+        roomRegistry.forget(id);
+        log.info('Room deleted', { room: id, by: admin.username, transcriptions });
+        return res.json({ ok: true, transcriptions });
+    });
+
     // ---------- TLLM*meet: state of the rooms (door page and organiser home) ----------
     const firstName = (peer) =>
         String(peer?.peer_info?.peer_name ?? peer?.peer_name ?? '')
