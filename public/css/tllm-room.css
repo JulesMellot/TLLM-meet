@@ -135,6 +135,13 @@ body.tllm-room {
     background: var(--tllm-surface-2);
 }
 
+/* Presentation mode on: the way to stop it (TllmProjection.js) */
+.tllm-top-btn.tllm-projecting {
+    border-color: var(--tllm-accent);
+    background: var(--tllm-accent-soft);
+    color: var(--tllm-text);
+}
+
 /* ---------- Stage (MiroTalk's video containers live inside) ---------- */
 #tllmStage {
     position: fixed;

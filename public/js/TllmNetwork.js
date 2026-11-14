@@ -47,13 +47,15 @@
         const told = new Map(); // consumer id -> layer the server knows
         let busy = false;
 
-        // Everything is wanted whole while it is recorded or shown in a picture-in-picture window
+        // Everything is wanted whole while it is recorded, shown in a picture-in-picture window
+        // or on a projector (presentation mode, TllmProjection.js)
         const wantsAll = () =>
             Boolean(
                 rc.isRecording?.() ||
                 rc.hasActiveRecorder?.() ||
                 doc.pictureInPictureElement ||
-                view.documentPictureInPicture?.window
+                view.documentPictureInPicture?.window ||
+                view.tllmProjection?.isOpen?.()
             );
 
         // Sound off on this screen: the speaker volume at zero, or this voice at zero

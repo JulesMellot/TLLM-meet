@@ -611,6 +611,15 @@
         html += item('view:grid', 'fas fa-table-cells-large', 'Grille', '', !speaker);
         html += item('view:speaker-top', 'fas fa-square', 'Orateur en grand', '', speaker);
         if (isShown('fullScreenButton')) html += item('click:fullScreenButton', 'fas fa-expand', 'Plein écran');
+        // A second window for the projector, the meeting stays on this screen (TllmProjection.js)
+        if (!isPhone() && window.tllmProjection)
+            html += item(
+                'projection',
+                'fas fa-person-chalkboard',
+                'Mode présentation (projecteur)',
+                '',
+                window.tllmProjection.isOpen()
+            );
 
         let share = '';
         if (isShown('whiteboardButton')) share += item('click:whiteboardButton', 'fas fa-chalkboard', 'Tableau blanc');
@@ -720,6 +729,7 @@
         if (act === 'polls') return T.togglePanel('polls');
         if (act === 'transcript') return window.tllmTranscript?.toggle();
         if (act === 'captions') return window.tllmTranscript?.toggleCaptions();
+        if (act === 'projection') return window.tllmProjection?.toggle();
         if (act === 'leave') return typeof leaveRoom === 'function' && leaveRoom();
         if (act === 'leaveAll') return typeof leaveRoom === 'function' && leaveRoom(true, true);
         if (act.startsWith('pm:')) return startPrivate(act.slice(3));

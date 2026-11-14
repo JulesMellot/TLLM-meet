@@ -132,6 +132,13 @@ describe('test-TllmNetwork', () => {
         sent[0][1].map((need) => need.layer).should.eql([2, 2, 2]);
     });
 
+    it('keeps every picture whole while they are shown on a projector', async () => {
+        const { rc, view, sent } = makePage({ small: 180, large: 600, hidden: 0 });
+        view.tllmProjection = { isOpen: () => true };
+        await start(rc, { view }).sync();
+        sent[0][1].map((need) => need.layer).should.eql([2, 2, 2]);
+    });
+
     it('stops a voice turned down to zero here, and asks for it again when turned back up', async () => {
         const { rc, view, doc, sent } = makePage({ small: 180 });
         rc.consumers = new Map([['voice', { kind: 'audio', closed: false }]]);
